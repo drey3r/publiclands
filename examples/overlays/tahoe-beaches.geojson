@@ -1,0 +1,29 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-120.064, 38.944] },
+      "properties": {
+        "title": "Baldwin Beach",
+        "description": "Example point (approximate). Linked to PRC 1579, whose lease area runs between Rubicon Bay and Baldwin Beach.",
+        "prc": "1579"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-120.039, 38.936] },
+      "properties": { "title": "Pope Beach", "description": "Example point (approximate)." }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-120.027, 39.238] },
+      "properties": { "title": "Kings Beach", "description": "Example point (approximate).", "url": "https://www.parks.ca.gov/" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "LineString", "coordinates": [[-120.0905, 38.9625], [-120.0915, 38.9545], [-120.0925, 38.9505]] },
+      "properties": { "title": "Example line", "description": "Lines and polygons work too. This one is illustrative, not a surveyed route." }
+    }
+  ]
+}

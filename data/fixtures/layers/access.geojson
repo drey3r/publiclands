@@ -1,0 +1,310 @@
+{
+ "type": "FeatureCollection",
+ "fixture": true,
+ "source": "FIXTURE (stand-in for CPAD)",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "fx-emerald-bay",
+    "name": "Emerald Bay State Park",
+    "manager": "California State Parks",
+    "access": "Open Access",
+    "kind": "State park",
+    "visit": "Day use, Vikingsholm, boat-in camping. Parking fills early in summer.",
+    "url": "https://www.parks.ca.gov/?page_id=506",
+    "fixture": true,
+    "note": "FIXTURE: hand-drawn approximate outline for development. Not survey or CPAD data."
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -120.125,
+       38.945
+      ],
+      [
+       -120.095,
+       38.945
+      ],
+      [
+       -120.09,
+       38.962
+      ],
+      [
+       -120.105,
+       38.975
+      ],
+      [
+       -120.128,
+       38.965
+      ],
+      [
+       -120.125,
+       38.945
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "fx-dl-bliss",
+    "name": "D.L. Bliss State Park",
+    "manager": "California State Parks",
+    "access": "Open Access",
+    "kind": "State park",
+    "visit": "Beaches, Rubicon Trail, seasonal campground.",
+    "url": "https://www.parks.ca.gov/?page_id=505",
+    "fixture": true,
+    "note": "FIXTURE: hand-drawn approximate outline for development. Not survey or CPAD data."
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -120.112,
+       38.976
+      ],
+      [
+       -120.094,
+       38.976
+      ],
+      [
+       -120.094,
+       38.996
+      ],
+      [
+       -120.114,
+       38.996
+      ],
+      [
+       -120.112,
+       38.976
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "fx-point-reyes",
+    "name": "Point Reyes National Seashore",
+    "manager": "National Park Service",
+    "access": "Open Access",
+    "kind": "National seashore",
+    "visit": "Trails, beaches, lighthouse. Free entry.",
+    "url": "https://www.nps.gov/pore/",
+    "fixture": true,
+    "note": "FIXTURE: hand-drawn approximate outline for development. Not survey or CPAD data."
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -123.02,
+       37.99
+      ],
+      [
+       -122.79,
+       37.9
+      ],
+      [
+       -122.75,
+       38.02
+      ],
+      [
+       -122.85,
+       38.2
+      ],
+      [
+       -122.97,
+       38.24
+      ],
+      [
+       -123.02,
+       38.12
+      ],
+      [
+       -123.02,
+       37.99
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "fx-crystal-cove",
+    "name": "Crystal Cove State Park",
+    "manager": "California State Parks",
+    "access": "Open Access",
+    "kind": "State park",
+    "visit": "Beach, tidepools, backcountry trails. Parking fee.",
+    "url": "https://www.parks.ca.gov/?page_id=644",
+    "fixture": true,
+    "note": "FIXTURE: hand-drawn approximate outline for development. Not survey or CPAD data."
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -117.86,
+       33.58
+      ],
+      [
+       -117.82,
+       33.56
+      ],
+      [
+       -117.8,
+       33.572
+      ],
+      [
+       -117.83,
+       33.6
+      ],
+      [
+       -117.86,
+       33.58
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "fx-brannan",
+    "name": "Brannan Island State Recreation Area",
+    "manager": "California State Parks",
+    "access": "Open Access",
+    "kind": "State recreation area",
+    "visit": "Delta boat launch, picnic, camping.",
+    "url": "https://www.parks.ca.gov/?page_id=487",
+    "fixture": true,
+    "note": "FIXTURE: hand-drawn approximate outline for development. Not survey or CPAD data."
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -121.71,
+       38.1
+      ],
+      [
+       -121.69,
+       38.1
+      ],
+      [
+       -121.69,
+       38.12
+      ],
+      [
+       -121.71,
+       38.12
+      ],
+      [
+       -121.71,
+       38.1
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "fx-anza-borrego",
+    "name": "Anza-Borrego Desert State Park",
+    "manager": "California State Parks",
+    "access": "Open Access",
+    "kind": "State park",
+    "visit": "Open desert, dispersed camping, spring wildflowers.",
+    "url": "https://www.parks.ca.gov/?page_id=638",
+    "fixture": true,
+    "note": "FIXTURE: hand-drawn approximate outline for development. Not survey or CPAD data."
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -116.6,
+       33.4
+      ],
+      [
+       -116.1,
+       33.4
+      ],
+      [
+       -116.05,
+       32.85
+      ],
+      [
+       -116.45,
+       32.75
+      ],
+      [
+       -116.6,
+       33.0
+      ],
+      [
+       -116.6,
+       33.4
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "fx-elkhorn",
+    "name": "Elkhorn Slough Ecological Reserve",
+    "manager": "California Dept. of Fish and Wildlife",
+    "access": "Restricted Access",
+    "kind": "Ecological reserve",
+    "visit": "Trails open Wed\u2013Sun; no dogs; stay on trail.",
+    "url": "https://wildlife.ca.gov/Lands/Places-to-Visit/Elkhorn-Slough-ER",
+    "fixture": true,
+    "note": "FIXTURE: hand-drawn approximate outline for development. Not survey or CPAD data."
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -121.77,
+       36.8
+      ],
+      [
+       -121.74,
+       36.8
+      ],
+      [
+       -121.73,
+       36.84
+      ],
+      [
+       -121.76,
+       36.84
+      ],
+      [
+       -121.77,
+       36.8
+      ]
+     ]
+    ]
+   }
+  }
+ ]
+}

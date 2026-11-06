@@ -1,0 +1,85 @@
+{
+ "type": "FeatureCollection",
+ "fixture": true,
+ "source": "FIXTURE (stand-in for CSLC boundary/water lines)",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "fx-ohw-tahoe",
+    "name": "Lake Tahoe low water line (approx.)",
+    "kind": "Low water / boundary line",
+    "fixture": true,
+    "note": "FIXTURE: hand-drawn approximate outline for development. Not survey or CPAD data."
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -120.1,
+      38.93
+     ],
+     [
+      -120.085,
+      38.955
+     ],
+     [
+      -120.09,
+      38.975
+     ],
+     [
+      -120.1,
+      38.995
+     ],
+     [
+      -120.13,
+      39.02
+     ],
+     [
+      -120.15,
+      39.07
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "fx-ohw-sac",
+    "name": "Sacramento River ordinary high water (approx.)",
+    "kind": "Ordinary high water line",
+    "fixture": true,
+    "note": "FIXTURE: hand-drawn approximate outline for development. Not survey or CPAD data."
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -121.51,
+      38.58
+     ],
+     [
+      -121.53,
+      38.5
+     ],
+     [
+      -121.55,
+      38.4
+     ],
+     [
+      -121.58,
+      38.3
+     ],
+     [
+      -121.56,
+      38.2
+     ],
+     [
+      -121.66,
+      38.1
+     ]
+    ]
+   }
+  }
+ ]
+}

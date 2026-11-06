@@ -1,0 +1,58 @@
+{
+ "generatedAt": "2026-11-06T07:39:29.478Z",
+ "layers": [
+  {
+   "name": "access",
+   "file": "access.geojson",
+   "title": "Parks and protected lands (CPAD units)",
+   "attribution": "California Protected Areas Database (CPAD 2026a), GreenInfo Network, www.calands.org",
+   "caveat": "Fee-owned protected lands only (no easements). Access is CPAD's ACCESS_TYP field. Geometry generalized for web display.",
+   "sources": [
+    "https://gis.cnra.ca.gov/arcgis/rest/services/Boundaries/CPAD_AgencyLevel/MapServer/1"
+   ],
+   "count": 17930,
+   "pulledAt": "2026-11-06",
+   "sourceLastEdit": null
+  },
+  {
+   "name": "granted",
+   "file": "granted.geojson",
+   "title": "Granted public trust lands (CSLC)",
+   "attribution": "California State Lands Commission",
+   "caveat": "Incomplete: CSLC notes parcel digitization is partial. No polygon does not mean no grant. Not a legal boundary.",
+   "sources": [
+    "https://services3.arcgis.com/5aaQCuq3e4GRvkFG/arcgis/rest/services/Granted_Lands/FeatureServer/0"
+   ],
+   "count": 115,
+   "pulledAt": "2026-11-06",
+   "sourceLastEdit": "2025-12-16"
+  },
+  {
+   "name": "school",
+   "file": "school.geojson",
+   "title": "State school lands (CSLC)",
+   "attribution": "California State Lands Commission, Land Management Division",
+   "caveat": "School lands only. Sovereign tide and submerged lands are not in this layer. Not a legal boundary.",
+   "sources": [
+    "https://services3.arcgis.com/5aaQCuq3e4GRvkFG/arcgis/rest/services/School_Lands_Public/FeatureServer/0"
+   ],
+   "count": 1309,
+   "pulledAt": "2026-11-06",
+   "sourceLastEdit": "2025-10-06"
+  },
+  {
+   "name": "waterlines",
+   "file": "waterlines.geojson",
+   "title": "Ordinary high and low water lines (CSLC administrative maps)",
+   "attribution": "California State Lands Commission",
+   "caveat": "Only portions of some waterways, each mapped at one point in time. These boundaries move; not a statewide or current line.",
+   "sources": [
+    "https://services3.arcgis.com/5aaQCuq3e4GRvkFG/arcgis/rest/services/AdminMapsPublic/FeatureServer/2",
+    "https://services3.arcgis.com/5aaQCuq3e4GRvkFG/arcgis/rest/services/AdminMapsPublic/FeatureServer/1"
+   ],
+   "count": 39,
+   "pulledAt": "2026-11-06",
+   "sourceLastEdit": "2025-05-29"
+  }
+ ]
+}

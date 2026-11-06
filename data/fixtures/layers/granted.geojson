@@ -1,0 +1,121 @@
+{
+ "type": "FeatureCollection",
+ "fixture": true,
+ "source": "FIXTURE (stand-in for CSLC granted lands)",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "fx-grant-la",
+    "name": "Port of Los Angeles granted tidelands",
+    "trustee": "City of Los Angeles",
+    "kind": "Granted lands",
+    "fixture": true,
+    "note": "FIXTURE: hand-drawn approximate outline for development. Not survey or CPAD data."
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -118.29,
+       33.7
+      ],
+      [
+       -118.22,
+       33.7
+      ],
+      [
+       -118.22,
+       33.77
+      ],
+      [
+       -118.29,
+       33.77
+      ],
+      [
+       -118.29,
+       33.7
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "fx-grant-sf",
+    "name": "San Francisco waterfront granted tidelands",
+    "trustee": "City and County of San Francisco (Port)",
+    "kind": "Granted lands",
+    "fixture": true,
+    "note": "FIXTURE: hand-drawn approximate outline for development. Not survey or CPAD data."
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -122.4,
+       37.75
+      ],
+      [
+       -122.38,
+       37.75
+      ],
+      [
+       -122.385,
+       37.81
+      ],
+      [
+       -122.41,
+       37.81
+      ],
+      [
+       -122.4,
+       37.75
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "fx-grant-lb",
+    "name": "Long Beach granted tidelands",
+    "trustee": "City of Long Beach",
+    "kind": "Granted lands",
+    "fixture": true,
+    "note": "FIXTURE: hand-drawn approximate outline for development. Not survey or CPAD data."
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -118.22,
+       33.73
+      ],
+      [
+       -118.12,
+       33.73
+      ],
+      [
+       -118.12,
+       33.77
+      ],
+      [
+       -118.22,
+       33.77
+      ],
+      [
+       -118.22,
+       33.73
+      ]
+     ]
+    ]
+   }
+  }
+ ]
+}

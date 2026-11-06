@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+:root {
+  /* Same tokens as the main site (publiclands/app/globals.css). */
+  --cream: #f4efe4;
+  --paper: #faf7f0;
+  --sand: #ebe3d3;
+  --line: #ddd3c1;
+  --ink: #2b2a26;
+  --ink-soft: #57534a;
+  --ink-faint: #736e63; /* darker than the site's #8d887c so small text passes AA on paper */
+  --sage: #8a9a7b;
+  --sage-soft: #c9d1bd;
+  --sage-deep: #56664f;
+  --water: #5b7b8f;
+  --water-soft: #b9cbd5;
+  --earth: #a8754f;
+  --clay: #a4553f;
+  --gold: #c49a4a;
+  --mist: #dfe5e0;
+}
+
+@theme inline {
+  --color-cream: var(--cream);
+  --color-paper: var(--paper);
+  --color-sand: var(--sand);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-sage: var(--sage);
+  --color-sage-soft: var(--sage-soft);
+  --color-sage-deep: var(--sage-deep);
+  --color-water: var(--water);
+  --color-water-soft: var(--water-soft);
+  --color-earth: var(--earth);
+  --color-clay: var(--clay);
+  --color-gold: var(--gold);
+  --color-mist: var(--mist);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-serif4), ui-serif, Georgia, serif;
+}
+
+html { background: var(--cream); color-scheme: light; }
+body { background: var(--cream); color: var(--ink); overflow-wrap: break-word; }
+
+.display { font-family: var(--font-serif); font-weight: 500; letter-spacing: -0.015em; line-height: 1.1; text-wrap: balance; }
+.kicker { font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--sage-deep); font-weight: 600; }
+.card { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+
+:focus-visible { outline: 2px solid var(--water); outline-offset: 2px; }
+
+/* MapLibre chrome in the site palette */
+.maplibregl-ctrl-group { background: var(--paper) !important; border: 1px solid var(--line); box-shadow: none !important; border-radius: 10px !important; }
+.maplibregl-ctrl-attrib { background: rgb(250 247 240 / 0.88) !important; font-size: 11px; }
+.maplibregl-ctrl-attrib a { color: var(--ink-soft) !important; }
+.maplibregl-popup-content { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; box-shadow: 0 6px 24px rgb(43 42 38 / 0.12); font-family: var(--font-sans); }
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: var(--paper) !important; }
+.maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: var(--paper) !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}

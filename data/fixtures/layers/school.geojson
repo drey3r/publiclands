@@ -1,0 +1,159 @@
+{
+ "type": "FeatureCollection",
+ "fixture": true,
+ "source": "FIXTURE (stand-in for CSLC school lands)",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "fx-school-section-16,-t6s-r12e",
+    "name": "Section 16, T6S R12E",
+    "manager": "California State Lands Commission",
+    "kind": "School lands",
+    "fixture": true,
+    "note": "FIXTURE: hand-drawn approximate outline for development. Not survey or CPAD data."
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -115.21,
+       33.65
+      ],
+      [
+       -115.1926,
+       33.65
+      ],
+      [
+       -115.1926,
+       33.6645
+      ],
+      [
+       -115.21,
+       33.6645
+      ],
+      [
+       -115.21,
+       33.65
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "fx-school-section-16,-t6s-r17e",
+    "name": "Section 16, T6S R17E",
+    "manager": "California State Lands Commission",
+    "kind": "School lands",
+    "fixture": true,
+    "note": "FIXTURE: hand-drawn approximate outline for development. Not survey or CPAD data."
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -115.75,
+       33.65
+      ],
+      [
+       -115.7326,
+       33.65
+      ],
+      [
+       -115.7326,
+       33.6645
+      ],
+      [
+       -115.75,
+       33.6645
+      ],
+      [
+       -115.75,
+       33.65
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "fx-school-section-36,-t10n-r1w",
+    "name": "Section 36, T10N R1W",
+    "manager": "California State Lands Commission",
+    "kind": "School lands",
+    "fixture": true,
+    "note": "FIXTURE: hand-drawn approximate outline for development. Not survey or CPAD data."
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -116.9,
+       35.1
+      ],
+      [
+       -116.88260000000001,
+       35.1
+      ],
+      [
+       -116.88260000000001,
+       35.1145
+      ],
+      [
+       -116.9,
+       35.1145
+      ],
+      [
+       -116.9,
+       35.1
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "fx-school-section-16,-t27s-r40e",
+    "name": "Section 16, T27S R40E",
+    "manager": "California State Lands Commission",
+    "kind": "School lands",
+    "fixture": true,
+    "note": "FIXTURE: hand-drawn approximate outline for development. Not survey or CPAD data."
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -117.6,
+       35.6
+      ],
+      [
+       -117.5826,
+       35.6
+      ],
+      [
+       -117.5826,
+       35.6145
+      ],
+      [
+       -117.6,
+       35.6145
+      ],
+      [
+       -117.6,
+       35.6
+      ]
+     ]
+    ]
+   }
+  }
+ ]
+}
