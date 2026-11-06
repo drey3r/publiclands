@@ -34,7 +34,8 @@ Management Division".
 ## California Protected Areas Database (CPAD)
 
 - Source: [CPAD units by agency level](https://gis.cnra.ca.gov/arcgis/rest/services/Boundaries/CPAD_AgencyLevel/MapServer/1),
-  California Natural Resources Agency service. Snapshot in `data/layers/access.geojson`.
+  California Natural Resources Agency service. Snapshot in `data/layers/access.pmtiles`, which
+  [tippecanoe](https://github.com/felt/tippecanoe) builds from the downloaded GeoJSON.
 - © GreenInfo Network. Free to redistribute and use, with citation:
   "California Protected Areas Database (CPAD), www.calands.org", plus the release. Provided as is; see the CPAD disclaimer
   at [calands.org](https://www.calands.org/).

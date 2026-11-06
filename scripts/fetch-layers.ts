@@ -7,6 +7,7 @@
 // small enough for the web. Display only: not for boundary determinations.
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { queryAll } from "./lib/arcgis.ts";
 
 const CSLC = "https://services3.arcgis.com/5aaQCuq3e4GRvkFG/arcgis/rest/services";
@@ -157,13 +158,26 @@ for (const spec of SPECS) {
     if (release && spec.name === "access") attribution = attribution.replace("(CPAD)", `(${release.replace(/\s+/, " ")})`);
     for (const f of r.features) if (f.geometry) features.push({ type: "Feature", geometry: s.simplify ? simplify(f.geometry, s.simplify) : f.geometry, properties: s.props(f.properties ?? {}) });
   }
-  const file = path.join(outDir, `${spec.name}.geojson`);
+  // Public spaces (CPAD) are drawn from vector tiles so the layer can be on by default.
+  // tippecanoe turns the GeoJSON into one PMTiles file; the GeoJSON stays in the cache.
+  const tiled = spec.name === "access";
+  const file = tiled ? path.join(cacheDir, `${spec.name}.geojson`) : path.join(outDir, `${spec.name}.geojson`);
   fs.writeFileSync(file, JSON.stringify({ type: "FeatureCollection", features }));
-  const bytes = fs.statSync(file).size;
-  console.log(`${spec.name}: ${features.length} features, ${(bytes / 1e6).toFixed(1)} MB`);
+  let outFile = file;
+  if (tiled) {
+    outFile = path.join(outDir, `${spec.name}.pmtiles`);
+    const r = spawnSync("tippecanoe", ["-q", "-o", outFile, "-l", spec.name, "-Z4", "-z12", "--drop-densest-as-needed", "--extend-zooms-if-still-dropping", "--force", file], { stdio: "inherit" });
+    if (r.error || r.status !== 0) {
+      console.warn("  tippecanoe not available: writing GeoJSON instead (slower). Install it: brew install tippecanoe");
+      outFile = path.join(outDir, `${spec.name}.geojson`);
+      fs.copyFileSync(file, outFile);
+    } else fs.rmSync(path.join(outDir, `${spec.name}.geojson`), { force: true });
+  }
+  const bytes = fs.statSync(outFile).size;
+  console.log(`${spec.name}: ${features.length} features, ${path.basename(outFile)} ${(bytes / 1e6).toFixed(1)} MB`);
   index.push({
     name: spec.name,
-    file: `${spec.name}.geojson`,
+    file: path.basename(outFile),
     title: spec.title,
     attribution,
     caveat: spec.caveat,

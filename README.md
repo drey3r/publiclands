@@ -27,8 +27,12 @@ map labels these leases **candidates for review**: a reading list, not a finding
   pipeline, outfall, power, other) or by estimated era. A subtle ring shows a "read this file first" screen score.
 - **Candidates for review:** 7 leases whose Improvements text, written by the Commission, says non-operational or
   abandoned, on an old lease renewed on a new term. Each one quotes that text.
-- **Land layers:** parks and protected lands (CPAD), CSLC granted lands, state school lands, and partial high and low
-  water lines.
+- **Public spaces:** parks, beaches and protected lands from CPAD, served as vector tiles (PMTiles) so they can be on by
+  default. More layers in the map key: CSLC granted lands, state school lands, and partial high and low water lines.
+- **Layout:** the list is on the left, with big Public spaces and Leases buttons that switch each layer on the map and in
+  the list. The map key and filters are on the right.
+- **Deep links:** `?layers=spaces,leases` (the default), `?layers=leases`, or `?layers=spaces`. Filters and the selected
+  lease are kept in the URL too, for example `?layers=leases&era=1950s&prc=944`, and `?story=944` plays a story.
 - **Lease pages** (`/lease/<PRC>`): facts quoted from the layer, estimates with their reasons, a locator map in 3D, and
   share images.
 - **Featured stories** fly in over 3D terrain: PRC 1579, Lake Tahoe telephone cables, removed; and PRC 944, Emerald Bay
@@ -94,7 +98,7 @@ Keep whatever you publish accurate and sourced. The disclaimer and the source ru
 
 ```bash
 npm run fetch:leases   # CSLC lease layer → data/cslc/leases-YYYY-MM-DD.geojson (newest file wins)
-npm run fetch:layers   # CPAD + CSLC granted, school and water-line layers → data/layers/
+npm run fetch:layers   # CPAD (→ PMTiles via tippecanoe) + CSLC granted, school and water-line layers → data/layers/
 npm run dev            # re-sync and check
 ```
 

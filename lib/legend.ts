@@ -44,7 +44,7 @@ export const STAGES: { key: StageKey; label: string }[] = [
 ];
 
 export const LAYER_INFO = {
-  access: { label: "Parks & protected lands", color: "#7f9a6a" },
+  access: { label: "Public spaces", color: "#7f9a6a" },
   granted: { label: "CSLC granted lands", color: "#5b7b8f" },
   school: { label: "CSLC school lands", color: "#a8754f" },
   waterlines: { label: "High & low water lines", color: "#3f6075" },

@@ -18,13 +18,16 @@ type Props = {
   setTerrain: (t: boolean) => void;
   onHome: () => void;
   collapsed?: boolean;
+  filtersOpen?: boolean;
+  filterCount?: number;
+  onFilters?: () => void;
 };
 
-export function MapControls({ colorBy, setColorBy, layers, setLayers, manifest, overlays, overlayVis, setOverlayVis, terrain, setTerrain, onHome, collapsed = false }: Props) {
+export function MapControls({ colorBy, setColorBy, layers, setLayers, manifest, overlays, overlayVis, setOverlayVis, terrain, setTerrain, onHome, collapsed = false, filtersOpen = false, filterCount = 0, onFilters }: Props) {
   const [open, setOpen] = useState(!collapsed);
   useEffect(() => setOpen(!collapsed), [collapsed]);
   // Only layers that exist; fixture outlines aren't listed unless the app runs on fixtures.
-  const available = (Object.keys(LAYER_INFO) as LayerName[]).filter((k) => manifest?.[k]);
+  const available = (Object.keys(LAYER_INFO) as LayerName[]).filter((k) => k !== "access" && manifest?.[k]);
   const seg = (on: boolean) => `flex-1 rounded-md px-2 py-1 text-[12px] font-medium ${on ? "bg-ink text-paper" : "text-ink-soft hover:text-ink"}`;
   return (
     <div className="pointer-events-auto w-[228px] rounded-xl border border-line bg-paper/95 text-[12px] shadow-[0_4px_18px_rgba(43,42,38,0.10)] backdrop-blur">
@@ -33,6 +36,17 @@ export function MapControls({ colorBy, setColorBy, layers, setLayers, manifest, 
           Map key {open ? "▾" : "▸"}
         </button>
         <div className="flex gap-1">
+          {onFilters && (
+            <button
+              type="button"
+              onClick={onFilters}
+              aria-expanded={filtersOpen}
+              aria-controls="filters"
+              className={`rounded-md border px-1.5 py-0.5 font-semibold ${filterCount || filtersOpen ? "border-ink bg-ink text-paper" : "border-line text-ink-soft hover:text-ink"}`}
+            >
+              Filters{filterCount ? ` · ${filterCount}` : ""}
+            </button>
+          )}
           <button type="button" onClick={onHome} className="rounded-md border border-line px-1.5 py-0.5 text-ink-soft hover:text-ink" title="Show all of California">CA</button>
           <button type="button" onClick={() => setTerrain(!terrain)} aria-pressed={terrain} className={`rounded-md border px-1.5 py-0.5 font-semibold ${terrain ? "border-ink bg-ink text-paper" : "border-line text-ink-soft hover:text-ink"}`} title="3D terrain (right-drag or two-finger drag to tilt)">
             3D
@@ -70,7 +84,7 @@ export function MapControls({ colorBy, setColorBy, layers, setLayers, manifest, 
           )}
           {available.length > 0 && (
             <fieldset className="space-y-1 border-t border-line pt-2">
-              <legend className="mb-1 font-semibold text-ink">Layers</legend>
+              <legend className="mb-1 font-semibold text-ink">More layers</legend>
               {available.map((k) => (
                 <label key={k} className="flex cursor-pointer items-center gap-2">
                   <input type="checkbox" checked={layers[k]} onChange={(e) => setLayers({ ...layers, [k]: e.target.checked })} className="accent-[#56664f]" />

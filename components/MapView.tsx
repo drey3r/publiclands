@@ -7,6 +7,7 @@ import { baseStyle } from "@/lib/mapStyle";
 import { CA_BOUNDS } from "@/lib/config";
 import { ERAS, ERA_UNKNOWN, LAYER_INFO, TYPES, TYPE_LABEL } from "@/lib/legend";
 import type { LayerManifest, LayerName, MiniLease, OverlayDef } from "@/lib/types";
+import type { Place as Space } from "./PlaceCard";
 
 // Served by scripts/sync-data.mjs (webpack can't bundle the v6 module worker).
 maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
@@ -20,6 +21,10 @@ type Props = {
   layers: Record<LayerName, boolean>;
   manifest: LayerManifest | null;
   terrain: boolean;
+  /** "Leases" big button. */
+  showLeases?: boolean;
+  /** Public spaces rendered in the current view (from vector tiles), for the list. */
+  onSpaces?: (spaces: Space[]) => void;
   overlays: OverlayDef[];
   overlayVis: Record<string, boolean>;
   hover: string | null;
@@ -56,6 +61,7 @@ export default function MapView(props: Props) {
   const cb = useRef(props);
   cb.current = props;
   const byPrc = useRef(new Map<string, MiniLease>());
+  const spacesDirty = useRef(true);
 
   // ---- create map once
   useEffect(() => {
@@ -192,6 +198,43 @@ export default function MapView(props: Props) {
         cb.current.onViewport([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
       };
       m.on("moveend", emit);
+      // Public spaces list = features in the rendered tiles, merged by id (tiles split big parks).
+      const emitSpaces = () => {
+        const cbk = cb.current.onSpaces;
+        if (!cbk) return;
+        if (!m.getSource("ov-access") || !cb.current.layers.access) return cbk([]);
+        const def = cb.current.manifest?.access;
+        const feats = m.querySourceFeatures("ov-access", def?.kind === "pmtiles" ? { sourceLayer: def.sourceLayer } : undefined);
+        const b = m.getBounds();
+        const view: [number, number, number, number] = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+        const byId = new Map<string, Space>();
+        for (const f of feats) {
+          const p = f.properties ?? {};
+          const id = String(p.id ?? p.unitId ?? f.id ?? "");
+          if (!id) continue;
+          const bb = bboxOf(f.geometry);
+          if (bb[0] > view[2] || bb[2] < view[0] || bb[1] > view[3] || bb[3] < view[1]) continue;
+          const prev = byId.get(id);
+          if (prev) prev.bbox = [Math.min(prev.bbox[0], bb[0]), Math.min(prev.bbox[1], bb[1]), Math.max(prev.bbox[2], bb[2]), Math.max(prev.bbox[3], bb[3])];
+          else
+            byId.set(id, {
+              id,
+              name: p.name ?? "Public land",
+              manager: p.managingAgency ?? p.manager,
+              access: p.access,
+              kind: p.agencyLevel ?? p.kind,
+              visit: p.visit,
+              url: p.url,
+              acres: typeof p.acres === "number" ? p.acres : null,
+              fixture: !!p.fixture,
+              bbox: bb,
+            });
+        }
+        cbk([...byId.values()]);
+      };
+      m.on("idle", () => { if (spacesDirty.current) { spacesDirty.current = false; emitSpaces(); } });
+      m.on("moveend", () => (spacesDirty.current = true));
+      m.on("sourcedata", (e) => { if (e.sourceId === "ov-access" && e.isSourceLoaded) spacesDirty.current = true; });
       ready.current = true;
       emit();
       syncAll();
@@ -234,7 +277,8 @@ export default function MapView(props: Props) {
         m.addLayer({ id: "waterlines-line", type: "line", source: src, ...sl, layout: { visibility: "none" }, paint: { "line-color": color, "line-width": 1.6, "line-dasharray": [4, 2], "line-opacity": 0.85 } }, before);
         continue;
       }
-      const fillOpacity = name === "access" ? 0.32 : 0.22;
+      // Public spaces are on by default: light statewide so leases read first, fuller up close.
+      const fillOpacity = (name === "access" ? ["interpolate", ["linear"], ["zoom"], 5, 0.16, 9, 0.26, 12, 0.32] : 0.22) as unknown as number;
       m.addLayer(
         {
           id: `${name}-fill`,
@@ -321,9 +365,18 @@ export default function MapView(props: Props) {
     }
   }
 
+  function syncLeasesVisible() {
+    const m = map.current;
+    if (!m || !ready.current) return;
+    const on = cb.current.showLeases ?? true;
+    for (const id of ["cluster", "cluster-count", "lease-flag", "lease-pt", "hl-ring"]) if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", on ? "visible" : "none");
+  }
+
   function syncLayers() {
     const m = map.current;
     if (!m) return;
+    spacesDirty.current = true;
+    m.triggerRepaint();
     const vis = cb.current.layers;
     const set = (id: string, on: boolean) => m.getLayer(id) && m.setLayoutProperty(id, "visibility", on ? "visible" : "none");
     for (const name of Object.keys(LAYER_INFO) as LayerName[]) {
@@ -370,6 +423,7 @@ export default function MapView(props: Props) {
     syncColor();
     syncTerrain();
     syncHighlight();
+    syncLeasesVisible();
     ensureOverlays();
     syncUserOverlays();
   }
@@ -377,6 +431,7 @@ export default function MapView(props: Props) {
   useEffect(syncData, [props.leases]);
   useEffect(syncHighlight, [props.hover, props.selected, props.leases]);
   useEffect(syncColor, [props.colorBy]);
+  useEffect(syncLeasesVisible, [props.showLeases]);
   useEffect(syncUserOverlays, [props.overlays, props.overlayVis]);
   useEffect(syncTerrain, [props.terrain]);
   useEffect(() => {
@@ -391,4 +446,16 @@ export default function MapView(props: Props) {
 
 function esc(s: string) {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
+
+function bboxOf(g: GeoJSON.Geometry): [number, number, number, number] {
+  let b: [number, number, number, number] = [180, 90, -180, -90];
+  const walk = (c: unknown): void => {
+    if (typeof (c as number[])[0] === "number") {
+      const [x, y] = c as number[];
+      b = [Math.min(b[0], x), Math.min(b[1], y), Math.max(b[2], x), Math.max(b[3], y)];
+    } else (c as unknown[]).forEach(walk);
+  };
+  if ("coordinates" in g) walk(g.coordinates);
+  return b;
 }

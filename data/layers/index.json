@@ -1,9 +1,9 @@
 {
- "generatedAt": "2026-11-06T07:39:29.478Z",
+ "generatedAt": "2026-11-06T08:08:36.342Z",
  "layers": [
   {
    "name": "access",
-   "file": "access.geojson",
+   "file": "access.pmtiles",
    "title": "Parks and protected lands (CPAD units)",
    "attribution": "California Protected Areas Database (CPAD 2026a), GreenInfo Network, www.calands.org",
    "caveat": "Fee-owned protected lands only (no easements). Access is CPAD's ACCESS_TYP field. Geometry generalized for web display.",

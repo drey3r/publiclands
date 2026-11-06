@@ -19,8 +19,22 @@ function toggle<T>(arr: T[], v: T) {
 export function FilterPanel({ f, set, counties, waterbodies, methods }: Props) {
   const chip = (on: boolean) =>
     `rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors ${on ? "border-ink bg-ink text-paper" : "border-line bg-paper text-ink-soft hover:border-ink-soft"}`;
+  const pre1960: Filters = { ...EMPTY, q: f.q, eras: ["pre1940", "1940s", "1950s"], types: ["cable", "pipeline", "outfall", "power"] };
+  const isPre = JSON.stringify(f) === JSON.stringify(pre1960);
+  const isCand = JSON.stringify(f) === JSON.stringify({ ...EMPTY, q: f.q, firstOnly: true });
   return (
     <div className="space-y-4 text-sm">
+      <fieldset>
+        <legend className="mb-1.5 text-[12px] font-semibold text-ink">Quick filters</legend>
+        <div className="flex flex-wrap gap-1.5">
+          <button type="button" aria-pressed={isPre} className={chip(isPre)} onClick={() => set(isPre ? { ...EMPTY, q: f.q } : pre1960)} title="Cable, pipeline, outfall and power leases with an estimated issue date before 1960">
+            Pre-1960 infrastructure
+          </button>
+          <button type="button" aria-pressed={isCand} className={chip(isCand)} onClick={() => set(isCand ? { ...EMPTY, q: f.q } : { ...EMPTY, q: f.q, firstOnly: true })}>
+            Candidates for review
+          </button>
+        </div>
+      </fieldset>
       <fieldset>
         <legend className="mb-1.5 text-[12px] font-semibold text-ink">
           Type <span className="font-normal text-ink-faint" title={methods.mapType}>(estimated from lease text)</span>
