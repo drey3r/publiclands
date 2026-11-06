@@ -239,7 +239,7 @@ export default function Explorer() {
             onClick={() => toggle(k)}
             className={`flex flex-col items-start rounded-xl border-2 px-3 py-2 text-left transition-colors ${show[k] ? "border-ink bg-ink text-paper" : "border-line bg-paper text-ink-soft hover:border-ink-soft"}`}
           >
-            <span className="flex w-full items-center justify-between text-[13.5px] font-semibold">
+            <span className="flex w-full items-center justify-between gap-2 text-[13.5px] font-semibold">
               {SHOW_LABEL[k]}
               <span aria-hidden className={`h-3.5 w-3.5 rounded-full border-2 ${show[k] ? "border-paper bg-paper" : "border-ink-faint"}`} />
             </span>
