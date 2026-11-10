@@ -16,6 +16,8 @@ export type LayerToggle = {
   onToggle: () => void;
   /** Longer description (tooltip). */
   title?: string;
+  /** A key for this layer, shown as its own fold ("<label> key") while the layer is on. */
+  legend?: React.ReactNode;
 };
 
 /** One-click views. */
@@ -72,6 +74,7 @@ export function MapControls(p: Props) {
   const [keyOpen, setKeyOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
+  const [legendOpen, setLegendOpen] = useState<Record<string, boolean>>({});
   const [more, setMore] = useState(false);
   const [above, setAbove] = useState(false);
   const userSet = useRef(false);
@@ -233,6 +236,11 @@ export function MapControls(p: Props) {
 
   const folds = (
     <div>
+      {p.toggles
+        .filter((t) => t.on && t.legend)
+        .map((t) => (
+          <div key={t.key}>{fold(`${t.label} key`, !!legendOpen[t.key], () => setLegendOpen((v) => ({ ...v, [t.key]: !v[t.key] })), `key-${t.key}`, t.legend)}</div>
+        ))}
       {p.leasesOn && fold("Lease colors and key", keyOpen, () => setKeyOpen((v) => !v), "lease-key", leaseKey)}
       {fold(
         <>
