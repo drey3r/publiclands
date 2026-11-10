@@ -776,7 +776,7 @@ function ListSkeleton() {
 
 function SectionHead({ id, title, count, note, loading = false }: { id: string; title: string; count: number; note: string; loading?: boolean }) {
   return (
-    <div className="sticky top-[-12px] z-10 -mx-4 mb-2 border-b border-line bg-cream/95 px-4 pb-1.5 pt-2 backdrop-blur">
+    <div className="sticky top-[-12px] z-20 -mx-4 mb-2 border-b border-line bg-cream px-4 pb-1.5 pt-2">
       <h2 id={id} className="flex items-baseline justify-between text-[15px] font-semibold text-ink">
         {title} <span className="text-[12px] font-medium text-ink-faint" aria-live="polite">{loading ? "Loading…" : `${count.toLocaleString()} in view`}</span>
       </h2>
