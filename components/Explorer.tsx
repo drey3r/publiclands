@@ -518,6 +518,7 @@ export default function Explorer() {
       maxHeight={variant === "panel" ? panelMaxH : null}
       counties={countyLines}
       setCounties={setCountyLines}
+      datasets={meta?.datasets ?? []}
       kinds={{ counts: nKinds, active: kindOf(filters), onPick: (k) => setFilters((f) => withKind(f, k)) }}
       filters={
         <>

@@ -68,8 +68,51 @@ const min = L.full.map((l) => ({
   pts: l.points ?? [[l.lng, l.lat]],
 }));
 
+const LAYERS = ["access", "granted", "school", "waterlines"];
+const layerDir = process.env.LAYERS_DIR ? path.resolve(root, process.env.LAYERS_DIR) : path.join(root, "data/layers");
+const fixtureLayers = process.env.FIXTURE_LAYERS === "1";
+let index = {};
+try { for (const l of readJson(path.join(layerDir, "index.json")).layers ?? []) index[l.name ?? l.id] = l; } catch {}
+
+// ---------- datasets: when each was pulled, and the source's own last-updated date ----------
+const snapSource = readJson(snapshot).source ?? {};
+const day = (v) => (v ? String(v).slice(0, 10) : null);
+const DATASET_NOTES = {
+  access: "CPAD publishes named releases (2026a); the release is its version.",
+};
+const datasets = [
+  {
+    key: "leases",
+    title: "State Lands Commission leases",
+    source: "California State Lands Commission, public GIS lease layer",
+    url: snapSource.layer ?? null,
+    pulledAt: day(snapSource.pulledAt),
+    sourceUpdated: day(snapSource.layerLastEdit),
+    sourceNote: null,
+    caveats: [
+      "Locations are approximate: one point per lease, not the lease boundary.",
+      "The public layer is incomplete: leases are added, modified or terminated on an ongoing basis.",
+      "\u201cActive\u201d is the record status in the layer, not evidence that anything is in use.",
+    ],
+  },
+  ...LAYERS.filter((n) => index[n]).map((n) => {
+    const i = index[n];
+    return {
+      key: n,
+      title: i.title ?? n,
+      source: i.attribution ?? null,
+      url: i.sources?.[0] ?? null,
+      pulledAt: day(i.pulledAt ?? i.asOf),
+      sourceUpdated: day(i.sourceLastEdit),
+      sourceNote: DATASET_NOTES[n] ?? null,
+      caveats: i.caveat ? [i.caveat] : [],
+    };
+  }),
+];
+
 const meta = {
   fixture: isFixture,
+  datasets,
   file: rel(snapshot),
   generatedAt: new Date().toISOString(),
   source: L.source,
@@ -85,11 +128,6 @@ fs.writeFileSync(path.join(root, "data/generated/leases.full.json"), JSON.string
 
 // ---------- layers ----------
 // Map layer name -> file name. A layer with no file is left out and hidden in the UI.
-const LAYERS = ["access", "granted", "school", "waterlines"];
-const layerDir = process.env.LAYERS_DIR ? path.resolve(root, process.env.LAYERS_DIR) : path.join(root, "data/layers");
-const fixtureLayers = process.env.FIXTURE_LAYERS === "1";
-let index = {};
-try { for (const l of readJson(path.join(layerDir, "index.json")).layers ?? []) index[l.name ?? l.id] = l; } catch {}
 
 const outLayers = path.join(root, "public/data/layers");
 for (const f of fs.readdirSync(outLayers)) fs.rmSync(path.join(outLayers, f));

@@ -36,8 +36,12 @@ export type MiniLease = {
   pts: [number, number][];
 };
 
+/** A dataset the map shows: when we pulled it and the source's own last-updated date (when it publishes one). */
+export type Dataset = { key: string; title: string; source: string | null; url: string | null; pulledAt: string | null; sourceUpdated: string | null; sourceNote: string | null; caveats: string[] };
+
 export type DataMeta = {
   fixture: boolean;
+  datasets: Dataset[];
   file: string;
   generatedAt: string;
   syncedAt: string;

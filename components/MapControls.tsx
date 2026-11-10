@@ -5,7 +5,8 @@ import { CATS, ERAS, ERA_UNKNOWN, LAYER_INFO, LEASE_MARK, LEASE_TIER, SCORE_BAND
 import type { LayerManifest, LayerName, OverlayDef } from "@/lib/types";
 import type { ColorBy } from "./MapView";
 import { KindIcon } from "./KindIcon";
-import type { KindKey } from "@/lib/types";
+import { DataDates } from "./DataDates";
+import type { Dataset, KindKey } from "@/lib/types";
 import type { ExploreKind } from "@/lib/filters";
 
 /** Key rows with an icon: the four infrastructure kinds, then roads and bridges and shoreline protection. */
@@ -62,6 +63,8 @@ type Props = {
   terrain: boolean;
   setTerrain: (t: boolean) => void;
   filterCount: number;
+  /** Datasets with pull dates and the source's own last-updated date (map key). */
+  datasets: Dataset[];
   /** Explore by kind: counts per key row, the kind shown alone (if any), and the row click. */
   kinds: { counts: Record<ExploreKind, number>; active: ExploreKind | null; onPick: (k: ExploreKind) => void };
   /** The filter form (FilterPanel plus its match count). */
@@ -106,6 +109,7 @@ export function MapControls(p: Props) {
   const [keyOpen, setKeyOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
+  const [datesOpen, setDatesOpen] = useState(false);
   const [legendOpen, setLegendOpen] = useState<Record<string, boolean>>({});
   const [more, setMore] = useState(false);
   const [above, setAbove] = useState(false);
@@ -333,6 +337,17 @@ export function MapControls(p: Props) {
         "reference",
         referenceList,
       )}
+      {p.datasets.length > 0 &&
+        fold(
+          "Data sources and dates",
+          datesOpen,
+          () => setDatesOpen((v) => !v),
+          "data-dates",
+          <>
+            <DataDates datasets={p.datasets} compact />
+            <a href="/about#data" className="mt-2 inline-block text-[11.5px] font-medium text-ink-soft underline underline-offset-2 hover:text-ink">All sources and caveats</a>
+          </>,
+        )}
     </div>
   );
 
