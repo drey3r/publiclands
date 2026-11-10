@@ -5,14 +5,14 @@ import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as MLMap, ExpressionSpecification, MapLayerMouseEvent } from "maplibre-gl";
 import { baseStyle } from "@/lib/mapStyle";
 import { CA_BOUNDS, CA_PATH, type MaskMode } from "@/lib/config";
-import { ERAS, ERA_UNKNOWN, LAND, LAYER_INFO, LEASE_MARK, NONPROFIT_COLOR, TYPES, TYPE_LABEL, type LandKey } from "@/lib/legend";
+import { CATS, CAT_LABEL, ERAS, ERA_UNKNOWN, LAND, LAYER_INFO, LEASE_MARK, LEASE_TIER, NONPROFIT_COLOR, SCORE_BANDS, SCORE_UNKNOWN, TYPES, TYPE_LABEL, type LandKey } from "@/lib/legend";
 import type { LayerManifest, LayerName, MiniLease, OverlayDef } from "@/lib/types";
 import type { Place as Space } from "./PlaceCard";
 
 // Served by scripts/sync-data.mjs (webpack can't bundle the v6 module worker).
 maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 
-export type ColorBy = "lease" | "type" | "era";
+export type ColorBy = "lease" | "cat" | "type" | "era" | "score";
 export type Bounds = [number, number, number, number];
 
 type Props = {
@@ -74,19 +74,28 @@ const LAND_FILL = [
   "Non Profit", NONPROFIT_COLOR,
   LAND[2].color,
 ] as unknown as ExpressionSpecification;
-const TYPE_EXPR = ["match", ["get", "t"], ...TYPES.flatMap((t) => [t.key, t.color]), "#8d887c"] as unknown as ExpressionSpecification;
+const TYPE_EXPR = ["match", ["get", "t"], ...TYPES.flatMap((t) => [t.key, t.color]), "#d9d2c2"] as unknown as ExpressionSpecification;
+const CAT_EXPR = ["match", ["get", "k"], ...CATS.flatMap((c) => [c.key, c.color]), "#c9c2b2"] as unknown as ExpressionSpecification;
 const ERA_EXPR = [
   "step",
   ["coalesce", ["get", "e"], -1],
   ERA_UNKNOWN,
   ...ERAS.flatMap((e) => [e.min, e.color]),
 ] as unknown as ExpressionSpecification;
+const SCORE_EXPR = ["case", ["==", ["get", "s"], null], SCORE_UNKNOWN, ["step", ["get", "s"], SCORE_BANDS[0].color, ...SCORE_BANDS.slice(1).flatMap((b) => [b.min, b.color])]] as unknown as ExpressionSpecification;
+
+/** Priority tier by category: 1 infrastructure, 2 public agency and commercial, 3 recreation and other. */
+const TIER_OF: Record<string, 1 | 2 | 3> = Object.fromEntries(CATS.map((c) => [c.key, c.tier]));
+const byTier = (pick: (t: (typeof LEASE_TIER)[1 | 2 | 3]) => unknown) =>
+  ["match", ["get", "tier"], 1, pick(LEASE_TIER[1]), 2, pick(LEASE_TIER[2]), pick(LEASE_TIER[3])] as unknown as ExpressionSpecification;
+const TIER_RADIUS = ["interpolate", ["linear"], ["zoom"], 5, byTier((t) => t.r[0]), 10, byTier((t) => t.r[1]), 15, byTier((t) => t.r[2])] as unknown as ExpressionSpecification;
+const TIER_FILL = byTier((t) => t.fill);
 
 function toGeoJSON(ls: MiniLease[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
   const features: GeoJSON.Feature<GeoJSON.Point>[] = [];
   for (const l of ls)
     for (const pt of l.pts)
-      features.push({ type: "Feature", geometry: { type: "Point", coordinates: pt }, properties: { p: l.p, n: l.n, t: l.t, e: l.e, s: l.s, f: l.f, cs: l.cs, x: l.x } });
+      features.push({ type: "Feature", geometry: { type: "Point", coordinates: pt }, properties: { p: l.p, n: l.n, t: l.t, k: l.k, tier: TIER_OF[l.k] ?? 3, e: l.e, s: l.s, f: l.f, cs: l.cs, x: l.x } });
   return { type: "FeatureCollection", features };
 }
 
@@ -175,13 +184,15 @@ export default function MapView(props: Props) {
         type: "circle",
         source: "leases",
         filter: ["!", ["has", "point_count"]],
+        // Infrastructure draws on top of the quieter categories.
+        layout: { "circle-sort-key": ["-", 4, ["get", "tier"]] },
         paint: {
-          "circle-color": LEASE_MARK.fill,
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 3.6, 10, 5.5, 15, 8.5],
-          // Dark outline so the mark holds on cream, green and water; heavier when the screen score is higher.
-          "circle-stroke-color": LEASE_MARK.line,
-          "circle-stroke-width": ["interpolate", ["linear"], ["coalesce", ["get", "s"], 0], 0, 1.1, 100, 2.6],
-          "circle-stroke-opacity": ["interpolate", ["linear"], ["coalesce", ["get", "s"], 0], 0, 0.85, 100, 1],
+          "circle-color": TIER_FILL,
+          "circle-radius": TIER_RADIUS,
+          // Dark outline so the mark holds on cream, green and water; strength follows the category.
+          "circle-stroke-color": byTier((t) => t.line),
+          "circle-stroke-width": byTier((t) => t.width),
+          "circle-stroke-opacity": byTier((t) => t.lineOpacity),
         },
       });
       m.addLayer({
@@ -222,7 +233,7 @@ export default function MapView(props: Props) {
         if (cb.current.hover !== p) cb.current.onHover(p);
         const l = byPrc.current.get(p);
         if (!l) return;
-        const html = `<div style="font-size:12px;line-height:1.35;max-width:220px"><div style="font-weight:600;color:#2b2a26">${esc(l.n)}</div><div style="color:#57534a">PRC ${esc(l.p)} · ${TYPE_LABEL[l.t]} <span style="color:#736e63">(est.)</span></div></div>`;
+        const html = `<div style="font-size:12px;line-height:1.35;max-width:220px"><div style="font-weight:600;color:#2b2a26">${esc(l.n)}</div><div style="color:#57534a">PRC ${esc(l.p)} · ${l.k === "infra" ? TYPE_LABEL[l.t] : CAT_LABEL[l.k]} <span style="color:#736e63">(estimate)</span></div></div>`;
         popup.current ??= new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 10, className: "lease-tip" });
         popup.current.setLngLat((f.geometry as GeoJSON.Point).coordinates as [number, number]).setHTML(html).addTo(m);
       });
@@ -481,7 +492,7 @@ export default function MapView(props: Props) {
     const m = map.current;
     if (!m || !ready.current) return;
     const c = cb.current.colorBy;
-    m.setPaintProperty("lease-pt", "circle-color", c === "era" ? ERA_EXPR : c === "type" ? TYPE_EXPR : LEASE_MARK.fill);
+    m.setPaintProperty("lease-pt", "circle-color", c === "era" ? ERA_EXPR : c === "type" ? TYPE_EXPR : c === "cat" ? CAT_EXPR : c === "score" ? SCORE_EXPR : TIER_FILL);
   }
 
   function syncTerrain() {

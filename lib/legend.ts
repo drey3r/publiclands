@@ -1,14 +1,41 @@
-import type { StageKey, TypeKey } from "./types";
+import type { CatKey, StageKey, TypeKey } from "./types";
 
+/**
+ * Infrastructure type (Estimate from the Improvements text). Colors are used only when
+ * "Color by: Type" is on; the default lease mark is gold. None of them is gold, and none is green.
+ */
 export const TYPES: { key: TypeKey; label: string; color: string; from: string }[] = [
-  { key: "cable", label: "Cable", color: "#3f6075", from: "Telecom" },
-  { key: "pipeline", label: "Pipeline", color: "#a4553f", from: "Pipeline / oil & gas" },
-  { key: "outfall", label: "Outfall / water", color: "#3f7a6c", from: "Water & sewer" },
-  { key: "power", label: "Power", color: "#c08f2f", from: "Electric utility" },
-  { key: "other", label: "Other", color: "#8d887c", from: "Recreational, marina, transport, agency, other" },
+  { key: "cable", label: "Cable", color: "#3f4f93", from: "Telephone, fiber optic, communications, submarine cable" },
+  { key: "pipeline", label: "Pipeline", color: "#a4553f", from: "Pipeline, petroleum, crude, natural gas" },
+  { key: "outfall", label: "Water / outfall", color: "#2286ad", from: "Outfall, sewer, wastewater, intake, water line" },
+  { key: "power", label: "Power", color: "#8e3b8a", from: "Power line or cable, transmission line, kV" },
+  { key: "other", label: "Not infrastructure", color: "#d9d2c2", from: "Recreation, public agency, commercial and other leases" },
 ];
 export const TYPE_COLOR = Object.fromEntries(TYPES.map((t) => [t.key, t.color])) as Record<TypeKey, string>;
 export const TYPE_LABEL = Object.fromEntries(TYPES.map((t) => [t.key, t.label])) as Record<TypeKey, string>;
+
+/**
+ * Lease category (Estimate): a grouping of the state's own lease type (TypeofLease), with
+ * infrastructure found in the Improvements text. `tier` sets how strong the mark is.
+ */
+export const CATS: { key: CatKey; label: string; short: string; color: string; tier: 1 | 2 | 3; note: string }[] = [
+  { key: "infra", label: "Infrastructure", short: "Infrastructure", color: "#b8452c", tier: 1, note: "Cable, pipeline, water/outfall and power lines" },
+  { key: "agency", label: "Public agency", short: "Public agency", color: "#3f4f93", tier: 2, note: "Public Agency Use, Streets and Highways" },
+  { key: "commercial", label: "Commercial and industrial", short: "Commercial", color: "#5e5141", tier: 2, note: "Commercial, industrial, oil and gas, mineral, geothermal, dredging, grazing" },
+  { key: "rec", label: "Recreation", short: "Recreation", color: "#e3cf9c", tier: 3, note: "Piers, docks, marinas, buoys" },
+  { key: "other", label: "Other", short: "Other", color: "#c9c2b2", tier: 3, note: "Right of way without utility words, protective structures, surveys, other" },
+];
+export const CAT_LABEL = Object.fromEntries(CATS.map((c) => [c.key, c.label])) as Record<CatKey, string>;
+export const CAT_COLOR = Object.fromEntries(CATS.map((c) => [c.key, c.color])) as Record<CatKey, string>;
+
+/** Screen score bands (Estimate), for "Color by: Score". */
+export const SCORE_BANDS: { min: number; label: string; color: string }[] = [
+  { min: 0, label: "0–19", color: "#f1e6c8" },
+  { min: 20, label: "20–39", color: "#ddb867" },
+  { min: 40, label: "40–59", color: "#b27a2c" },
+  { min: 60, label: "60 and up", color: "#6a3b12" },
+];
+export const SCORE_UNKNOWN = "#cfc8b8";
 
 /** Era buckets: older is darker and warmer. `min` is inclusive decade. */
 export const ERAS: { key: string; label: string; min: number; max: number; color: string }[] = [
@@ -66,3 +93,13 @@ export const landOf = (agencyLevel: string | null | undefined): LandKey => (agen
 
 /** Lease marks: muted gold with a dark outline (treatment a, picked after Round 1). */
 export const LEASE_MARK = { fill: "#d2b06a", line: "#2b2a26", text: "#2b2a26" };
+/**
+ * Priority by strength, not hue: infrastructure is full gold with a dark outline and a little
+ * larger; public agency and commercial are the standard mark; recreation and other are smaller
+ * and paler but still outlined.
+ */
+export const LEASE_TIER = {
+  1: { fill: LEASE_MARK.fill, line: LEASE_MARK.line, lineOpacity: 1, width: 2, r: [4.8, 7.2, 10.5] },
+  2: { fill: "#e3cd98", line: LEASE_MARK.line, lineOpacity: 0.7, width: 1, r: [3.3, 5, 7.5] },
+  3: { fill: "#efe5c8", line: "#6b6352", lineOpacity: 0.65, width: 0.9, r: [2.5, 3.8, 6] },
+} as const;

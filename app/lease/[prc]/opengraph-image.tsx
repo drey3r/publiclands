@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 import { getLease } from "@/lib/server";
-import { TYPE_COLOR, TYPE_LABEL } from "@/lib/legend";
+import { CAT_LABEL, LEASE_MARK, TYPE_LABEL } from "@/lib/legend";
 
 export const runtime = "nodejs";
 export const size = { width: 1200, height: 630 };
@@ -26,7 +26,7 @@ export default async function OG({ params }: { params: Promise<{ prc: string }> 
   const { prc } = await params;
   const { meta, lease: l } = getLease(decodeURIComponent(prc));
   const title = l ? l.caseStudy?.title ?? l.name : `PRC ${prc}`;
-  const color = l ? TYPE_COLOR[l.derived.typeKey] : "#8d887c";
+  const color = LEASE_MARK.fill;
   const at: [number, number] | null = l ? [l.lng, l.lat] : null;
   const [px, py] = at ? proj(at) : ["0", "0"];
   const status = !l ? "" : l.completed ? "Completed" : l.derived.firstTarget ? "Candidate for review" : "Lease site";
@@ -53,7 +53,7 @@ export default async function OG({ params }: { params: Promise<{ prc: string }> 
           )}
           <div style={{ display: "flex", marginTop: "auto", alignItems: "center", gap: 12, fontSize: 22, color: "#57534a" }}>
             {l && <div style={{ display: "flex", width: 18, height: 18, borderRadius: 9, background: color }} />}
-            {l && <span>{TYPE_LABEL[l.derived.typeKey]} (est.) · {l.derived.county?.value ? `${l.derived.county.value} County` : l.region.value}</span>}
+            {l && <span>{l.derived.categoryKey === "infra" ? TYPE_LABEL[l.derived.typeKey] : CAT_LABEL[l.derived.categoryKey]} (estimate) · {l.derived.county?.value ? `${l.derived.county.value} County` : l.region.value}</span>}
           </div>
           <div style={{ display: "flex", fontSize: 16, color: "#736e63", marginTop: 10 }}>
             {meta.fixture ? "FIXTURE DATA · " : ""}Source: California State Lands Commission lease layer

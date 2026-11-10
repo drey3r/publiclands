@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import * as maplibregl from "maplibre-gl";
 import { baseStyle } from "@/lib/mapStyle";
-import { TYPE_COLOR } from "@/lib/legend";
+import { LEASE_MARK } from "@/lib/legend";
 import type { TypeKey } from "@/lib/types";
 
 maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
@@ -39,7 +39,7 @@ export default function MiniMap({ points, t, pitch = 50, approximate = false }: 
         return;
       }
       m.addLayer({ id: "pts-halo", type: "circle", source: "pts", paint: { "circle-radius": 13, "circle-color": "rgba(250,247,240,0.5)", "circle-stroke-color": "#2b2a26", "circle-stroke-width": 2 } });
-      m.addLayer({ id: "pts", type: "circle", source: "pts", paint: { "circle-radius": 6, "circle-color": TYPE_COLOR[t], "circle-stroke-color": "#faf7f0", "circle-stroke-width": 1.5 } });
+      m.addLayer({ id: "pts", type: "circle", source: "pts", paint: { "circle-radius": 6, "circle-color": LEASE_MARK.fill, "circle-stroke-color": LEASE_MARK.line, "circle-stroke-width": 1.8 } });
     });
     m.getCanvas().setAttribute("aria-label", "Locator map of the lease site");
     return () => m.remove();

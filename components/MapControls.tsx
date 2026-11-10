@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ERAS, ERA_UNKNOWN, LAYER_INFO, LEASE_MARK, TYPES } from "@/lib/legend";
+import { CATS, ERAS, ERA_UNKNOWN, LAYER_INFO, LEASE_MARK, LEASE_TIER, SCORE_BANDS, SCORE_UNKNOWN, TYPES } from "@/lib/legend";
 import type { LayerManifest, LayerName, OverlayDef } from "@/lib/types";
 import type { ColorBy } from "./MapView";
 
@@ -57,6 +57,17 @@ type Props = {
 /** A lease mark as drawn on the map. */
 export function LeaseSwatch({ size = 12 }: { size?: number }) {
   return <span aria-hidden className="inline-block shrink-0 rounded-full" style={{ width: size, height: size, background: LEASE_MARK.fill, border: `1.5px solid ${LEASE_MARK.line}` }} />;
+}
+
+/** A lease mark at its priority tier, as drawn at mid zoom. */
+function TierSwatch({ tier }: { tier: 1 | 2 | 3 }) {
+  const t = LEASE_TIER[tier];
+  const d = Math.round(t.r[1] * 2);
+  return (
+    <span aria-hidden className="inline-flex w-4 shrink-0 items-center justify-center">
+      <span className="rounded-full" style={{ width: d, height: d, background: t.fill, border: `${t.width}px solid ${t.line}` }} />
+    </span>
+  );
 }
 
 /**
@@ -182,29 +193,47 @@ export function MapControls(p: Props) {
     </section>
   );
 
-  const seg = (on: boolean) => `flex-1 rounded-md px-1.5 py-1 text-[11.5px] font-medium ${on ? "bg-ink text-paper" : "text-ink-soft hover:text-ink"}`;
+  const seg = (on: boolean) => `flex-1 rounded-md px-1 py-1 text-[11.5px] font-medium ${on ? "bg-ink text-paper" : "text-ink-soft hover:text-ink"}`;
   const leaseKey = (
     <div className="space-y-2">
-      <div className="flex gap-1 rounded-lg bg-sand p-0.5" role="group" aria-label="Color lease points by">
-        <button type="button" className={seg(p.colorBy === "lease")} aria-pressed={p.colorBy === "lease"} onClick={() => p.setColorBy("lease")}>One color</button>
-        <button type="button" className={seg(p.colorBy === "type")} aria-pressed={p.colorBy === "type"} onClick={() => p.setColorBy("type")}>Type</button>
-        <button type="button" className={seg(p.colorBy === "era")} aria-pressed={p.colorBy === "era"} onClick={() => p.setColorBy("era")}>Era</button>
-      </div>
-      <ul className="grid grid-cols-2 gap-x-2 gap-y-1 text-[12px]">
-        {p.colorBy === "lease" ? (
-          <li className="col-span-2 flex items-center gap-2 text-ink"><LeaseSwatch /> Lease site (clusters show counts)</li>
-        ) : p.colorBy === "type" ? (
-          TYPES.map((t) => <Row key={t.key} color={t.color} label={t.label} />)
-        ) : (
-          [...ERAS.map((e) => <Row key={e.key} color={e.color} label={e.label} />), <Row key="u" color={ERA_UNKNOWN} label="Unknown" />]
-        )}
+      <ul className="space-y-1 text-[12px] text-ink">
+        <li className="flex items-center gap-2"><TierSwatch tier={1} /> Infrastructure <span className="text-ink-faint">(strongest)</span></li>
+        <li className="flex items-center gap-2"><TierSwatch tier={2} /> Public agency, commercial and industrial</li>
+        <li className="flex items-center gap-2"><TierSwatch tier={3} /> Recreation and other <span className="text-ink-faint">(quieter)</span></li>
+        <li className="flex items-center gap-2"><span aria-hidden className="inline-flex w-4 justify-center"><LeaseSwatch size={15} /></span> Group of lease sites (count)</li>
       </ul>
+      <div>
+        <p className="mb-1 text-[11.5px] font-semibold text-ink-soft">Color by</p>
+        <div className="flex gap-0.5 rounded-lg bg-sand p-0.5" role="group" aria-label="Color lease points by">
+          {(
+            [
+              ["lease", "Gold"],
+              ["cat", "Category"],
+              ["type", "Type"],
+              ["era", "Era"],
+              ["score", "Score"],
+            ] as const
+          ).map(([k, label]) => (
+            <button key={k} type="button" className={seg(p.colorBy === k)} aria-pressed={p.colorBy === k} onClick={() => p.setColorBy(k)}>{label}</button>
+          ))}
+        </div>
+      </div>
+      {p.colorBy !== "lease" && (
+        <ul className="grid grid-cols-2 gap-x-2 gap-y-1 text-[12px]">
+          {p.colorBy === "cat"
+            ? CATS.map((c) => <Row key={c.key} color={c.color} label={c.short} />)
+            : p.colorBy === "type"
+              ? TYPES.map((t) => <Row key={t.key} color={t.color} label={t.label} />)
+              : p.colorBy === "score"
+                ? [...SCORE_BANDS.map((b) => <Row key={b.min} color={b.color} label={`Score ${b.label}`} />), <Row key="u" color={SCORE_UNKNOWN} label="No score" />]
+                : [...ERAS.map((e) => <Row key={e.key} color={e.color} label={e.label} />), <Row key="u" color={ERA_UNKNOWN} label="Unknown" />]}
+        </ul>
+      )}
       <ul className="grid grid-cols-1 gap-y-1 text-[12px] text-ink-soft">
-        <li className="flex items-center gap-2"><span aria-hidden className="h-3 w-3 shrink-0 rounded-full border-[2.5px] border-ink/80 bg-paper" /> Heavier ring: higher screen score</li>
         <li className="flex items-center gap-2"><span aria-hidden className="h-3.5 w-3.5 shrink-0 rounded-full border-[1.5px] border-clay" /> Candidate for review</li>
         <li className="flex items-center gap-2"><span aria-hidden className="h-3.5 w-3.5 shrink-0 rounded-full border-[1.5px] border-sage-deep" /> Completed</li>
       </ul>
-      <p className="text-[11px] text-ink-faint">Type, era and score are estimates.</p>
+      <p className="text-[11px] text-ink-faint">Category, infrastructure type, era and score are estimates; the state&apos;s lease type is source data.</p>
     </div>
   );
 
