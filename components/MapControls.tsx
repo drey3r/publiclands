@@ -6,6 +6,7 @@ import type { LayerManifest, LayerName, OverlayDef } from "@/lib/types";
 import type { ColorBy } from "./MapView";
 import { KindIcon } from "./KindIcon";
 import type { KindKey } from "@/lib/types";
+import type { ExploreKind } from "@/lib/filters";
 
 /** Key rows with an icon: the four infrastructure kinds, then roads and bridges and shoreline protection. */
 export const KIND_ROWS: { key: KindKey; label: string }[] = [
@@ -15,6 +16,12 @@ export const KIND_ROWS: { key: KindKey; label: string }[] = [
   { key: "power", label: "Power" },
   { key: "roads", label: "Roads and bridges" },
   { key: "shore", label: "Shoreline protection" },
+];
+const QUIET_ROWS: { key: ExploreKind; label: string; tier: 2 | 3 }[] = [
+  { key: "agency", label: "Public agency", tier: 2 },
+  { key: "commercial", label: "Commercial and industrial", tier: 2 },
+  { key: "rec", label: "Recreation", tier: 3 },
+  { key: "other", label: "Other", tier: 3 },
 ];
 
 /** One row of the layer stack. The rows are the legend and the switches at once. */
@@ -55,6 +62,8 @@ type Props = {
   terrain: boolean;
   setTerrain: (t: boolean) => void;
   filterCount: number;
+  /** Explore by kind: counts per key row, the kind shown alone (if any), and the row click. */
+  kinds: { counts: Record<ExploreKind, number>; active: ExploreKind | null; onPick: (k: ExploreKind) => void };
   /** The filter form (FilterPanel plus its match count). */
   filters: React.ReactNode;
   /** "panel": floating over the map (desktop). "sheet": inside the phone bottom sheet. */
@@ -208,15 +217,33 @@ export function MapControls(p: Props) {
   const seg = (on: boolean) => `flex-1 rounded-md px-1 py-1 text-[11.5px] font-medium ${on ? "bg-ink text-paper" : "text-ink-soft hover:text-ink"}`;
   const leaseKey = (
     <div className="space-y-2">
-      <ul className="space-y-1 text-[12px] text-ink">
-        {KIND_ROWS.map((r) => (
-          <li key={r.key} className="flex items-center gap-2"><KindIcon k={r.key} size={20} /> {r.label}</li>
-        ))}
-        <li className="flex items-center gap-2"><TierSwatch tier={2} /> Public agency, commercial and industrial</li>
-        <li className="flex items-center gap-2"><TierSwatch tier={3} /> Recreation and other <span className="text-ink-faint">(quieter)</span></li>
-        <li className="flex items-center gap-2"><span aria-hidden className="inline-flex w-5 justify-center"><LeaseSwatch size={15} /></span> Group of lease sites (count)</li>
+      <p className="text-[11px] text-ink-faint">Click a row to show only that kind{p.kinds.active ? "; click it again to show all" : ""}.</p>
+      <ul className="-mx-1 text-[12px] text-ink" aria-label="Explore by kind">
+        {[
+          ...KIND_ROWS.map((r) => ({ key: r.key as ExploreKind, label: r.label, mark: <KindIcon k={r.key} size={20} /> })),
+          ...QUIET_ROWS.map((r) => ({ key: r.key, label: r.label, mark: <TierSwatch tier={r.tier} /> })),
+        ].map((r) => {
+          const on = p.kinds.active === r.key;
+          const dim = !!p.kinds.active && !on;
+          return (
+            <li key={r.key}>
+              <button
+                type="button"
+                aria-pressed={on}
+                onClick={() => p.kinds.onPick(r.key)}
+                title={on ? "Show all kinds again" : `Show only ${r.label.toLowerCase()}`}
+                className={`flex w-full items-center gap-2 rounded-md px-1 py-[3px] text-left ${on ? "bg-ink/10 font-semibold" : "hover:bg-sand"} ${dim ? "opacity-55" : ""}`}
+              >
+                {r.mark}
+                <span className="min-w-0 flex-1 truncate">{r.label}</span>
+                <span className="tabular-nums text-ink-faint">{p.kinds.counts[r.key].toLocaleString()}</span>
+              </button>
+            </li>
+          );
+        })}
+        <li className="flex items-center gap-2 px-1 py-[3px]"><span aria-hidden className="inline-flex w-5 justify-center"><LeaseSwatch size={15} /></span> Group of lease sites (count)</li>
       </ul>
-      <p className="text-[11px] text-ink-faint">Icons from zoom 11; dots and counts below that. Infrastructure is full gold; roads, bridges and shoreline protection a lighter gold.</p>
+      <p className="text-[11px] text-ink-faint">Icons from zoom 11; dots and counts below that. A lease with two kinds (say, a pipeline and a cable) counts under both.</p>
       <div>
         <p className="mb-1 text-[11.5px] font-semibold text-ink-soft">Color by</p>
         <div className="flex gap-0.5 rounded-lg bg-sand p-0.5" role="group" aria-label="Color lease points by">

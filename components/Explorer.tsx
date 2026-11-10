@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { Map as MLMap } from "maplibre-gl";
 import { ABOUT_URL, BACK_LABEL, BACK_URL, DISCLAIMER, REPO_URL, STORIES, maskFrom, type MaskMode } from "@/lib/config";
-import { EMPTY, activeCount, applyFilters, fromQuery, inBounds, sortForList, toQuery, type Filters } from "@/lib/filters";
+import { EMPTY, activeCount, applyFilters, fromQuery, inBounds, kindCounts, kindOf, sortForList, toQuery, withKind, type Filters } from "@/lib/filters";
 import type { LayerManifest, LayerName, LeasesPayload, MiniLease, OverlayDef } from "@/lib/types";
 import { FilterPanel } from "./FilterPanel";
 import { LeaseCard } from "./LeaseCard";
@@ -177,6 +177,7 @@ export default function Explorer() {
   const hasPlaces = !!manifest?.access;
   const byPrc = useMemo(() => new Map(all.map((l) => [l.p, l])), [all]);
   const filtered = useMemo(() => applyFilters(all, filters), [all, filters]);
+  const nKinds = useMemo(() => kindCounts(all), [all]);
   const deferredFiltered = useDeferredValue(filtered);
   const inView = useMemo(() => {
     const ls = sortForList(inBounds(deferredFiltered, bounds));
@@ -517,6 +518,7 @@ export default function Explorer() {
       maxHeight={variant === "panel" ? panelMaxH : null}
       counties={countyLines}
       setCounties={setCountyLines}
+      kinds={{ counts: nKinds, active: kindOf(filters), onPick: (k) => setFilters((f) => withKind(f, k)) }}
       filters={
         <>
           <FilterPanel f={filters} set={setFilters} counties={counties} waterbodies={waterbodies} methods={meta?.methods ?? {}} />

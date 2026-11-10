@@ -1,5 +1,5 @@
 import { ERAS, eraOf } from "./legend";
-import type { CatKey, MiniLease, TypeKey } from "./types";
+import type { CatKey, KindKey, MiniLease, TypeKey } from "./types";
 
 export type Status = "current" | "expired" | "none";
 export const STATUSES: { key: Status; code: MiniLease["xs"]; label: string; note: string }[] = [
@@ -9,6 +9,14 @@ export const STATUSES: { key: Status; code: MiniLease["xs"]; label: string; note
 ];
 const CAT_KEYS: CatKey[] = ["infra", "roads", "shore", "rec", "agency", "commercial", "other"];
 const TYPE_KEYS: TypeKey[] = ["cable", "pipeline", "outfall", "power"];
+
+/**
+ * "Explore by kind": one key row = one kind. The four infrastructure kinds match any kind in
+ * the lease's text; the others are categories. Shareable as ?kind=<key>.
+ */
+export type ExploreKind = KindKey | Exclude<CatKey, "infra" | "roads" | "shore">;
+export const EXPLORE_KINDS: ExploreKind[] = ["cable", "pipeline", "outfall", "power", "roads", "shore", "agency", "commercial", "rec", "other"];
+const isType = (k: string): k is Exclude<TypeKey, "other"> => (TYPE_KEYS as string[]).includes(k);
 
 export type Filters = {
   /** What is it? Categories (Estimate). */
@@ -29,6 +37,27 @@ export type Filters = {
 };
 
 export const EMPTY: Filters = { cats: [], types: [], eras: [], minScore: 0, region: "", county: "", waterbody: "", firstOnly: false, status: [], nonop: false, q: "" };
+
+/** The kind a filter shows, when "What is it?" is exactly one kind; otherwise null. */
+export function kindOf(f: Filters): ExploreKind | null {
+  if (f.types.length === 1 && (f.cats.length === 0 || (f.cats.length === 1 && f.cats[0] === "infra"))) return f.types[0] as ExploreKind;
+  if (f.types.length === 0 && f.cats.length === 1 && f.cats[0] !== "infra") return f.cats[0] as ExploreKind;
+  return null;
+}
+/** Show only this kind (or, when it is already the only one shown, show everything again). Other filters stay. */
+export function withKind(f: Filters, k: ExploreKind): Filters {
+  if (kindOf(f) === k) return { ...f, cats: [], types: [] };
+  return isType(k) ? { ...f, cats: [], types: [k] } : { ...f, cats: [k], types: [] };
+}
+/** Statewide count per kind (a lease with a cable and a pipeline counts under both). */
+export function kindCounts(all: MiniLease[]): Record<ExploreKind, number> {
+  const n = Object.fromEntries(EXPLORE_KINDS.map((k) => [k, 0])) as Record<ExploreKind, number>;
+  for (const l of all) {
+    if (l.k === "infra") for (const t of l.ts ?? [l.t]) { if (isType(t)) n[t]++; }
+    else n[l.k as ExploreKind]++;
+  }
+  return n;
+}
 
 export function activeCount(f: Filters) {
   return (
@@ -83,8 +112,12 @@ export function applyFilters(all: MiniLease[], f: Filters): MiniLease[] {
 /** Filters ⇄ URL query, so a filtered view is shareable. */
 export function toQuery(f: Filters): string {
   const p = new URLSearchParams();
-  if (f.cats.length) p.set("cat", f.cats.join(","));
-  if (f.types.length) p.set("type", f.types.join(","));
+  const kind = kindOf(f);
+  if (kind) p.set("kind", kind);
+  else {
+    if (f.cats.length) p.set("cat", f.cats.join(","));
+    if (f.types.length) p.set("type", f.types.join(","));
+  }
   if (f.eras.length) p.set("era", f.eras.join(","));
   if (f.minScore) p.set("score", String(f.minScore));
   if (f.region) p.set("region", f.region);
@@ -104,9 +137,15 @@ export function fromQuery(sp: URLSearchParams): Filters {
   const oldType = list("type");
   const cats = new Set(list("cat").filter((c): c is CatKey => (CAT_KEYS as string[]).includes(c)));
   if (oldType.includes("other")) for (const c of CAT_KEYS) if (c !== "infra") cats.add(c);
+  const types = new Set(oldType.filter((t): t is TypeKey => (TYPE_KEYS as string[]).includes(t)));
+  // ?kind=cable (explore by kind)
+  for (const k of list("kind")) {
+    if (isType(k)) types.add(k);
+    else if ((EXPLORE_KINDS as string[]).includes(k)) cats.add(k as CatKey);
+  }
   return {
     cats: CAT_KEYS.filter((c) => cats.has(c)),
-    types: oldType.filter((t): t is TypeKey => (TYPE_KEYS as string[]).includes(t)),
+    types: TYPE_KEYS.filter((t) => types.has(t)),
     eras: list("era"),
     minScore: Number(sp.get("score") ?? 0) || 0,
     region: sp.get("region") ?? "",
