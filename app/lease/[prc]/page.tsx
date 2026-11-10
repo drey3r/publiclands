@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MiniMapLazy } from "@/components/MiniMapLazy";
-import { FixtureBadge, ScoreRing, StageTracker, TypeDot } from "@/components/ui";
+import { DataLabel, FixtureBadge, ScoreRing, StageTracker, WhatDot, whatLabel } from "@/components/ui";
 import { ABOUT_URL, BACK_LABEL, BACK_URL, CSLC_URL, DISCLAIMER, REPO_URL } from "@/lib/config";
-import { STAGES, TYPE_LABEL } from "@/lib/legend";
+import { STAGES } from "@/lib/legend";
 import { getLease, loadFull, nearby } from "@/lib/server";
 import type { Inferred } from "@/lib/types";
 
@@ -40,7 +40,7 @@ export default async function LeasePage({ params }: Params) {
 
   const facts: [string, string | null][] = [
     ["Lease or permit", l.facts.leaseOrPermit],
-    ["Type of lease", l.facts.typeOfLease],
+    ["State lease type", l.facts.typeOfLease],
     ["Location", l.facts.location],
     ["What's authorized there", l.facts.improvements],
     ["Current term began", fmtDate(l.facts.leaseStart)],
@@ -51,7 +51,8 @@ export default async function LeasePage({ params }: Params) {
   ];
 
   const inferred: [string, Inferred<unknown> | null, string?][] = [
-    ["Likely type", l.likelyType],
+    ["Category", l.category],
+    ["Infrastructure type", l.likelyType],
     ["Era (current term)", l.era],
     ["Estimated original issue", l.eraFromPrc ? { ...l.eraFromPrc, value: `~${l.eraFromPrc.year} (${l.eraFromPrc.value})` } : null],
     ["Renewed legacy lease", { ...l.renewedLegacy, value: l.renewedLegacy.value ? "Likely yes" : "No" }],
@@ -81,8 +82,9 @@ export default async function LeasePage({ params }: Params) {
             <h1 className="display mt-1 text-[34px] text-ink sm:text-[42px]">{cs?.title ?? l.name}</h1>
             <p className="mt-2 text-[15px] leading-relaxed text-ink-soft">{l.facts.location}</p>
             <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-soft">
-              <span className="inline-flex items-center gap-1.5"><TypeDot t={l.derived.typeKey} />{TYPE_LABEL[l.derived.typeKey]} <span className="text-[10px] uppercase text-ink-faint">(est.)</span></span>
-              <span className="inline-flex items-center gap-2"><ScoreRing s={l.score.value} size={30} /> screen score <span className="text-[10px] uppercase text-ink-faint">(est.)</span></span>
+              <span className="inline-flex items-center gap-1.5" title={`Why: ${l.category.reason}`}><WhatDot t={l.derived.typeKey} k={l.derived.categoryKey} />{whatLabel(l.derived.typeKey, l.derived.categoryKey)}<DataLabel kind="estimate" /></span>
+              {l.facts.typeOfLease && <span className="inline-flex items-center">State lease type: {l.facts.typeOfLease}<DataLabel kind="source" /></span>}
+              <span className="inline-flex items-center gap-2"><ScoreRing s={l.score.value} size={30} /> screen score<DataLabel kind="estimate" /></span>
             </p>
           </div>
           <div className="relative h-[260px] overflow-hidden rounded-2xl border border-line bg-sand lg:row-span-2 lg:h-auto lg:min-h-[340px]">
@@ -133,7 +135,7 @@ export default async function LeasePage({ params }: Params) {
 
         <div className="mt-6 grid gap-6 md:grid-cols-2">
           <section aria-labelledby="facts">
-            <h2 id="facts" className="display text-[22px] text-ink">Facts from the lease record</h2>
+            <h2 id="facts" className="display text-[22px] text-ink">Facts from the lease record <DataLabel kind="source" /></h2>
             <p className="mt-1 text-[12px] text-ink-faint">Verbatim from the State Lands Commission GIS layer (whitespace cleaned).</p>
             <dl className="mt-3 divide-y divide-line rounded-xl border border-line bg-paper">
               {facts.map(([k, v]) => (
@@ -147,12 +149,12 @@ export default async function LeasePage({ params }: Params) {
           </section>
 
           <section aria-labelledby="inferred">
-            <h2 id="inferred" className="display text-[22px] text-ink">Our estimates</h2>
+            <h2 id="inferred" className="display text-[22px] text-ink">Our estimates <DataLabel kind="estimate" /></h2>
             <p className="mt-1 text-[12px] text-ink-faint">Estimated by this map, not stated in the record. Each shows its reason.</p>
             <dl className="mt-3 divide-y divide-line rounded-xl border border-dashed border-line bg-paper">
               {inferred.map(([k, v]) => (
                 <div key={k} className="grid grid-cols-[150px_1fr] gap-3 px-3 py-2 text-[13px]">
-                  <dt className="text-ink-faint">{k} <span className="text-[10px] uppercase">est.</span></dt>
+                  <dt className="text-ink-faint">{k}</dt>
                   <dd>
                     {v ? (
                       <>
@@ -166,7 +168,7 @@ export default async function LeasePage({ params }: Params) {
                 </div>
               ))}
               <div className="grid grid-cols-[150px_1fr] gap-3 px-3 py-2 text-[13px]">
-                <dt className="text-ink-faint">Screen score <span className="text-[10px] uppercase">est.</span></dt>
+                <dt className="text-ink-faint">Screen score</dt>
                 <dd>
                   <span className="text-ink">{l.score.value ?? "Not scored"}</span>
                   {l.score.why.length > 0 && (
@@ -232,7 +234,7 @@ export default async function LeasePage({ params }: Params) {
                     <ScoreRing s={o.score.value} size={30} />
                     <span className="min-w-0">
                       <span className="block truncate text-[14px] font-semibold text-ink">{o.name}</span>
-                      <span className="text-[12px] text-ink-faint">PRC {o.prc} · {TYPE_LABEL[o.derived.typeKey]} (est.) · {d < 1 ? "<1" : Math.round(d)} km</span>
+                      <span className="text-[12px] text-ink-faint">PRC {o.prc} · {whatLabel(o.derived.typeKey, o.derived.categoryKey)} (estimate) · {d < 1 ? "<1" : Math.round(d)} km</span>
                     </span>
                   </Link>
                 </li>

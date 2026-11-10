@@ -1,5 +1,5 @@
-import { STAGES, TYPE_COLOR, TYPE_LABEL, eraOf } from "@/lib/legend";
-import type { StageKey, TypeKey } from "@/lib/types";
+import { CAT_COLOR, CAT_LABEL, STAGES, TYPE_COLOR, TYPE_LABEL, eraOf } from "@/lib/legend";
+import type { CatKey, StageKey, TypeKey } from "@/lib/types";
 
 export function TypeDot({ t, className = "" }: { t: TypeKey; className?: string }) {
   return <span aria-hidden className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${className}`} style={{ background: TYPE_COLOR[t] }} />;
@@ -69,4 +69,22 @@ export function FixtureBadge({ label = "Fixture data" }: { label?: string }) {
       ◌ {label}
     </span>
   );
+}
+
+/** The two data labels: the official record vs. this map's classification or score. */
+export function DataLabel({ kind, title }: { kind: "source" | "estimate"; title?: string }) {
+  return kind === "source" ? (
+    <span title={title ?? "Source data: copied from the State Lands Commission lease layer"} className="ml-1 inline-block rounded border border-sage-deep/40 px-1 align-middle text-[10px] font-medium uppercase tracking-wide text-sage-deep">Source data</span>
+  ) : (
+    <span title={title ?? "Estimate: this map's classification or score"} className="ml-1 inline-block rounded border border-dashed border-ink-faint/60 px-1 align-middle text-[10px] font-medium uppercase tracking-wide text-ink-faint">Estimate</span>
+  );
+}
+
+/** What a lease is, in a word: its infrastructure type, else its category (both estimates). */
+export function whatLabel(t: TypeKey, k: CatKey) {
+  return k === "infra" && t !== "other" ? TYPE_LABEL[t] : CAT_LABEL[k];
+}
+export function WhatDot({ t, k, className = "" }: { t: TypeKey; k: CatKey; className?: string }) {
+  const color = k === "infra" && t !== "other" ? TYPE_COLOR[t] : CAT_COLOR[k];
+  return <span aria-hidden className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-ink/30 ${className}`} style={{ background: color }} />;
 }

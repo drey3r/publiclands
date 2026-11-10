@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { memo } from "react";
 import type { MiniLease } from "@/lib/types";
-import { ScoreRing, StageTracker, TypeDot, eraColor, eraLabel, typeLabel } from "./ui";
+import { ScoreRing, StageTracker, WhatDot, eraColor, eraLabel, whatLabel } from "./ui";
 
 type Props = {
   l: MiniLease;
@@ -44,7 +44,7 @@ export const LeaseCard = memo(function LeaseCard({ l, active, selected, onHover,
           </button>
         </h3>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-ink-soft">
-          <span className="inline-flex items-center gap-1"><TypeDot t={l.t} />{typeLabel(l.t)}</span>
+          <span className="inline-flex items-center gap-1"><WhatDot t={l.t} k={l.k} />{whatLabel(l.t, l.k)}</span>
           <span className="inline-flex items-center gap-1"><span aria-hidden className="h-2 w-2 rounded-sm" style={{ background: eraColor(l.e) }} />{eraLabel(l.e)}</span>
           <span className="text-ink-faint">{l.c ? `${l.c} Co.` : l.r}</span>
           <span className="text-[10px] uppercase tracking-wide text-ink-faint">(est.)</span>

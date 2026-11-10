@@ -13,7 +13,7 @@ import { LeaseSwatch, MapControls, type LayerToggle, type Preset } from "./MapCo
 import { LAND, NONPROFIT_COLOR, landOf, type LandKey } from "@/lib/legend";
 import { PlaceCard, type Place } from "./PlaceCard";
 import { SearchBox, type Suggestion } from "./SearchBox";
-import { FixtureBadge, ScoreRing, StageTracker, TypeDot, eraLabel, typeLabel } from "./ui";
+import { FixtureBadge, ScoreRing, StageTracker, WhatDot, eraLabel, whatLabel } from "./ui";
 import type { Bounds, ColorBy } from "./MapView";
 import type * as maplibregl from "maplibre-gl";
 import { AUTO_PITCH, AUTO_ZOOM, bearingWithin, type Camera, type CameraOverride } from "@/lib/camera";
@@ -744,7 +744,7 @@ function SelectedPreview({ l, onClose, onFly }: { l: MiniLease; onClose: () => v
           <div className="text-[11px] font-semibold text-ink-faint">PRC {l.p}{l.x ? " · Completed" : l.f ? " · Candidate for review" : ""}</div>
           <h2 className="text-[16px] font-semibold leading-snug text-ink">{l.n}</h2>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[12px] text-ink-soft">
-            <span className="inline-flex items-center gap-1"><TypeDot t={l.t} />{typeLabel(l.t)}</span>
+            <span className="inline-flex items-center gap-1"><WhatDot t={l.t} k={l.k} />{whatLabel(l.t, l.k)}</span>
             <span>{eraLabel(l.e)}</span>
             {l.w && <span>{l.w}</span>}
             <span className="text-[10px] uppercase tracking-wide text-ink-faint">(est.)</span>
