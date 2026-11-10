@@ -5,8 +5,9 @@ import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as MLMap, ExpressionSpecification, MapLayerMouseEvent } from "maplibre-gl";
 import { baseStyle } from "@/lib/mapStyle";
 import { CA_BOUNDS, CA_PATH, type MaskMode } from "@/lib/config";
+import { kindMarker } from "@/lib/icons";
 import { CATS, CAT_LABEL, ERAS, ERA_UNKNOWN, LAND, LAYER_INFO, LEASE_MARK, LEASE_TIER, NONPROFIT_COLOR, SCORE_BANDS, SCORE_UNKNOWN, TYPES, TYPE_LABEL, type LandKey } from "@/lib/legend";
-import type { LayerManifest, LayerName, MiniLease, OverlayDef } from "@/lib/types";
+import type { KindKey, LayerManifest, LayerName, MiniLease, OverlayDef } from "@/lib/types";
 import type { Place as Space } from "./PlaceCard";
 
 // Served by scripts/sync-data.mjs (webpack can't bundle the v6 module worker).
@@ -88,14 +89,32 @@ const SCORE_EXPR = ["case", ["==", ["get", "s"], null], SCORE_UNKNOWN, ["step", 
 const TIER_OF: Record<string, 1 | 2 | 3> = Object.fromEntries(CATS.map((c) => [c.key, c.tier]));
 const byTier = (pick: (t: (typeof LEASE_TIER)[1 | 2 | 3]) => unknown) =>
   ["match", ["get", "tier"], 1, pick(LEASE_TIER[1]), 2, pick(LEASE_TIER[2]), pick(LEASE_TIER[3])] as unknown as ExpressionSpecification;
-const TIER_RADIUS = ["interpolate", ["linear"], ["zoom"], 5, byTier((t) => t.r[0]), 10, byTier((t) => t.r[1]), 15, byTier((t) => t.r[2])] as unknown as ExpressionSpecification;
 const TIER_FILL = byTier((t) => t.fill);
+
+/** From zoom 11, kinds with an icon (infrastructure, roads and bridges, shoreline protection) draw as icons. */
+const ICON_Z = 11;
+const ICON_PX = 24;
+const HAS_ICON = ["!=", ["get", "ic"], ""] as unknown as ExpressionSpecification;
+/** Circle radius by tier, jumping to the icon's radius (hit area) at ICON_Z for kinds with an icon. */
+const atIcon = (dot: unknown, icon: unknown) => ["case", HAS_ICON, icon, dot] as unknown as ExpressionSpecification;
+const LEASE_RADIUS = [
+  "interpolate", ["linear"], ["zoom"],
+  5, byTier((t) => t.r[0]),
+  10, byTier((t) => t.r[1]),
+  ICON_Z - 0.01, byTier((t) => t.r[1] + (t.r[2] - t.r[1]) * 0.2),
+  ICON_Z, atIcon(byTier((t) => t.r[1] + (t.r[2] - t.r[1]) * 0.2), ICON_PX / 2),
+  15, atIcon(byTier((t) => t.r[2]), ICON_PX / 2),
+] as unknown as ExpressionSpecification;
+/** Hide the dot where the icon draws (the circle stays as the hit area). */
+const dotOpacity = (base: unknown) => ["step", ["zoom"], base, ICON_Z, atIcon(base, 0)] as unknown as ExpressionSpecification;
+const iconImage = (fill: ExpressionSpecification) => ["concat", "m|", ["get", "ic"], "|", fill] as unknown as ExpressionSpecification;
+const iconOf = (l: MiniLease) => (l.k === "infra" && l.t !== "other" ? l.t : l.k === "roads" || l.k === "shore" ? l.k : "");
 
 function toGeoJSON(ls: MiniLease[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
   const features: GeoJSON.Feature<GeoJSON.Point>[] = [];
   for (const l of ls)
     for (const pt of l.pts)
-      features.push({ type: "Feature", geometry: { type: "Point", coordinates: pt }, properties: { p: l.p, n: l.n, t: l.t, k: l.k, tier: TIER_OF[l.k] ?? 3, e: l.e, s: l.s, f: l.f, cs: l.cs, x: l.x } });
+      features.push({ type: "Feature", geometry: { type: "Point", coordinates: pt }, properties: { p: l.p, n: l.n, t: l.t, k: l.k, ic: iconOf(l), tier: TIER_OF[l.k] ?? 3, e: l.e, s: l.s, f: l.f, cs: l.cs, x: l.x } });
   return { type: "FeatureCollection", features };
 }
 
@@ -141,6 +160,12 @@ export default function MapView(props: Props) {
       el.current?.querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show");
       m.setSky({ "sky-color": "#dfe5e0", "horizon-color": "#f4efe4", "fog-color": "#f4efe4", "sky-horizon-blend": 0.6, "horizon-fog-blend": 0.7, "fog-ground-blend": 0.25, "atmosphere-blend": 0 });
 
+      // Kind icons are drawn on demand: "m|<kind>|<disc color>" (the disc follows Color by).
+      m.on("styleimagemissing", (e: { id: string }) => {
+        const [tag, kind, fill] = e.id.split("|");
+        if (tag !== "m" || !kind || m.hasImage(e.id)) return;
+        m.addImage(e.id, kindMarker(kind as KindKey, ICON_PX, 2, fill || undefined), { pixelRatio: 2 });
+      });
       m.addSource("leases", { type: "geojson", data: toGeoJSON([]), cluster: true, clusterRadius: 44, clusterMaxZoom: 9 });
       m.addSource("hl", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
 
@@ -172,7 +197,7 @@ export default function MapView(props: Props) {
         source: "leases",
         filter: ["all", ["!", ["has", "point_count"]], ["any", ["==", ["get", "f"], 1], ["==", ["get", "cs"], 1]]],
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 7, 10, 9.5, 15, 13],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 7, 10, 9.5, ICON_Z - 0.01, 10, ICON_Z, atIcon(10, ICON_PX / 2 + 3.5), 15, atIcon(13, ICON_PX / 2 + 3.5)],
           "circle-color": "rgba(0,0,0,0)",
           "circle-stroke-color": ["case", ["==", ["get", "x"], 1], "#56664f", "#a4553f"],
           "circle-stroke-width": 1.6,
@@ -188,11 +213,26 @@ export default function MapView(props: Props) {
         layout: { "circle-sort-key": ["-", 4, ["get", "tier"]] },
         paint: {
           "circle-color": TIER_FILL,
-          "circle-radius": TIER_RADIUS,
+          "circle-radius": LEASE_RADIUS,
+          "circle-opacity": dotOpacity(1),
           // Dark outline so the mark holds on cream, green and water; strength follows the category.
           "circle-stroke-color": byTier((t) => t.line),
           "circle-stroke-width": byTier((t) => t.width),
-          "circle-stroke-opacity": byTier((t) => t.lineOpacity),
+          "circle-stroke-opacity": dotOpacity(byTier((t) => t.lineOpacity)),
+        },
+      });
+      // Close up, infrastructure, roads and bridges and shoreline protection show their icon.
+      m.addLayer({
+        id: "lease-icon",
+        type: "symbol",
+        source: "leases",
+        minzoom: ICON_Z,
+        filter: ["all", ["!", ["has", "point_count"]], HAS_ICON],
+        layout: {
+          "icon-image": iconImage(TIER_FILL),
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+          "symbol-sort-key": ["-", 4, ["get", "tier"]],
         },
       });
       m.addLayer({
@@ -200,7 +240,7 @@ export default function MapView(props: Props) {
         type: "circle",
         source: "hl",
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 10, 15, 15],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 10, ICON_Z - 0.01, 13.5, ICON_Z, ICON_PX / 2 + 4, 15, ICON_PX / 2 + 5],
           "circle-color": "rgba(250,247,240,0.35)",
           "circle-stroke-color": "#2b2a26",
           "circle-stroke-width": ["case", ["==", ["get", "sel"], 1], 3, 2],
@@ -213,7 +253,7 @@ export default function MapView(props: Props) {
       const block = (id: string, filter: ExpressionSpecification, size: ExpressionSpecification) =>
         m.addLayer({ id, type: "symbol", source: "leases", filter, layout: { "icon-image": "blk", "icon-size": size, "icon-allow-overlap": true, "icon-ignore-placement": false }, paint: { "icon-opacity": 0 } });
       block("cluster-block", ["has", "point_count"] as unknown as ExpressionSpecification, ["interpolate", ["linear"], ["sqrt", ["get", "point_count"]], 1, 12, 10, 23, 30, 35] as unknown as ExpressionSpecification);
-      block("lease-block", ["!", ["has", "point_count"]] as unknown as ExpressionSpecification, ["interpolate", ["linear"], ["zoom"], 5, 4.5, 10, 6.5, 15, 9.5] as unknown as ExpressionSpecification);
+      block("lease-block", ["!", ["has", "point_count"]] as unknown as ExpressionSpecification, ["interpolate", ["linear"], ["zoom"], 5, 4.5, 10, 6.5, ICON_Z - 0.01, 7, ICON_Z, atIcon(7, ICON_PX / 2 + 1), 15, atIcon(9.5, ICON_PX / 2 + 1)] as unknown as ExpressionSpecification);
 
       // Interaction
       const pointer = (on: boolean) => (m.getCanvas().style.cursor = on ? "pointer" : "");
@@ -233,7 +273,7 @@ export default function MapView(props: Props) {
         if (cb.current.hover !== p) cb.current.onHover(p);
         const l = byPrc.current.get(p);
         if (!l) return;
-        const html = `<div style="font-size:12px;line-height:1.35;max-width:220px"><div style="font-weight:600;color:#2b2a26">${esc(l.n)}</div><div style="color:#57534a">PRC ${esc(l.p)} · ${l.k === "infra" ? TYPE_LABEL[l.t] : CAT_LABEL[l.k]} <span style="color:#736e63">(estimate)</span></div></div>`;
+        const html = `<div style="font-size:12px;line-height:1.35;max-width:220px"><div style="font-weight:600;color:#2b2a26">${esc(l.n)}</div><div style="color:#57534a">PRC ${esc(l.p)} · ${l.k === "infra" ? (l.ts ?? [l.t]).map((t) => TYPE_LABEL[t]).join(" + ") : CAT_LABEL[l.k]} <span style="color:#736e63">(estimate)</span></div></div>`;
         popup.current ??= new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 10, className: "lease-tip" });
         popup.current.setLngLat((f.geometry as GeoJSON.Point).coordinates as [number, number]).setHTML(html).addTo(m);
       });
@@ -449,7 +489,7 @@ export default function MapView(props: Props) {
     const m = map.current;
     if (!m || !ready.current) return;
     const on = cb.current.showLeases ?? true;
-    for (const id of ["cluster", "cluster-count", "lease-flag", "lease-pt", "hl-ring", "cluster-block", "lease-block"]) if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", on ? "visible" : "none");
+    for (const id of ["cluster", "cluster-count", "lease-flag", "lease-pt", "lease-icon", "hl-ring", "cluster-block", "lease-block"]) if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", on ? "visible" : "none");
   }
 
   function syncLayers() {
@@ -492,7 +532,9 @@ export default function MapView(props: Props) {
     const m = map.current;
     if (!m || !ready.current) return;
     const c = cb.current.colorBy;
-    m.setPaintProperty("lease-pt", "circle-color", c === "era" ? ERA_EXPR : c === "type" ? TYPE_EXPR : c === "cat" ? CAT_EXPR : c === "score" ? SCORE_EXPR : TIER_FILL);
+    const fill = c === "era" ? ERA_EXPR : c === "type" ? TYPE_EXPR : c === "cat" ? CAT_EXPR : c === "score" ? SCORE_EXPR : TIER_FILL;
+    m.setPaintProperty("lease-pt", "circle-color", fill);
+    m.setLayoutProperty("lease-icon", "icon-image", iconImage(fill));
   }
 
   function syncTerrain() {

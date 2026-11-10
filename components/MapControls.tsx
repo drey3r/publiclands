@@ -4,6 +4,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CATS, ERAS, ERA_UNKNOWN, LAYER_INFO, LEASE_MARK, LEASE_TIER, SCORE_BANDS, SCORE_UNKNOWN, TYPES } from "@/lib/legend";
 import type { LayerManifest, LayerName, OverlayDef } from "@/lib/types";
 import type { ColorBy } from "./MapView";
+import { KindIcon } from "./KindIcon";
+import type { KindKey } from "@/lib/types";
+
+/** Key rows with an icon: the four infrastructure kinds, then roads and bridges and shoreline protection. */
+export const KIND_ROWS: { key: KindKey; label: string }[] = [
+  { key: "cable", label: "Cable" },
+  { key: "pipeline", label: "Pipeline" },
+  { key: "outfall", label: "Water / outfall" },
+  { key: "power", label: "Power" },
+  { key: "roads", label: "Roads and bridges" },
+  { key: "shore", label: "Shoreline protection" },
+];
 
 /** One row of the layer stack. The rows are the legend and the switches at once. */
 export type LayerToggle = {
@@ -64,7 +76,7 @@ function TierSwatch({ tier }: { tier: 1 | 2 | 3 }) {
   const t = LEASE_TIER[tier];
   const d = Math.round(t.r[1] * 2);
   return (
-    <span aria-hidden className="inline-flex w-4 shrink-0 items-center justify-center">
+    <span aria-hidden className="inline-flex w-5 shrink-0 items-center justify-center">
       <span className="rounded-full" style={{ width: d, height: d, background: t.fill, border: `${t.width}px solid ${t.line}` }} />
     </span>
   );
@@ -197,11 +209,14 @@ export function MapControls(p: Props) {
   const leaseKey = (
     <div className="space-y-2">
       <ul className="space-y-1 text-[12px] text-ink">
-        <li className="flex items-center gap-2"><TierSwatch tier={1} /> Infrastructure <span className="text-ink-faint">(strongest)</span></li>
+        {KIND_ROWS.map((r) => (
+          <li key={r.key} className="flex items-center gap-2"><KindIcon k={r.key} size={20} /> {r.label}</li>
+        ))}
         <li className="flex items-center gap-2"><TierSwatch tier={2} /> Public agency, commercial and industrial</li>
         <li className="flex items-center gap-2"><TierSwatch tier={3} /> Recreation and other <span className="text-ink-faint">(quieter)</span></li>
-        <li className="flex items-center gap-2"><span aria-hidden className="inline-flex w-4 justify-center"><LeaseSwatch size={15} /></span> Group of lease sites (count)</li>
+        <li className="flex items-center gap-2"><span aria-hidden className="inline-flex w-5 justify-center"><LeaseSwatch size={15} /></span> Group of lease sites (count)</li>
       </ul>
+      <p className="text-[11px] text-ink-faint">Icons from zoom 11; dots and counts below that. Infrastructure is full gold; roads, bridges and shoreline protection a lighter gold.</p>
       <div>
         <p className="mb-1 text-[11.5px] font-semibold text-ink-soft">Color by</p>
         <div className="flex gap-0.5 rounded-lg bg-sand p-0.5" role="group" aria-label="Color lease points by">
