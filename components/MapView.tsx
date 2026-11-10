@@ -37,8 +37,6 @@ type Props = {
   onReady: (map: MLMap) => void;
   /** Outside-California treatment. */
   mask: MaskMode;
-  /** Padding that frames California at Home (depends on the panels around the map). */
-  homePadding: () => maplibregl.PaddingOptions;
   /** California Home button. */
   onHome: () => void;
 };
@@ -94,7 +92,7 @@ export default function MapView(props: Props) {
       container: el.current,
       style: baseStyle({ mask: cb.current.mask }),
       bounds: CA_BOUNDS,
-      fitBoundsOptions: { padding: cb.current.homePadding() },
+      renderWorldCopies: false,
       maxPitch: 75,
       attributionControl: false,
       fadeDuration: reduce ? 0 : 200,

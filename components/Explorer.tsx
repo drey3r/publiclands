@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { Map as MLMap } from "maplibre-gl";
-import { ABOUT_URL, BACK_LABEL, BACK_URL, CA_BOUNDS, DISCLAIMER, REPO_URL, STORIES, maskFrom, type MaskMode } from "@/lib/config";
+import { ABOUT_URL, BACK_LABEL, BACK_URL, DISCLAIMER, REPO_URL, STORIES, maskFrom, type MaskMode } from "@/lib/config";
 import { EMPTY, activeCount, applyFilters, fromQuery, inBounds, sortForList, toQuery, type Filters } from "@/lib/filters";
 import type { LayerManifest, LayerName, LeasesPayload, MiniLease, OverlayDef } from "@/lib/types";
 import { FilterPanel } from "./FilterPanel";
@@ -16,6 +16,7 @@ import { FixtureBadge, ScoreRing, StageTracker, TypeDot, eraLabel, typeLabel } f
 import type { Bounds, ColorBy } from "./MapView";
 import type * as maplibregl from "maplibre-gl";
 import { AUTO_PITCH, AUTO_ZOOM, bearingWithin, type Camera, type CameraOverride } from "@/lib/camera";
+import { homeCamera, limitToHome, roomBeside } from "@/lib/home";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => <div className="absolute inset-0 animate-pulse bg-sand" /> });
 
@@ -173,11 +174,29 @@ export default function Explorer() {
   useEffect(() => setLimit(PAGE), [filters, bounds]);
 
   // ---- camera helpers
-  /** Frames California at Home: clear of the view panel on the right, and of the bottom sheet on phones. */
-  const homePadding = useCallback(() => {
-    if (window.innerWidth < 768) return { top: 20, bottom: PEEK + 12, left: 56, right: 16 };
-    return { top: 28, bottom: 36, left: 28, right: viewPanelRight() };
+  /**
+   * Home: California as large as the map allows, clear of the map buttons (top left)
+   * and the bottom sheet on phones. The view panel may float over Nevada but never
+   * over California. Also sets the limits: no zooming out past Home, no drifting away.
+   */
+  const homeView = useCallback(() => {
+    const m = map.current;
+    if (!m) return null;
+    const phone = window.innerWidth < 768;
+    const pad = phone ? { top: 12, bottom: PEEK + 8, left: 50, right: 12 } : { top: 18, bottom: 26, left: 58, right: 18 };
+    const cam = homeCamera(m, pad);
+    limitToHome(m, cam);
+    // The view panel floats over Nevada: it ends above California's border, and scrolls inside.
+    if (!phone) {
+      const W = m.getContainer().clientWidth;
+      const top = 12;
+      setPanelMaxH(Math.max(230, Math.round(roomBeside(m, cam, W - 12 - VIEW_W) - top - 10)));
+    }
+    return cam;
   }, []);
+  const [panelMaxH, setPanelMaxH] = useState<number | null>(null);
+  /** True from Home until the visitor moves the map; a window resize then re-frames Home. */
+  const atHome = useRef(true);
   // ---- Fly in / fly out
   const [cameras, setCameras] = useState<Record<string, CameraOverride>>({});
   /** The view before the first fly-in, for "Back to previous view". */
@@ -189,8 +208,11 @@ export default function Explorer() {
     prevView.current = null;
     setFlown(null);
     setTerrain(false);
-    map.current?.fitBounds(CA_BOUNDS, { padding: homePadding(), pitch: 0, bearing: 0, duration: reduceMotion() ? 0 : 1000 });
-  }, [homePadding]);
+    const cam = homeView();
+    if (!cam) return;
+    map.current?.easeTo({ ...cam, pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: reduceMotion() ? 0 : 1000 });
+    atHome.current = true;
+  }, [homeView]);
   const padding = useCallback(
     () => (mobile ? { top: 70, bottom: Math.round(window.innerHeight * 0.45), left: 20, right: 20 } : { top: 40, bottom: 40, left: 40, right: viewPanelRight() }),
     [mobile],
@@ -306,13 +328,22 @@ export default function Explorer() {
   const onReady = useCallback(
     (m: MLMap) => {
       map.current = m;
+      const cam = homeView();
+      if (cam) m.jumpTo({ ...cam, pitch: 0, bearing: 0 });
+      atHome.current = true;
+      // Any move by the visitor leaves Home; a resize while at Home re-frames it.
+      m.on("movestart", (e) => { if ((e as { originalEvent?: Event }).originalEvent) atHome.current = false; });
+      m.on("resize", () => {
+        const c = homeView();
+        if (c && atHome.current && !prevView.current) m.jumpTo({ ...c, pitch: 0, bearing: 0 });
+      });
       const sp = initial.current;
       const story = sp?.get("story");
       const prc = sp?.get("prc");
       if (story) setTimeout(() => playStory(story), 300);
       else if (prc) setTimeout(() => { setSelected(prc); setPinned(prc); }, 0);
     },
-    [playStory],
+    [playStory, homeView],
   );
 
   // Fly to ?prc= once data is in.
@@ -398,6 +429,7 @@ export default function Explorer() {
       terrain={terrain}
       setTerrain={setTerrain3D}
       filterCount={nActive}
+      maxHeight={variant === "panel" ? panelMaxH : null}
       filters={
         <>
           <FilterPanel f={filters} set={setFilters} counties={counties} waterbodies={waterbodies} methods={meta?.methods ?? {}} />
@@ -580,7 +612,6 @@ export default function Explorer() {
             onViewport={setBounds}
             onReady={onReady}
             mask={mask}
-            homePadding={homePadding}
             onHome={goHome}
           />
           {flown && (

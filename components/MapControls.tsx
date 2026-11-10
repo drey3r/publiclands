@@ -36,6 +36,8 @@ type Props = {
   filters: React.ReactNode;
   /** "panel": floating over the map (desktop). "sheet": inside the phone bottom sheet. */
   variant?: "panel" | "sheet";
+  /** Floating panel: tallest it may be (px) so it stays over Nevada at Home; it scrolls inside. */
+  maxHeight?: number | null;
 };
 
 /**
@@ -195,6 +197,7 @@ export function MapControls(p: Props) {
       id="view-panel"
       data-compact={!open ? "1" : undefined}
       className="pointer-events-auto absolute right-3 top-3 z-10 flex max-h-[calc(100%-56px)] w-[300px] max-w-[calc(100%-24px)] flex-col rounded-2xl border border-line bg-paper/95 shadow-[0_6px_24px_rgba(43,42,38,0.12)] backdrop-blur"
+      style={p.maxHeight ? { maxHeight: `min(${p.maxHeight}px, calc(100% - 56px))` } : undefined}
       aria-label="Map view controls"
       role="region"
     >
