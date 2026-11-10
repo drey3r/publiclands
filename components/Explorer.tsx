@@ -16,7 +16,7 @@ import { FixtureBadge, ScoreRing, StageTracker, TypeDot, eraLabel, typeLabel } f
 import type { Bounds, ColorBy } from "./MapView";
 import type * as maplibregl from "maplibre-gl";
 import { AUTO_PITCH, AUTO_ZOOM, bearingWithin, type Camera, type CameraOverride } from "@/lib/camera";
-import { homeCamera, limitToHome, roomBeside, type HomeCamera } from "@/lib/home";
+import { homeCamera, limitToHome, roomBeside } from "@/lib/home";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => <div className="absolute inset-0 animate-pulse bg-sand" /> });
 
@@ -196,8 +196,8 @@ export default function Explorer() {
     return cam;
   }, []);
   const [panelMaxH, setPanelMaxH] = useState<number | null>(null);
-  /** The last Home camera. A window resize while the map still shows (about) it re-frames Home. */
-  const lastHome = useRef<HomeCamera | null>(null);
+  /** False while the map shows Home; any other move sets it. A resize at Home re-frames Home. */
+  const away = useRef(false);
   // ---- Fly in / fly out
   const [cameras, setCameras] = useState<Record<string, CameraOverride>>({});
   /** The view before the first fly-in, for "Back to previous view". */
@@ -212,8 +212,8 @@ export default function Explorer() {
     const cam = homeView();
     const m = map.current;
     if (!cam || !m) return;
-    lastHome.current = cam;
     m.easeTo({ ...cam, pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: reduceMotion() ? 0 : 1000 });
+    m.once("moveend", () => (away.current = false));
   }, [homeView]);
   const padding = useCallback(
     () => (mobile ? { top: 70, bottom: Math.round(window.innerHeight * 0.45), left: 20, right: 20 } : { top: 40, bottom: 40, left: 40, right: viewPanelRight() }),
@@ -331,21 +331,31 @@ export default function Explorer() {
   const onCreate = useCallback(
     (m: MLMap) => {
       map.current = m;
+      // `away` turns on with any move that isn't Home itself or a resize (the visitor, a search, a fly-in).
+      let quiet = false;
       const jumpHome = () => {
         const c = homeView();
         if (!c) return;
-        lastHome.current = c;
+        quiet = true;
         m.jumpTo({ ...c, pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 } });
+        quiet = false;
+        away.current = false;
       };
-      const showingHome = () => {
-        const h = lastHome.current;
-        if (!h) return false;
-        const c = m.getCenter();
-        return m.getPitch() < 1 && Math.abs(m.getZoom() - h.zoom) < 0.15 && Math.abs(c.lng - h.center[0]) < 0.3 && Math.abs(c.lat - h.center[1]) < 0.3;
-      };
+      m.on("movestart", () => { if (!quiet) away.current = true; });
       jumpHome();
-      // Resizing the window re-frames Home if the map was showing it; otherwise only the limits update.
-      m.on("resize", () => (showingHome() ? jumpHome() : homeView()));
+      // Resizes are handled here (trackResize is off): lift the limits so the old ones can't pin the
+      // view, resize, then re-frame Home if the visitor hasn't moved, else just reset the limits.
+      const ro = new ResizeObserver(() => {
+        quiet = true;
+        m.setMaxBounds(null);
+        m.setMinZoom(0);
+        m.resize();
+        quiet = false;
+        if (!away.current) jumpHome();
+        else homeView();
+      });
+      ro.observe(m.getContainer());
+      m.once("remove", () => ro.disconnect());
     },
     [homeView],
   );

@@ -97,6 +97,8 @@ export default function MapView(props: Props) {
       style: baseStyle({ mask: cb.current.mask }),
       bounds: CA_BOUNDS,
       renderWorldCopies: false,
+      // Explorer observes the container and resizes (it re-frames Home); see onCreate.
+      trackResize: false,
       maxPitch: 75,
       attributionControl: false,
       fadeDuration: reduce ? 0 : 200,
