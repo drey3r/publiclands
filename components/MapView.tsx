@@ -108,6 +108,9 @@ const LEASE_RADIUS = [
 /** Hide the dot where the icon draws (the circle stays as the hit area). */
 const dotOpacity = (base: unknown) => ["step", ["zoom"], base, ICON_Z, atIcon(base, 0)] as unknown as ExpressionSpecification;
 const iconImage = (fill: ExpressionSpecification) => ["concat", "m|", ["get", "ic"], "|", fill] as unknown as ExpressionSpecification;
+const ICON_KINDS: KindKey[] = ["cable", "pipeline", "outfall", "power", "roads", "shore"];
+/** Every disc color any Color by mode can produce. */
+const ICON_FILLS = [...new Set([LEASE_TIER[1].fill, LEASE_TIER[2].fill, LEASE_TIER[3].fill, ...CATS.map((c) => c.color), ...TYPES.map((t) => t.color), ...ERAS.map((e) => e.color), ERA_UNKNOWN, ...SCORE_BANDS.map((b) => b.color), SCORE_UNKNOWN])];
 const iconOf = (l: MiniLease) => (l.k === "infra" && l.t !== "other" ? l.t : l.k === "roads" || l.k === "shore" ? l.k : "");
 
 function toGeoJSON(ls: MiniLease[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
@@ -160,12 +163,9 @@ export default function MapView(props: Props) {
       el.current?.querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show");
       m.setSky({ "sky-color": "#dfe5e0", "horizon-color": "#f4efe4", "fog-color": "#f4efe4", "sky-horizon-blend": 0.6, "horizon-fog-blend": 0.7, "fog-ground-blend": 0.25, "atmosphere-blend": 0 });
 
-      // Kind icons are drawn on demand: "m|<kind>|<disc color>" (the disc follows Color by).
-      m.on("styleimagemissing", (e: { id: string }) => {
-        const [tag, kind, fill] = e.id.split("|");
-        if (tag !== "m" || !kind || m.hasImage(e.id)) return;
-        m.addImage(e.id, kindMarker(kind as KindKey, ICON_PX, 2, fill || undefined), { pixelRatio: 2 });
-      });
+      // Kind icons: "m|<kind>|<disc color>" (the disc follows Color by). All are added before the
+      // layer exists: an image added later (styleimagemissing) never reaches tiles already parsed.
+      for (const fill of ICON_FILLS) for (const k of ICON_KINDS) m.addImage(`m|${k}|${fill}`, kindMarker(k, ICON_PX, 2, fill), { pixelRatio: 2 });
       m.addSource("leases", { type: "geojson", data: toGeoJSON([]), cluster: true, clusterRadius: 44, clusterMaxZoom: 9 });
       m.addSource("hl", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
 
