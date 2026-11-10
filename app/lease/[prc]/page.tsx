@@ -6,6 +6,7 @@ import { DataLabel, FixtureBadge, ScoreRing, StageTracker, WhatDot, whatLabel } 
 import { ABOUT_URL, BACK_LABEL, BACK_URL, CSLC_URL, DISCLAIMER, REPO_URL } from "@/lib/config";
 import { STAGES } from "@/lib/legend";
 import { getLease, loadFull, nearby } from "@/lib/server";
+import { loadRecords } from "@/lib/records";
 import type { Inferred } from "@/lib/types";
 
 type Params = { params: Promise<{ prc: string }> };
@@ -37,6 +38,7 @@ export default async function LeasePage({ params }: Params) {
   const stageIdx = STAGES.findIndex((s) => s.key === l.stage);
   const near = nearby(l);
   const cs = l.caseStudy;
+  const records = loadRecords(l.prc);
 
   const facts: [string, string | null][] = [
     ["Lease or permit", l.facts.leaseOrPermit],
@@ -211,6 +213,30 @@ export default async function LeasePage({ params }: Params) {
                 staff report for that meeting, and any removal or abandonment conditions.
               </p>
             </div>
+          )}
+        </section>
+
+        <section className="mt-8" aria-labelledby="commission">
+          <h2 id="commission" className="display text-[22px] text-ink">Commission records <DataLabel kind="source" title="Source data: State Lands Commission staff reports and meeting items" /></h2>
+          {records.length ? (
+            <>
+              <p className="mt-1 text-[12px] text-ink-faint">Staff reports and meeting items for this lease, newest first.</p>
+              <ol className="mt-3 divide-y divide-line rounded-xl border border-line bg-paper">
+                {records.map((r) => (
+                  <li key={r.url} className="grid grid-cols-[100px_1fr] gap-3 px-3 py-2 text-[13px]">
+                    <span className="tabular-nums text-ink-faint">{fmtDate(r.date) ?? "Undated"}</span>
+                    <span>
+                      <a href={r.url} target="_blank" rel="noopener" className="font-medium text-water underline underline-offset-2">{r.title} ↗</a>
+                      <span className="block text-[11px] text-ink-faint">
+                        {[r.item != null && r.item !== "" ? `Item ${r.item}` : null, r.pages != null && r.pages !== "" ? `pages ${r.pages}` : null].filter(Boolean).join(" · ")}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </>
+          ) : (
+            <p className="mt-2 text-[13px] text-ink-soft">No Commission records linked here yet.</p>
           )}
         </section>
 
