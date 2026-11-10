@@ -5,14 +5,14 @@ import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as MLMap, ExpressionSpecification, MapLayerMouseEvent } from "maplibre-gl";
 import { baseStyle } from "@/lib/mapStyle";
 import { CA_BOUNDS, CA_PATH, type MaskMode } from "@/lib/config";
-import { ERAS, ERA_UNKNOWN, LAYER_INFO, TYPES, TYPE_LABEL } from "@/lib/legend";
+import { ERAS, ERA_UNKNOWN, LAND, LAYER_INFO, LEASE_MARK, NONPROFIT_COLOR, TYPES, TYPE_LABEL, type LandKey } from "@/lib/legend";
 import type { LayerManifest, LayerName, MiniLease, OverlayDef } from "@/lib/types";
 import type { Place as Space } from "./PlaceCard";
 
 // Served by scripts/sync-data.mjs (webpack can't bundle the v6 module worker).
 maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 
-export type ColorBy = "type" | "era";
+export type ColorBy = "lease" | "type" | "era";
 export type Bounds = [number, number, number, number];
 
 type Props = {
@@ -21,6 +21,8 @@ type Props = {
   layers: Record<LayerName, boolean>;
   manifest: LayerManifest | null;
   terrain: boolean;
+  /** Public land shown: which owner levels, and whether only land open to the public. */
+  land: { groups: LandKey[]; openOnly: boolean };
   /** "County lines" reference layer: stronger lines plus county names. */
   counties: boolean;
   /** "Leases" big button. */
@@ -62,6 +64,16 @@ class HomeControl implements maplibregl.IControl {
   }
 }
 
+/** Public land by owner level (CPAD AGNCY_LEV), all green: palette A. */
+const LAND_OF = ["match", ["get", "agencyLevel"], "State", "state", "Federal", "federal", "local"] as unknown as ExpressionSpecification;
+const LAND_FILL = [
+  "match",
+  ["get", "agencyLevel"],
+  "State", LAND[0].color,
+  "Federal", LAND[1].color,
+  "Non Profit", NONPROFIT_COLOR,
+  LAND[2].color,
+] as unknown as ExpressionSpecification;
 const TYPE_EXPR = ["match", ["get", "t"], ...TYPES.flatMap((t) => [t.key, t.color]), "#8d887c"] as unknown as ExpressionSpecification;
 const ERA_EXPR = [
   "step",
@@ -129,11 +141,11 @@ export default function MapView(props: Props) {
         source: "leases",
         filter: ["has", "point_count"],
         paint: {
-          "circle-color": "#56664f",
-          "circle-opacity": 0.9,
+          "circle-color": LEASE_MARK.fill,
+          "circle-opacity": 1,
           "circle-radius": ["interpolate", ["linear"], ["sqrt", ["get", "point_count"]], 1, 11, 10, 22, 30, 34],
-          "circle-stroke-color": "#faf7f0",
-          "circle-stroke-width": 2,
+          "circle-stroke-color": LEASE_MARK.line,
+          "circle-stroke-width": 1.4,
         },
       });
       m.addLayer({
@@ -142,7 +154,7 @@ export default function MapView(props: Props) {
         source: "leases",
         filter: ["has", "point_count"],
         layout: { "text-field": ["get", "point_count_abbreviated"], "text-font": ["Noto Sans Bold"], "text-size": 12, "text-allow-overlap": true },
-        paint: { "text-color": "#faf7f0" },
+        paint: { "text-color": LEASE_MARK.text },
       });
       // Marker ring for candidates for review / case studies (behind the dot).
       m.addLayer({
@@ -164,12 +176,12 @@ export default function MapView(props: Props) {
         source: "leases",
         filter: ["!", ["has", "point_count"]],
         paint: {
-          "circle-color": TYPE_EXPR,
+          "circle-color": LEASE_MARK.fill,
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 3.6, 10, 5.5, 15, 8.5],
-          // Score as a subtle ring: heavier and darker when the screen score is higher.
-          "circle-stroke-color": "#2b2a26",
-          "circle-stroke-width": ["interpolate", ["linear"], ["coalesce", ["get", "s"], 0], 0, 0.5, 100, 2.6],
-          "circle-stroke-opacity": ["interpolate", ["linear"], ["coalesce", ["get", "s"], 0], 0, 0.18, 100, 0.8],
+          // Dark outline so the mark holds on cream, green and water; heavier when the screen score is higher.
+          "circle-stroke-color": LEASE_MARK.line,
+          "circle-stroke-width": ["interpolate", ["linear"], ["coalesce", ["get", "s"], 0], 0, 1.1, 100, 2.6],
+          "circle-stroke-opacity": ["interpolate", ["linear"], ["coalesce", ["get", "s"], 0], 0, 0.85, 100, 1],
         },
       });
       m.addLayer({
@@ -321,7 +333,7 @@ export default function MapView(props: Props) {
         continue;
       }
       // Public spaces are on by default: light statewide so leases read first, fuller up close.
-      const fillOpacity = (name === "access" ? ["interpolate", ["linear"], ["zoom"], 5, 0.16, 9, 0.26, 12, 0.32] : 0.22) as unknown as number;
+      const fillOpacity = (name === "access" ? ["interpolate", ["linear"], ["zoom"], 5, 0.62, 10, 0.55, 13, 0.45] : 0.22) as unknown as number;
       m.addLayer(
         {
           id: `${name}-fill`,
@@ -330,13 +342,26 @@ export default function MapView(props: Props) {
           ...sl,
           layout: { visibility: "none" },
           paint: {
-            "fill-color": name === "access" ? ["match", ["get", "access"], "Open Access", "#7f9a6a", "Restricted Access", "#b3a46a", "#a99f8c"] : color,
+            "fill-color": name === "access" ? LAND_FILL : color,
             "fill-opacity": fillOpacity,
           },
         },
         before,
       );
-      m.addLayer({ id: `${name}-line`, type: "line", source: src, ...sl, layout: { visibility: "none" }, paint: { "line-color": color, "line-width": 1, "line-opacity": 0.75 } }, before);
+      m.addLayer(
+        {
+          id: `${name}-line`,
+          type: "line",
+          source: src,
+          ...sl,
+          layout: { visibility: "none" },
+          paint:
+            name === "access"
+              ? { "line-color": "#3f5e3f", "line-width": 0.6, "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 9, 0.35, 12, 0.6] }
+              : { "line-color": color, "line-width": 1, "line-opacity": 0.75 },
+        },
+        before,
+      );
       if (name === "access")
         m.addLayer(
           {
@@ -426,6 +451,10 @@ export default function MapView(props: Props) {
     for (const name of Object.keys(LAYER_INFO) as LayerName[]) {
       for (const suffix of ["fill", "line", "label"]) set(`${name}-${suffix}`, vis[name]);
     }
+    // Public land: only the owner levels that are on (and only open land for "Parks only").
+    const { groups, openOnly } = cb.current.land;
+    const f = ["all", ["in", LAND_OF, ["literal", groups]], ...(openOnly ? [["==", ["get", "access"], "Open Access"]] : [])] as unknown as ExpressionSpecification;
+    for (const id of ["access-fill", "access-line", "access-label"]) if (m.getLayer(id)) m.setFilter(id, f);
   }
 
   function syncData() {
@@ -451,7 +480,8 @@ export default function MapView(props: Props) {
   function syncColor() {
     const m = map.current;
     if (!m || !ready.current) return;
-    m.setPaintProperty("lease-pt", "circle-color", cb.current.colorBy === "era" ? ERA_EXPR : TYPE_EXPR);
+    const c = cb.current.colorBy;
+    m.setPaintProperty("lease-pt", "circle-color", c === "era" ? ERA_EXPR : c === "type" ? TYPE_EXPR : LEASE_MARK.fill);
   }
 
   function syncTerrain() {
@@ -493,7 +523,7 @@ export default function MapView(props: Props) {
     ensureOverlays();
     syncLayers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.layers, props.manifest]);
+  }, [props.layers, props.manifest, props.land]);
 
   // Inline position: maplibre's .maplibregl-map class sets position:relative, which would collapse it.
   return <div ref={el} style={{ position: "absolute", inset: 0 }} role="region" aria-label="Interactive map" />;

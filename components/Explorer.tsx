@@ -9,7 +9,8 @@ import { EMPTY, activeCount, applyFilters, fromQuery, inBounds, sortForList, toQ
 import type { LayerManifest, LayerName, LeasesPayload, MiniLease, OverlayDef } from "@/lib/types";
 import { FilterPanel } from "./FilterPanel";
 import { LeaseCard } from "./LeaseCard";
-import { MapControls, type LayerToggle } from "./MapControls";
+import { LeaseSwatch, MapControls, type LayerToggle, type Preset } from "./MapControls";
+import { LAND, NONPROFIT_COLOR, landOf, type LandKey } from "@/lib/legend";
 import { PlaceCard, type Place } from "./PlaceCard";
 import { SearchBox, type Suggestion } from "./SearchBox";
 import { FixtureBadge, ScoreRing, StageTracker, TypeDot, eraLabel, typeLabel } from "./ui";
@@ -22,16 +23,31 @@ const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => 
 
 const PAGE = 40;
 const PLACE_MAX = 60;
-/** Layers you can switch on and off from the big buttons; also the ?layers= deep link. */
-type ShowKey = "spaces" | "leases";
-const SHOW_KEYS: ShowKey[] = ["spaces", "leases"];
-const SHOW_LABEL: Record<ShowKey, string> = { spaces: "Public spaces", leases: "Leases" };
-function showFromQuery(sp: URLSearchParams): Record<ShowKey, boolean> {
+/**
+ * The layer stack, in panel order; also the ?layers= deep link (plus "open": only land open
+ * to the public). Old links: "spaces" means all three kinds of public land.
+ */
+type ShowKey = "state" | "leases" | "federal" | "local";
+const SHOW_KEYS: ShowKey[] = ["state", "leases", "federal", "local"];
+const SHOW_LABEL: Record<ShowKey, string> = { state: "State lands", leases: "Lease sites", federal: "Federal lands", local: "Local and nonprofit" };
+const LAND_KEYS: LandKey[] = ["state", "federal", "local"];
+type View = { show: Record<ShowKey, boolean>; openOnly: boolean };
+const ALL_ON: Record<ShowKey, boolean> = { state: true, leases: true, federal: true, local: true };
+function viewFromQuery(sp: URLSearchParams): View {
   const raw = sp.get("layers");
-  if (!raw) return { spaces: true, leases: true };
+  if (!raw) return { show: { ...ALL_ON }, openOnly: false };
   const on = new Set(raw.split(",").map((x) => x.trim()));
-  return { spaces: on.has("spaces"), leases: on.has("leases") };
+  const land = (k: string) => on.has(k) || on.has("spaces");
+  return { show: { state: land("state"), leases: on.has("leases"), federal: land("federal"), local: land("local") }, openOnly: on.has("open") };
 }
+/** One-click views. */
+const PRESETS: (Preset & View)[] = [
+  { key: "everything", label: "Everything", show: { ...ALL_ON }, openOnly: false },
+  { key: "leases", label: "Leases only", show: { state: false, leases: true, federal: false, local: false }, openOnly: false },
+  { key: "public", label: "Public lands only", show: { state: true, leases: false, federal: true, local: true }, openOnly: false },
+  { key: "parks", label: "Parks only", show: { state: true, leases: false, federal: true, local: true }, openOnly: true },
+  { key: "state", label: "State lands only", show: { state: true, leases: false, federal: false, local: false }, openOnly: false },
+];
 type Sheet = "peek" | "half" | "full";
 
 function useIsMobile() {
@@ -47,7 +63,7 @@ function useIsMobile() {
 }
 
 /** Width the view panel takes on the right of the map, plus a margin (desktop). */
-const VIEW_W = 300;
+const VIEW_W = 284;
 /** Bottom-sheet height when collapsed on phones (title + layer toggles + controls button). */
 const PEEK = 178;
 function viewPanelRight() {
@@ -92,12 +108,14 @@ export default function Explorer() {
   const [missingPrc, setMissingPrc] = useState<string | null>(null);
   /** Public spaces arrive from map tiles; until the first batch, counts read "Loading". */
   const [spacesReady, setSpacesReady] = useState(false);
-  const [colorBy, setColorBy] = useState<ColorBy>("type");
-  // Public spaces (access) follow the big "Public spaces" button; the other land layers start off.
+  const [colorBy, setColorBy] = useState<ColorBy>("lease");
+  // Public land (access) follows the State / Federal / Local rows; the reference layers start off.
   const [layers, setLayers] = useState<Record<LayerName, boolean>>({ access: true, granted: false, school: false, waterlines: false });
   const [terrain, setTerrain] = useState(false);
   const [countyLines, setCountyLines] = useState(false);
-  const [show, setShow] = useState<Record<ShowKey, boolean>>({ spaces: true, leases: true });
+  const [show, setShow] = useState<Record<ShowKey, boolean>>({ ...ALL_ON });
+  /** "Parks only": public land CPAD marks Open Access. */
+  const [openOnly, setOpenOnly] = useState(false);
   const [spacesOpen, setSpacesOpen] = useState(false);
   // ?panelw=520 tries another left-panel width (for choosing one).
   const [panelW] = useState<number | null>(() => {
@@ -118,7 +136,9 @@ export default function Explorer() {
   useEffect(() => {
     initial.current = new URLSearchParams(window.location.search);
     setFilters(fromQuery(initial.current));
-    setShow(showFromQuery(initial.current));
+    const v0 = viewFromQuery(initial.current);
+    setShow(v0.show);
+    setOpenOnly(v0.openOnly);
     setFindParam(initial.current.get("find"));
     fetch("/data/cameras.json")
       .then((r) => (r.ok ? r.json() : {}))
@@ -145,13 +165,13 @@ export default function Explorer() {
     const qs = toQuery(filters);
     const keep = new URLSearchParams(window.location.search);
     const next = new URLSearchParams(qs);
-    next.set("layers", SHOW_KEYS.filter((k) => show[k]).join(",") || "none");
+    next.set("layers", [...SHOW_KEYS.filter((k) => show[k]), ...(openOnly ? ["open"] : [])].join(",") || "none");
     for (const k of ["mask", "panelw"]) if (keep.get(k)) next.set(k, keep.get(k)!);
     if (selected) next.set("prc", selected);
     else keep.delete("prc");
-    const q = next.toString().replace(/%2C/gi, ","); // readable deep links: ?layers=spaces,leases
+    const q = next.toString().replace(/%2C/gi, ","); // readable deep links: ?layers=state,leases,federal,local
     history.replaceState(null, "", `${location.pathname}${q ? `?${q}` : ""}`);
-  }, [filters, selected, show]);
+  }, [filters, selected, show, openOnly]);
 
   const all = data?.leases ?? [];
   const hasPlaces = !!manifest?.access;
@@ -164,7 +184,19 @@ export default function Explorer() {
     return i > 0 ? [ls[i], ...ls.slice(0, i), ...ls.slice(i + 1)] : ls;
   }, [deferredFiltered, bounds, pinned]);
   // Public spaces in view come from the map's rendered tiles; largest first.
-  const placesInView = useMemo(() => [...places].sort((a, b) => (b.acres ?? 0) - (a.acres ?? 0)), [places]);
+  // Counted per kind of land (what each row of the stack would show), listed for the kinds that are on.
+  const openPlaces = useMemo(() => (openOnly ? places.filter((p) => p.access === "Open Access") : places), [places, openOnly]);
+  const landCount = useMemo(() => {
+    const c: Record<LandKey, number> = { state: 0, federal: 0, local: 0 };
+    for (const p of openPlaces) c[landOf(p.kind)]++;
+    return c;
+  }, [openPlaces]);
+  const placesInView = useMemo(
+    () => openPlaces.filter((p) => show[landOf(p.kind)]).sort((a, b) => (b.acres ?? 0) - (a.acres ?? 0)),
+    [openPlaces, show],
+  );
+  const spacesOn = LAND_KEYS.some((k) => show[k]);
+  const land = useMemo(() => ({ groups: LAND_KEYS.filter((k) => show[k]), openOnly }), [show, openOnly]);
   const counties = useMemo(() => [...new Set(all.map((l) => l.c).filter(Boolean) as string[])].sort(), [all]);
   const waterbodies = useMemo(() => {
     const n = new Map<string, number>();
@@ -404,7 +436,8 @@ export default function Explorer() {
       const pts = ls.flatMap((l) => l.pts);
       if (pts.length) fit([Math.min(...pts.map((p) => p[0])), Math.min(...pts.map((p) => p[1])), Math.max(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[1]))], 12);
     } else if (s.kind === "place") {
-      setShow((v) => ({ ...v, spaces: true }));
+      setShow((v) => ({ ...v, [landOf(s.p.kind)]: true }));
+      if (s.p.access !== "Open Access") setOpenOnly(false);
       setSelectedPlace(s.p.id);
       fit(s.p.bbox, 13);
     } else if (s.kind === "geo") {
@@ -418,10 +451,19 @@ export default function Explorer() {
   const nActive = activeCount(filters);
   const atStatewide = !bounds || bounds[2] - bounds[0] > 6;
 
-  const counts: Record<ShowKey, number> = { spaces: placesInView.length, leases: inView.length };
-  const loaded: Record<ShowKey, boolean> = { spaces: spacesReady || !hasPlaces, leases: !!data && !!bounds };
+  const counts: Record<ShowKey, number> = { state: landCount.state, leases: inView.length, federal: landCount.federal, local: landCount.local };
+  const landLoaded = spacesReady || !hasPlaces;
+  const loaded: Record<ShowKey, boolean> = { state: landLoaded, leases: !!data && !!bounds, federal: landLoaded, local: landLoaded };
   const countText = (k: ShowKey) => (loaded[k] ? `${counts[k].toLocaleString()} in view` : "Loading…");
   const toggle = (k: ShowKey) => setShow((v) => ({ ...v, [k]: !v[k] }));
+  const landSwatch = (k: LandKey) => {
+    const c = LAND.find((x) => x.key === k)!.color;
+    return k === "local" ? (
+      <span className="flex h-3.5 w-4 overflow-hidden rounded-[3px] border border-[#3f5e3f]/60"><span className="flex-1" style={{ background: c }} /><span className="flex-1" style={{ background: NONPROFIT_COLOR }} /></span>
+    ) : (
+      <span className="h-3.5 w-4 rounded-[3px] border border-[#3f5e3f]/60" style={{ background: c }} />
+    );
+  };
 
   const toggles: LayerToggle[] = SHOW_KEYS.map((k) => ({
     key: k,
@@ -429,8 +471,22 @@ export default function Explorer() {
     on: show[k],
     status: countText(k),
     onToggle: () => toggle(k),
-    swatch: k === "spaces" ? <span className="h-3.5 w-4 rounded-[3px] border border-[#56664f] bg-[#7f9a6a]/60" /> : <span className="h-3 w-3 rounded-full border-2 border-paper bg-[#3f6075] shadow-[0_0_0_1px_#2b2a26]" />,
+    title: k === "leases" ? "State Lands Commission lease sites" : LAND.find((x) => x.key === k)?.note,
+    swatch: k === "leases" ? <LeaseSwatch /> : landSwatch(k),
   }));
+  const preset = PRESETS.find((x) => x.openOnly === openOnly && SHOW_KEYS.every((k) => x.show[k] === show[k]))?.key ?? "";
+  const onPreset = (key: string) => {
+    const x = PRESETS.find((y) => y.key === key);
+    if (!x) return;
+    setShow({ ...x.show });
+    setOpenOnly(x.openOnly);
+  };
+  const stackNote = openOnly ? (
+    <p className="text-[11.5px] text-ink-soft">
+      Only land open to the public (CPAD access).{" "}
+      <button type="button" className="font-semibold underline underline-offset-2" onClick={() => setOpenOnly(false)}>Show all</button>
+    </p>
+  ) : null;
 
   const setTerrain3D = (t: boolean) => {
     setTerrain(t);
@@ -454,6 +510,10 @@ export default function Explorer() {
       terrain={terrain}
       setTerrain={setTerrain3D}
       filterCount={nActive}
+      presets={PRESETS}
+      preset={preset}
+      onPreset={onPreset}
+      stackNote={stackNote}
       maxHeight={variant === "panel" ? panelMaxH : null}
       counties={countyLines}
       setCounties={setCountyLines}
@@ -512,11 +572,17 @@ export default function Explorer() {
 
         {!SHOW_KEYS.some((k) => show[k]) && <div className="card p-4 text-sm text-ink-soft">Everything is switched off. Turn on a layer in {mobile ? "the controls above" : "the panel on the right of the map"}.</div>}
 
-        {show.spaces && (
+        {spacesOn && (
           <section id="sec-spaces" aria-labelledby="h-spaces" className="mb-6">
-            <SectionHead id="h-spaces" title="Public spaces" count={placesInView.length} loading={!loaded.spaces} note="Parks, beaches and protected lands in view (CPAD), largest first." />
-            {!loaded.spaces && <ListSkeleton />}
-            {loaded.spaces && placesInView.length === 0 && <div className="card p-3 text-[13px] text-ink-soft">None in this view yet. Pan or zoom the map.</div>}
+            <SectionHead
+              id="h-spaces"
+              title="Public lands"
+              count={placesInView.length}
+              loading={!landLoaded}
+              note={`${LAND_KEYS.filter((k) => show[k]).map((k) => SHOW_LABEL[k].replace(" lands", "")).join(", ")} land in view${openOnly ? ", open to the public" : ""} (CPAD), largest first.`}
+            />
+            {!landLoaded && <ListSkeleton />}
+            {landLoaded && placesInView.length === 0 && <div className="card p-3 text-[13px] text-ink-soft">None in this view yet. Pan or zoom the map.</div>}
             <ul className="space-y-2">
               {placesInView.slice(0, spacesOpen ? PLACE_MAX : 4).map((p) => (
                 <PlaceCard
@@ -613,7 +679,8 @@ export default function Explorer() {
           <MapView
             leases={filtered}
             colorBy={colorBy}
-            layers={{ ...layers, access: show.spaces }}
+            layers={{ ...layers, access: spacesOn }}
+            land={land}
             showLeases={show.leases}
             onSpaces={(sp) => {
               setPlaces(sp);
@@ -657,7 +724,12 @@ export default function Explorer() {
         </div>
 
         {/* Mobile bottom sheet */}
-        {mobile && <BottomSheet state={sheet} setState={setSheet} title={SHOW_KEYS.filter((k) => show[k]).map((k) => `${SHOW_LABEL[k]} ${loaded[k] ? counts[k].toLocaleString() : "…"}`).join(" · ") || "Nothing switched on"}>{panel}</BottomSheet>}
+        {mobile && <BottomSheet state={sheet} setState={setSheet} title={
+              [
+                spacesOn ? `Public lands ${landLoaded ? placesInView.length.toLocaleString() : "…"}` : "",
+                show.leases ? `Leases ${loaded.leases ? counts.leases.toLocaleString() : "…"}` : "",
+              ].filter(Boolean).join(" · ") || "Nothing switched on"
+            }>{panel}</BottomSheet>}
       </div>
     </div>
   );

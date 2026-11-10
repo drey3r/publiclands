@@ -49,3 +49,20 @@ export const LAYER_INFO = {
   school: { label: "CSLC school lands", color: "#a8754f" },
   waterlines: { label: "High & low water lines", color: "#3f6075" },
 } as const;
+
+/**
+ * Public land, all green; the shade is the owner level (palette A, picked after Round 1).
+ * Groups follow CPAD's AGNCY_LEV. "Local and nonprofit" also holds CPAD's small Joint,
+ * Tribal, Private and Home Owners Association groups.
+ */
+export type LandKey = "state" | "federal" | "local";
+export const LAND: { key: LandKey; label: string; color: string; note: string }[] = [
+  { key: "state", label: "State lands", color: "#2f6b3a", note: "State Parks, Fish & Wildlife, conservancies, State Lands Commission and other state agencies" },
+  { key: "federal", label: "Federal lands", color: "#86ad72", note: "National forests, parks, BLM, wildlife refuges and other federal agencies" },
+  { key: "local", label: "Local and nonprofit", color: "#b3cf98", note: "Counties, cities, special districts, nonprofits (and CPAD's few joint, tribal and private holdings)" },
+];
+export const NONPROFIT_COLOR = "#9cc2ad";
+export const landOf = (agencyLevel: string | null | undefined): LandKey => (agencyLevel === "State" ? "state" : agencyLevel === "Federal" ? "federal" : "local");
+
+/** Lease marks: muted gold with a dark outline (treatment a, picked after Round 1). */
+export const LEASE_MARK = { fill: "#d2b06a", line: "#2b2a26", text: "#2b2a26" };
