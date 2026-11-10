@@ -75,6 +75,11 @@ Management Division".
   county, made with [mapshaper](https://github.com/mbloch/mapshaper):
   `mapshaper ca-counties.geojson -innerlines` and `mapshaper ca-counties.geojson -points inner`.
 
+## Public land completeness
+
+- `docs/cpad-audit-2026-11.md`: every CPAD unit is on the map (checked against the live service with
+  `node scripts/audit-cpad.mjs`), and a list of accessible public land CPAD does not cover.
+
 ## California place names
 
 - `data/ref/ca-labels.geojson`: a short hand-placed list of mountain ranges, major rivers, bays, lakes and road passes,

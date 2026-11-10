@@ -3,6 +3,39 @@
 Changes to the California Public Lands Map, newest first. Data snapshots and
 counts are unchanged unless an entry says otherwise.
 
+## 2026-11-10 · Round 2: greens, every park, layers you peel back (plus Round 1 adjustments)
+
+**Data:** same CPAD snapshot (2026-11-06, CPAD 2026a, 17,930 units) and lease snapshot. The public
+land tiles were rebuilt from that snapshot: 40 very small units (0–2.6 acres) that never appeared
+at any zoom are now on the map, so "in view" counts for public land can be slightly higher. Every
+CPAD unit is drawn from zoom 10. Audit: `docs/cpad-audit-2026-11.md` (`node scripts/audit-cpad.mjs`).
+
+### Round 1 adjustments
+- **Right panel never clips.** Compact rows, Quick view as one menu, the 3D switch in the header;
+  lease key, filters and reference layers fold away. Everything common fits at 1280×720. If an
+  open section runs long, the panel scrolls with a visible "More below" and a fade at the edges.
+- **Home always shows all of California** with a small margin, at every window size and after any
+  resize (a window grown after loading used to clip San Diego).
+- **Place names stay clean.** Public land was drawn over the place names, washing out Chico,
+  Salinas, Bakersfield and Los Angeles; it now sits under them. Names under a lease cluster
+  slide aside or hide.
+- **Outside California: a light landscape** with faint relief, lakes and major rivers, and no
+  names. `?mask=flat` shows the flat version.
+
+### Round 2
+- **All public land is green; the shade is the owner level** (CPAD's agency level): State lands
+  (darkest), Federal lands, Local and nonprofit (counties, cities, special districts, nonprofits,
+  and CPAD's few joint, tribal and private holdings).
+- **Lease marks are muted gold with a dark outline**, clusters and points. Lease colors can still
+  switch to Type or Era ("Lease colors and key").
+- **Layer stack in the right panel**, in this order: State lands · Lease sites · Federal lands ·
+  Local and nonprofit · Reference layers. Each row is the legend and the switch, with its count.
+- **Quick views:** Everything · Leases only · Public lands only · Parks only (land CPAD marks Open
+  Access) · State lands only.
+- **Deep links:** `?layers=state,leases,federal,local` (add `open` for open land only). Old
+  `?layers=spaces,leases` links still work.
+- **Access on every public space**, as source data: CPAD's own access type with a plain reading.
+
 ## 2026-11-09 · Round 1 fixes: California fills the frame, quiet outside, more names, county lines
 
 No data changes: same CSLC lease snapshot (2026-11-06, 4,206 leases) and CPAD layer.
