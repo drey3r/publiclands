@@ -3,6 +3,32 @@
 Changes to the California Public Lands Map, newest first. Data snapshots and
 counts are unchanged unless an entry says otherwise.
 
+## 2026-11-10 · Round 3 icons: kinds you can see and browse
+
+**Data:** same lease snapshot (CSLC layer pulled 2026-11-06, 4,206 leases). Infrastructure is
+unchanged at 744; screen scores and the 7 candidates for review are unchanged.
+
+- **Two new categories** (Estimates, not part of Infrastructure): **Roads and bridges** 182
+  (123 Streets and Highways leases, which were Public agency, plus 59 Right of Way leases whose text
+  names a road, bridge or highway) and **Shoreline protection** 148 (Protective Structure Use:
+  seawalls, riprap, bulkheads). Right of Way leases with no text, or with no road or utility words,
+  stay in Other. Categories now: Infrastructure 744 · Roads and bridges 182 · Shoreline protection
+  148 · Recreation 1,965 · Public agency 697 · Commercial and industrial 214 · Other 256.
+- **Every infrastructure kind is kept**, not only the first. 168 infrastructure leases name more
+  than one (a pipeline and a cable, say). The first named is the primary and sets the icon; the
+  lease page lists all of them; filters match any. Leases per kind (any): cable 240, pipeline 270,
+  water/outfall 295, power 116.
+- **Icons (Set A: gold disc, ink line)** for cable, pipeline, water/outfall, power, roads and
+  bridges, and shoreline protection. On the map they appear from zoom 11 at 24px; below that, dots
+  and counts as before. Roads and bridges and shoreline protection sit on a lighter gold disc, one
+  step quieter than infrastructure. Recreation and the other categories stay dots. In the key the
+  icons are 20px. With Color by on, the disc takes that color.
+- **Explore by kind:** each row of the lease key shows its statewide count and, in one click, shows
+  only that kind (click again for all). Shareable: `?kind=cable`, `?kind=roads`, … Old `?type=`
+  and `?cat=` links still work.
+- **The classifier is one standalone module:** `lib/lease-classifier.mjs` (no imports; types in
+  `lib/lease-classifier.d.ts`), so other projects can reuse it.
+
 ## 2026-11-10 · Round 3: lease data you can read
 
 **Data:** same lease snapshot (CSLC layer pulled 2026-11-06, 4,206 leases). The classification
