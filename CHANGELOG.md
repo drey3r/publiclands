@@ -14,10 +14,11 @@ unchanged at 744; screen scores and the 7 candidates for review are unchanged.
   seawalls, riprap, bulkheads). Right of Way leases with no text, or with no road or utility words,
   stay in Other. Categories now: Infrastructure 744 · Roads and bridges 182 · Shoreline protection
   148 · Recreation 1,965 · Public agency 697 · Commercial and industrial 214 · Other 256.
-- **Every infrastructure kind is kept**, not only the first. 168 infrastructure leases name more
+- **Every infrastructure kind is kept**, not only the first. 48 infrastructure leases name more
   than one (a pipeline and a cable, say). The first named is the primary and sets the icon; the
-  lease page lists all of them; filters match any. Leases per kind (any): cable 240, pipeline 270,
-  water/outfall 295, power 116.
+  lease page lists all of them; filters match any. Next to water or sewer words, a bare "pipeline"
+  ("sewer outfall pipeline") is the water pipe and adds no second Pipeline kind unless the text names
+  oil, gas or petroleum. Leases per kind (any): cable 240, pipeline 147, water/outfall 295, power 116.
 - **Icons (Set A: gold disc, ink line)** for cable, pipeline, water/outfall, power, roads and
   bridges, and shoreline protection. On the map they appear from zoom 11 at 24px; below that, dots
   and counts as before. Roads and bridges and shoreline protection sit on a lighter gold disc, one
