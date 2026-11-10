@@ -36,6 +36,9 @@ type Props = {
   filters: React.ReactNode;
   /** "panel": floating over the map (desktop). "sheet": inside the phone bottom sheet. */
   variant?: "panel" | "sheet";
+  /** County lines and names (stronger than the faint default lines). */
+  counties: boolean;
+  setCounties: (on: boolean) => void;
   /** Floating panel: tallest it may be (px) so it stays over Nevada at Home; it scrolls inside. */
   maxHeight?: number | null;
 };
@@ -155,7 +158,7 @@ export function MapControls(p: Props) {
         {filtersOpen && <div id="filters" className="pt-2.5">{p.filters}</div>}
       </section>
 
-      {(reference.length > 0 || p.overlays.length > 0) && (
+      {(
         <fieldset className="space-y-1 border-t border-line pt-2.5 text-[12px]">
           <legend className="mb-1 text-[12px] font-semibold text-ink">Reference layers</legend>
           {reference.map((k) => (
@@ -166,6 +169,11 @@ export function MapControls(p: Props) {
               {p.manifest?.[k]?.fixture && <span className="ml-auto rounded border border-dashed border-clay/60 px-1 text-[10px] text-clay" title={p.manifest[k]?.source ?? "Fixture"}>fixture</span>}
             </label>
           ))}
+          <label className="flex cursor-pointer items-center gap-2">
+            <input type="checkbox" checked={p.counties} onChange={(e) => p.setCounties(e.target.checked)} className="accent-[#56664f]" />
+            <span aria-hidden className="h-0 w-3.5 border-t-[1.5px] border-dashed border-[#857a65]" />
+            <span className="text-ink">County lines</span>
+          </label>
           {p.overlays.map((o) => (
             <label key={o.id} className="flex cursor-pointer items-center gap-2" title={o.description ?? undefined}>
               <input type="checkbox" checked={p.overlayVis[o.id] ?? o.visible} onChange={(e) => p.setOverlayVis({ ...p.overlayVis, [o.id]: e.target.checked })} className="accent-[#56664f]" />

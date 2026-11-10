@@ -65,8 +65,22 @@ Management Division".
 ## County boundaries
 
 - `data/ref/ca-counties.geojson`: California county boundaries derived from US Census Bureau data (public domain), via
-  the [click_that_hood](https://github.com/codeforgermany/click_that_hood) project. Used only to estimate each
-  lease's county.
+  the [click_that_hood](https://github.com/codeforgermany/click_that_hood) project. Used to estimate each
+  lease's county, and as the source of the files below.
+- `data/ref/ca-outline.geojson`: the counties dissolved into one state outline.
+- `data/ref/ca-frame.json` (`node scripts/make-ca-frame.mjs`): California's land border (Oregon, Nevada, Arizona,
+  Mexico) and an area polygon closing it through the Pacific (the state plus its bays and coastal waters). The map
+  quiets everything outside that area and shows place names only inside it.
+- `data/ref/ca-county-lines.geojson` and `ca-county-labels.geojson`: shared county borders and one interior point per
+  county, made with [mapshaper](https://github.com/mbloch/mapshaper):
+  `mapshaper ca-counties.geojson -innerlines` and `mapshaper ca-counties.geojson -points inner`.
+
+## California place names
+
+- `data/ref/ca-labels.geojson`: a short hand-placed list of mountain ranges, major rivers, bays, lakes and road passes,
+  so the statewide map has names before the basemap's own labels appear. Positions are approximate label anchors,
+  not survey locations. Cities, towns, smaller lakes, rivers and peaks come from the OpenFreeMap basemap
+  (OpenStreetMap).
 
 ## Fonts
 

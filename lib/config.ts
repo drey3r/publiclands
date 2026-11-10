@@ -14,14 +14,14 @@ export const CSLC_URL = "https://www.slc.ca.gov/";
 export const CA_BOUNDS: [[number, number], [number, number]] = [[-124.42, 32.53], [-114.13, 42.01]];
 
 /**
- * What the map does outside California:
- *  fade    quiet neutral wash, neighbors and coast still faintly visible (default)
- *  blank   solid neutral, only the outlines of neighboring states
- *  outline no wash; a stronger California outline
+ * What the map does outside California (labels outside the state are always off):
+ *  blank   one flat neutral over the land, water still water, neighbors as hairlines (default)
+ *  fade    the Round 1 wash: relief and roads faintly visible through it
+ *  outline no wash; a stronger California border
  * Override per visit with ?mask=fade|blank|outline to compare.
  */
 export type MaskMode = "fade" | "blank" | "outline";
-export const MASK_MODE: MaskMode = "fade";
+export const MASK_MODE: MaskMode = "blank";
 export const maskFrom = (v: string | null | undefined): MaskMode => (v === "fade" || v === "blank" || v === "outline" ? v : MASK_MODE);
 
 /** California silhouette for the Home button and icon (24×24, Web Mercator, simplified). */

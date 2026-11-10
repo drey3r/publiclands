@@ -21,6 +21,8 @@ type Props = {
   layers: Record<LayerName, boolean>;
   manifest: LayerManifest | null;
   terrain: boolean;
+  /** "County lines" reference layer: stronger lines plus county names. */
+  counties: boolean;
   /** "Leases" big button. */
   showLeases?: boolean;
   /** Public spaces rendered in the current view (from vector tiles), for the list. */
@@ -34,6 +36,8 @@ type Props = {
   onSelect: (prc: string | null) => void;
   onSelectPlace: (id: string | null) => void;
   onViewport: (b: Bounds) => void;
+  /** Right after the map is created, before tiles load (Home framing). */
+  onCreate: (map: MLMap) => void;
   onReady: (map: MLMap) => void;
   /** Outside-California treatment. */
   mask: MaskMode;
@@ -98,6 +102,7 @@ export default function MapView(props: Props) {
       fadeDuration: reduce ? 0 : 200,
     });
     map.current = m;
+    cb.current.onCreate(m);
     if (process.env.NODE_ENV !== "production") (window as unknown as { __map: MLMap }).__map = m; // dev: camera tuning
     m.on("error", (e) => console.warn("[map]", e.error?.message ?? e));
     // Compact (ⓘ) so credits never cover the bottom of the state; one tap opens them.
@@ -176,6 +181,14 @@ export default function MapView(props: Props) {
           "circle-stroke-width": ["case", ["==", ["get", "sel"], 1], 3, 2],
         },
       });
+
+      // Invisible blockers the size of each lease mark: place names slide aside or drop
+      // instead of being drawn under a cluster or point.
+      if (!m.hasImage("blk")) m.addImage("blk", { width: 2, height: 2, data: new Uint8Array(16) });
+      const block = (id: string, filter: ExpressionSpecification, size: ExpressionSpecification) =>
+        m.addLayer({ id, type: "symbol", source: "leases", filter, layout: { "icon-image": "blk", "icon-size": size, "icon-allow-overlap": true, "icon-ignore-placement": false }, paint: { "icon-opacity": 0 } });
+      block("cluster-block", ["has", "point_count"] as unknown as ExpressionSpecification, ["interpolate", ["linear"], ["sqrt", ["get", "point_count"]], 1, 12, 10, 23, 30, 35] as unknown as ExpressionSpecification);
+      block("lease-block", ["!", ["has", "point_count"]] as unknown as ExpressionSpecification, ["interpolate", ["linear"], ["zoom"], 5, 4.5, 10, 6.5, 15, 9.5] as unknown as ExpressionSpecification);
 
       // Interaction
       const pointer = (on: boolean) => (m.getCanvas().style.cursor = on ? "pointer" : "");
@@ -328,11 +341,12 @@ export default function MapView(props: Props) {
             type: "symbol",
             source: src,
             ...sl,
-            minzoom: 9,
-            layout: { visibility: "none", "text-field": ["get", "name"], "text-font": ["Noto Sans Italic"], "text-size": 11, "text-max-width": 9 },
+            minzoom: 10,
+            layout: { visibility: "none", "text-field": ["get", "name"], "text-font": ["Noto Sans Italic"], "text-size": 10.5, "text-max-width": 9, "text-padding": 6 },
             paint: { "text-color": "#56664f", "text-halo-color": "#f7f3ea", "text-halo-width": 1.2 },
           },
-          before,
+          // Park names rank below California's place names (placed after them).
+          m.getLayer("label-range") ? "label-range" : before,
         );
     }
     syncLayers();
@@ -396,7 +410,7 @@ export default function MapView(props: Props) {
     const m = map.current;
     if (!m || !ready.current) return;
     const on = cb.current.showLeases ?? true;
-    for (const id of ["cluster", "cluster-count", "lease-flag", "lease-pt", "hl-ring"]) if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", on ? "visible" : "none");
+    for (const id of ["cluster", "cluster-count", "lease-flag", "lease-pt", "hl-ring", "cluster-block", "lease-block"]) if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", on ? "visible" : "none");
   }
 
   function syncLayers() {
@@ -445,7 +459,17 @@ export default function MapView(props: Props) {
     if (!on && m.getTerrain()) m.setTerrain(null);
   }
 
+  function syncCounties() {
+    const m = map.current;
+    if (!m || !ready.current) return;
+    const on = cb.current.counties;
+    m.setLayoutProperty("county-line", "visibility", on ? "none" : "visible");
+    m.setLayoutProperty("county-line-strong", "visibility", on ? "visible" : "none");
+    m.setLayoutProperty("county-label", "visibility", on ? "visible" : "none");
+  }
+
   function syncAll() {
+    syncCounties();
     syncData();
     syncColor();
     syncTerrain();
@@ -461,6 +485,7 @@ export default function MapView(props: Props) {
   useEffect(syncLeasesVisible, [props.showLeases]);
   useEffect(syncUserOverlays, [props.overlays, props.overlayVis]);
   useEffect(syncTerrain, [props.terrain]);
+  useEffect(syncCounties, [props.counties]);
   useEffect(() => {
     ensureOverlays();
     syncLayers();

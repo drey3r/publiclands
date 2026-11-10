@@ -16,7 +16,7 @@ import { FixtureBadge, ScoreRing, StageTracker, TypeDot, eraLabel, typeLabel } f
 import type { Bounds, ColorBy } from "./MapView";
 import type * as maplibregl from "maplibre-gl";
 import { AUTO_PITCH, AUTO_ZOOM, bearingWithin, type Camera, type CameraOverride } from "@/lib/camera";
-import { homeCamera, limitToHome, roomBeside } from "@/lib/home";
+import { homeCamera, limitToHome, roomBeside, type HomeCamera } from "@/lib/home";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => <div className="absolute inset-0 animate-pulse bg-sand" /> });
 
@@ -96,6 +96,7 @@ export default function Explorer() {
   // Public spaces (access) follow the big "Public spaces" button; the other land layers start off.
   const [layers, setLayers] = useState<Record<LayerName, boolean>>({ access: true, granted: false, school: false, waterlines: false });
   const [terrain, setTerrain] = useState(false);
+  const [countyLines, setCountyLines] = useState(false);
   const [show, setShow] = useState<Record<ShowKey, boolean>>({ spaces: true, leases: true });
   const [spacesOpen, setSpacesOpen] = useState(false);
   // ?panelw=520 tries another left-panel width (for choosing one).
@@ -195,8 +196,8 @@ export default function Explorer() {
     return cam;
   }, []);
   const [panelMaxH, setPanelMaxH] = useState<number | null>(null);
-  /** True from Home until the visitor moves the map; a window resize then re-frames Home. */
-  const atHome = useRef(true);
+  /** The last Home camera. A window resize while the map still shows (about) it re-frames Home. */
+  const lastHome = useRef<HomeCamera | null>(null);
   // ---- Fly in / fly out
   const [cameras, setCameras] = useState<Record<string, CameraOverride>>({});
   /** The view before the first fly-in, for "Back to previous view". */
@@ -209,9 +210,10 @@ export default function Explorer() {
     setFlown(null);
     setTerrain(false);
     const cam = homeView();
-    if (!cam) return;
-    map.current?.easeTo({ ...cam, pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: reduceMotion() ? 0 : 1000 });
-    atHome.current = true;
+    const m = map.current;
+    if (!cam || !m) return;
+    lastHome.current = cam;
+    m.easeTo({ ...cam, pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: reduceMotion() ? 0 : 1000 });
   }, [homeView]);
   const padding = useCallback(
     () => (mobile ? { top: 70, bottom: Math.round(window.innerHeight * 0.45), left: 20, right: 20 } : { top: 40, bottom: 40, left: 40, right: viewPanelRight() }),
@@ -325,25 +327,38 @@ export default function Explorer() {
     [byPrc, flyInLease],
   );
 
+  /** Map created (before tiles load): frame Home and set the limits right away. */
+  const onCreate = useCallback(
+    (m: MLMap) => {
+      map.current = m;
+      const jumpHome = () => {
+        const c = homeView();
+        if (!c) return;
+        lastHome.current = c;
+        m.jumpTo({ ...c, pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 } });
+      };
+      const showingHome = () => {
+        const h = lastHome.current;
+        if (!h) return false;
+        const c = m.getCenter();
+        return m.getPitch() < 1 && Math.abs(m.getZoom() - h.zoom) < 0.15 && Math.abs(c.lng - h.center[0]) < 0.3 && Math.abs(c.lat - h.center[1]) < 0.3;
+      };
+      jumpHome();
+      // Resizing the window re-frames Home if the map was showing it; otherwise only the limits update.
+      m.on("resize", () => (showingHome() ? jumpHome() : homeView()));
+    },
+    [homeView],
+  );
   const onReady = useCallback(
     (m: MLMap) => {
       map.current = m;
-      const cam = homeView();
-      if (cam) m.jumpTo({ ...cam, pitch: 0, bearing: 0 });
-      atHome.current = true;
-      // Any move by the visitor leaves Home; a resize while at Home re-frames it.
-      m.on("movestart", (e) => { if ((e as { originalEvent?: Event }).originalEvent) atHome.current = false; });
-      m.on("resize", () => {
-        const c = homeView();
-        if (c && atHome.current && !prevView.current) m.jumpTo({ ...c, pitch: 0, bearing: 0 });
-      });
       const sp = initial.current;
       const story = sp?.get("story");
       const prc = sp?.get("prc");
       if (story) setTimeout(() => playStory(story), 300);
       else if (prc) setTimeout(() => { setSelected(prc); setPinned(prc); }, 0);
     },
-    [playStory, homeView],
+    [playStory],
   );
 
   // Fly to ?prc= once data is in.
@@ -430,6 +445,8 @@ export default function Explorer() {
       setTerrain={setTerrain3D}
       filterCount={nActive}
       maxHeight={variant === "panel" ? panelMaxH : null}
+      counties={countyLines}
+      setCounties={setCountyLines}
       filters={
         <>
           <FilterPanel f={filters} set={setFilters} counties={counties} waterbodies={waterbodies} methods={meta?.methods ?? {}} />
@@ -594,6 +611,7 @@ export default function Explorer() {
             }}
             manifest={manifest}
             terrain={terrain}
+            counties={countyLines}
             overlays={overlays}
             overlayVis={overlayVis}
             hover={hover}
@@ -610,6 +628,7 @@ export default function Explorer() {
               }
             }}
             onViewport={setBounds}
+            onCreate={onCreate}
             onReady={onReady}
             mask={mask}
             onHome={goHome}

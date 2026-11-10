@@ -6,7 +6,9 @@
 //   data/layers/*.geojson + index.json    land layers (CPAD, granted, school, water lines)
 //   data/curated.json                     sourced case studies and extra review candidates
 //   data/cameras.json                     optional hand-tuned Fly-in cameras by PRC
-//   data/ref/ca-outline.geojson           California outline (mask outside the state, Home framing)
+//   data/ref/ca-frame.json                California's land border + state-and-coastal-waters area (mask, labels)
+//   data/ref/ca-county-*.geojson          county lines and county name points
+//   data/ref/ca-labels.geojson            curated California place names (ranges, rivers, lakes, bays, passes)
 // Optional (off by default):
 //   CAMERAS_EXTRA=path                    more Fly-in camera overrides, same format as data/cameras.json
 //   OVERLAYS_DIR=path                     your own GeoJSON overlay layers (see README "Build your own layer")
@@ -144,14 +146,21 @@ if (fs.existsSync(overlayDir)) {
 fs.writeFileSync(path.join(outOverlays, "index.json"), JSON.stringify(overlays, null, 1));
 
 // ---------- California frame ----------
-// The state outline (dissolved from data/ref/ca-counties.geojson) and its inverse,
-// a world polygon with California cut out, used to quiet everything outside the state.
-const outline = readJson(path.join(root, "data/ref/ca-outline.geojson"));
-const caRings = outline.features.flatMap((f) => (f.geometry.type === "MultiPolygon" ? f.geometry.coordinates.map((p) => p[0]) : [f.geometry.coordinates[0]]));
+// data/ref/ca-frame.json (scripts/make-ca-frame.mjs): California's land border, and an
+// "area" polygon = the state plus its bays and coastal waters. Everything outside the area
+// is quieted by the mask (the coast itself comes from the basemap, so it stays exact).
+const frame = readJson(path.join(root, "data/ref/ca-frame.json"));
 const world = [[-179.9, -85], [179.9, -85], [179.9, 85], [-179.9, 85], [-179.9, -85]];
-const mask = { type: "FeatureCollection", features: [{ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [world, ...caRings.map((r) => [...r].reverse())] } }] };
-fs.writeFileSync(path.join(root, "public/data/ca-outline.geojson"), JSON.stringify(outline));
+const fc = (features) => ({ type: "FeatureCollection", features });
+const mask = fc([{ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [world, [...frame.area].reverse()] } }]);
+const border = fc([{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: frame.border } }]);
+fs.writeFileSync(path.join(root, "public/data/ca-outline.geojson"), fs.readFileSync(path.join(root, "data/ref/ca-outline.geojson")));
 fs.writeFileSync(path.join(root, "public/data/ca-mask.geojson"), JSON.stringify(mask));
+fs.writeFileSync(path.join(root, "public/data/ca-border.geojson"), JSON.stringify(border));
+// County lines (shared borders only) and county name points, from data/ref/ca-counties.geojson;
+// curated California place names (ranges, rivers, lakes, bays, passes).
+for (const f of ["ca-county-lines.geojson", "ca-county-labels.geojson", "ca-labels.geojson"])
+  fs.copyFileSync(path.join(root, "data/ref", f), path.join(root, "public/data", f));
 
 // ---------- Fly-in camera overrides (data/cameras.json; optional extra file via CAMERAS_EXTRA) ----------
 const cameras = {};

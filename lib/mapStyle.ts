@@ -1,5 +1,7 @@
 import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
+import type { ExpressionSpecification } from "maplibre-gl";
 import { MASK_MODE, type MaskMode } from "./config";
+import frame from "@/data/ref/ca-frame.json";
 
 // Basemap: OpenFreeMap vector tiles (OpenMapTiles schema, no key).
 // Terrain: AWS Open Data Terrain Tiles (Terrarium encoding), for hillshade and 3D.
@@ -35,52 +37,289 @@ const C = {
   text: "#57534a",
   textStrong: "#2b2a26",
   halo: "#f7f3ea",
-  outside: "#ece8df",
-  outsideLine: "#b9af9c",
-  caLine: "#6f6656",
+  outside: "#ebe7de",
+  outsideLine: "#cfc6b4",
+  caLine: "#8a806d",
+  county: "#b9ad96",
+  countyStrong: "#6f6656",
+  countyText: "#7d7360",
+  range: "#8a7b62",
+  pass: "#6f6656",
 };
 
 const FONT = ["Noto Sans Regular"];
 const FONT_IT = ["Noto Sans Italic"];
 const FONT_B = ["Noto Sans Bold"];
+const NAME = ["coalesce", ["get", "name:en"], ["get", "name"]] as unknown as ExpressionSpecification;
 
-/** Outside-California treatment: drawn above the basemap, below every data layer. */
-function frameLayers(mode: MaskMode): LayerSpecification[] {
-  const out: LayerSpecification[] = [];
-  if (mode !== "outline")
-    out.push({
+/** Inside California (with its bays and coastal waters): every basemap label must be. */
+const IN_CA = ["within", { type: "Polygon", coordinates: [frame.area] }] as unknown as ExpressionSpecification;
+const inCA = (f?: unknown) => (f ? (["all", IN_CA, f] as unknown as ExpressionSpecification) : IN_CA);
+/** Curated labels (data/ref/ca-labels.geojson): kind, and the zoom range each shows in. */
+const curated = (kinds: string[]) =>
+  ["all", ["match", ["get", "k"], kinds, true, false], [">=", ["zoom"], ["get", "z"]], ["<", ["zoom"], ["get", "mz"]]] as unknown as ExpressionSpecification;
+/** Names the curated set already places; the basemap's copies are left out. */
+const CURATED_WATER = ["Lake Tahoe", "Salton Sea", "Mono Lake", "Shasta Lake", "Clear Lake", "Lake Oroville", "Lake Almanor", "Eagle Lake", "Goose Lake", "Lake Berryessa", "Folsom Lake", "Trinity Lake", "Lake Isabella", "Honey Lake", "San Luis Reservoir", "New Melones Lake", "Don Pedro Reservoir", "Big Bear Lake", "Lake Elsinore", "Millerton Lake", "San Francisco Bay", "Monterey Bay", "San Pablo Bay", "Suisun Bay", "Humboldt Bay", "Santa Monica Bay", "San Pedro Bay", "San Diego Bay", "Tomales Bay", "Drakes Bay", "Morro Bay", "Pacific Ocean", "North Pacific Ocean"];
+
+/**
+ * Outside California: one flat neutral over the land (no relief, roads or labels),
+ * water redrawn on top so the ocean still reads as water, neighbors as hairlines.
+ * Drawn above the land layers and roads, below water.
+ */
+function maskLayers(mode: MaskMode): LayerSpecification[] {
+  if (mode === "outline") return [];
+  return [
+    {
       id: "outside-mask",
       type: "fill",
       source: "caMask",
       paint: {
         "fill-color": C.outside,
-        // Fade: strongest statewide, lighter up close so a border site keeps its context.
+        // blank (default): flat. fade: the Round 1 wash, for comparison (?mask=fade).
         "fill-opacity": mode === "blank" ? 1 : ["interpolate", ["linear"], ["zoom"], 5, 0.7, 8, 0.6, 11, 0.42, 14, 0.32],
         "fill-antialias": false,
       },
-    });
-  // Neighboring states, faint, above the wash.
-  out.push({
-    id: "outside-states",
-    type: "line",
-    source: "omt",
-    "source-layer": "boundary",
-    filter: ["all", ["<=", ["coalesce", ["get", "admin_level"], 99], 4], ["!=", ["coalesce", ["get", "maritime"], 0], 1]],
-    paint: { "line-color": C.outsideLine, "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.6, 10, 1.1], "line-opacity": mode === "outline" ? 0 : 0.9 },
-  });
-  out.push({
-    id: "ca-outline",
-    type: "line",
-    source: "caOutline",
-    layout: { "line-join": "round" },
-    paint: {
-      "line-color": C.caLine,
-      "line-width": ["interpolate", ["linear"], ["zoom"], 4, mode === "outline" ? 1.8 : 1.1, 10, mode === "outline" ? 3 : 2],
-      "line-opacity": mode === "outline" ? 0.85 : 0.6,
     },
-  });
-  return out;
+  ];
 }
+
+function frameLines(mode: MaskMode): LayerSpecification[] {
+  return [
+    {
+      id: "outside-states",
+      type: "line",
+      source: "omt",
+      "source-layer": "boundary",
+      filter: ["all", ["<=", ["coalesce", ["get", "admin_level"], 99], 4], ["!=", ["coalesce", ["get", "maritime"], 0], 1]],
+      paint: { "line-color": C.outsideLine, "line-width": 0.5, "line-opacity": mode === "outline" ? 0 : 0.8 },
+    },
+    {
+      id: "ca-outline",
+      type: "line",
+      source: "caBorder",
+      layout: { "line-join": "round" },
+      paint: {
+        "line-color": C.caLine,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 4, mode === "outline" ? 1.8 : 0.9, 10, mode === "outline" ? 3 : 1.6],
+        "line-opacity": mode === "outline" ? 0.85 : 0.7,
+      },
+    },
+  ];
+}
+
+const ROAD_MAJOR = ["match", ["get", "class"], ["motorway", "trunk", "primary"], true, false] as unknown as ExpressionSpecification;
+const ROAD_MINOR = ["match", ["get", "class"], ["secondary", "tertiary", "minor", "service", "track"], true, false] as unknown as ExpressionSpecification;
+const BRIDGE = ["==", ["get", "brunnel"], "bridge"] as unknown as ExpressionSpecification;
+
+function roadLayers(bridges: boolean): LayerSpecification[] {
+  const id = (s: string) => (bridges ? `bridge-${s}` : `road-${s}`);
+  const f = (cls: ExpressionSpecification) => (bridges ? inCA(["all", cls, BRIDGE]) : cls);
+  return [
+    {
+      id: id("major-case"),
+      type: "line",
+      source: "omt",
+      "source-layer": "transportation",
+      minzoom: bridges ? 9 : 6,
+      filter: f(ROAD_MAJOR),
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": C.roadCase, "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.6, 10, 2.2, 14, 7], "line-opacity": 0.8 },
+    },
+    {
+      id: id("minor"),
+      type: "line",
+      source: "omt",
+      "source-layer": "transportation",
+      minzoom: 10,
+      filter: f(ROAD_MINOR),
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": C.road, "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.5, 14, 3], "line-opacity": 0.9 },
+    },
+    {
+      id: id("major"),
+      type: "line",
+      source: "omt",
+      "source-layer": "transportation",
+      minzoom: bridges ? 9 : 6,
+      filter: f(ROAD_MAJOR),
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": C.roadMajor, "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.3, 10, 1.4, 14, 5] },
+    },
+  ];
+}
+
+/** Anchors a place label may slide to when a lease mark or another label is in the way. */
+const SLIDE = [
+  "literal",
+  ["center", [0, 0], "left", [0.9, 0], "right", [-0.9, 0], "top", [0, 0.8], "bottom", [0, -0.8], "left", [2.2, 0], "right", [-2.2, 0], "top", [0, 1.8], "bottom", [0, -1.8]],
+] as unknown as ExpressionSpecification;
+
+/**
+ * California place names, in tiers by zoom:
+ *   statewide  big cities, mountain ranges, the ocean, the largest bays and lakes
+ *   ~7         towns, main rivers, more lakes and bays, smaller ranges, major passes
+ *   ~9+        villages, the basemap's river and lake names, peaks
+ * Lease marks sit above the labels and block them (see MapView), so labels slide aside or drop.
+ */
+function labelLayers(): LayerSpecification[] {
+  return [
+    {
+      id: "label-range",
+      type: "symbol",
+      source: "caLabels",
+      filter: curated(["range"]),
+      layout: {
+        "symbol-placement": "line-center",
+        "text-field": ["get", "name"],
+        "text-font": FONT,
+        "text-transform": "uppercase",
+        "text-size": ["interpolate", ["linear"], ["zoom"], 5, 9.5, 9, 12],
+        "text-letter-spacing": 0.32,
+        "text-max-angle": 30,
+        "text-keep-upright": true,
+      },
+      paint: { "text-color": C.range, "text-opacity": 0.85, "text-halo-color": C.halo, "text-halo-width": 1.2 },
+    },
+    {
+      id: "label-river",
+      type: "symbol",
+      source: "caLabels",
+      filter: curated(["river"]),
+      layout: { "symbol-placement": "line-center", "text-field": ["get", "name"], "text-font": FONT_IT, "text-size": 10.5, "text-letter-spacing": 0.04, "text-max-angle": 35 },
+      paint: { "text-color": C.waterText, "text-halo-color": C.halo, "text-halo-width": 1.2 },
+    },
+    {
+      id: "water-name-line",
+      type: "symbol",
+      source: "omt",
+      "source-layer": "waterway",
+      minzoom: 9,
+      filter: inCA(["==", ["get", "class"], "river"]),
+      layout: { "symbol-placement": "line", "text-field": NAME, "text-font": FONT_IT, "text-size": 11, "text-letter-spacing": 0.05 },
+      paint: { "text-color": C.waterText, "text-halo-color": C.halo, "text-halo-width": 1.2 },
+    },
+    {
+      id: "label-water",
+      type: "symbol",
+      source: "caLabels",
+      filter: curated(["sea", "bay", "lake"]),
+      layout: {
+        "text-field": ["get", "name"],
+        "text-font": FONT_IT,
+        "text-size": ["interpolate", ["linear"], ["zoom"], 5, ["match", ["get", "k"], "sea", 13, 10.5], 10, 13],
+        "text-letter-spacing": ["match", ["get", "k"], "sea", 0.3, 0.06],
+        "text-max-width": 7,
+      },
+      paint: { "text-color": C.waterText, "text-halo-color": "rgba(247,243,234,0.7)", "text-halo-width": 1 },
+    },
+    {
+      id: "water-name",
+      type: "symbol",
+      source: "omt",
+      "source-layer": "water_name",
+      minzoom: 9,
+      filter: inCA(["!", ["in", NAME, ["literal", CURATED_WATER]]]),
+      layout: { "text-field": NAME, "text-font": FONT_IT, "text-size": ["interpolate", ["linear"], ["zoom"], 9, 11, 13, 13], "text-letter-spacing": 0.06, "text-max-width": 8 },
+      paint: { "text-color": C.waterText, "text-halo-color": "rgba(247,243,234,0.7)", "text-halo-width": 1 },
+    },
+    {
+      id: "label-pass",
+      type: "symbol",
+      source: "caLabels",
+      filter: curated(["pass"]),
+      layout: {
+        "text-field": ["concat", "⌒ ", ["get", "name"]],
+        "text-font": FONT,
+        "text-size": 10,
+        "text-variable-anchor-offset": ["literal", ["left", [0.4, 0], "right", [-0.4, 0], "top", [0, 0.4]]],
+        "text-optional": true,
+      },
+      paint: { "text-color": C.pass, "text-halo-color": C.halo, "text-halo-width": 1.2 },
+    },
+    {
+      id: "peak",
+      type: "symbol",
+      source: "omt",
+      "source-layer": "mountain_peak",
+      minzoom: 10,
+      filter: inCA(["has", "name"]),
+      layout: { "text-field": ["concat", "▲ ", ["get", "name"]], "text-font": FONT, "text-size": 10, "text-anchor": "top", "text-optional": true },
+      paint: { "text-color": "#7c6f55", "text-halo-color": C.halo, "text-halo-width": 1 },
+    },
+    {
+      id: "place-minor",
+      type: "symbol",
+      source: "omt",
+      "source-layer": "place",
+      minzoom: 9.5,
+      filter: inCA(["match", ["get", "class"], ["village", "hamlet", "suburb", "neighbourhood"], true, false]),
+      layout: { "text-field": NAME, "text-font": FONT, "text-size": 11, "text-variable-anchor-offset": SLIDE },
+      paint: { "text-color": C.text, "text-halo-color": C.halo, "text-halo-width": 1.2 },
+    },
+    {
+      id: "place-town",
+      type: "symbol",
+      source: "omt",
+      "source-layer": "place",
+      minzoom: 6.5,
+      filter: inCA(["==", ["get", "class"], "town"]),
+      layout: { "text-field": NAME, "text-font": FONT, "text-size": ["interpolate", ["linear"], ["zoom"], 6.5, 10.5, 12, 13], "text-variable-anchor-offset": SLIDE },
+      paint: { "text-color": C.text, "text-halo-color": C.halo, "text-halo-width": 1.3 },
+    },
+    {
+      id: "place-city",
+      type: "symbol",
+      source: "omt",
+      "source-layer": "place",
+      minzoom: 4,
+      filter: inCA(["==", ["get", "class"], "city"]),
+      layout: {
+        "text-field": NAME,
+        "text-font": FONT_B,
+        "text-size": ["interpolate", ["linear"], ["zoom"], 4, 10.5, 10, 15],
+        "symbol-sort-key": ["coalesce", ["get", "rank"], 99],
+        "text-variable-anchor-offset": SLIDE,
+      },
+      paint: { "text-color": C.textStrong, "text-halo-color": C.halo, "text-halo-width": 1.5 },
+    },
+  ];
+}
+
+/** County lines: faint as you zoom in by default; "County lines" (reference layers) makes them stronger and names counties. */
+function countyLayers(): LayerSpecification[] {
+  return [
+    {
+      id: "county-line",
+      type: "line",
+      source: "caCounties",
+      layout: { "line-join": "round" },
+      paint: { "line-color": C.county, "line-width": ["interpolate", ["linear"], ["zoom"], 6.5, 0.4, 12, 1], "line-opacity": ["interpolate", ["linear"], ["zoom"], 6.5, 0, 8, 0.55, 12, 0.7] },
+    },
+    {
+      id: "county-line-strong",
+      type: "line",
+      source: "caCounties",
+      layout: { "line-join": "round", visibility: "none" },
+      paint: { "line-color": C.countyStrong, "line-width": ["interpolate", ["linear"], ["zoom"], 5, 1, 12, 2.2], "line-opacity": 0.9, "line-dasharray": [4, 2] },
+    },
+  ];
+}
+const countyLabel: LayerSpecification = {
+  id: "county-label",
+  type: "symbol",
+  source: "caCountyLabels",
+  layout: {
+    visibility: "none",
+    "text-field": ["concat", ["get", "name"], " County"],
+    "text-font": FONT,
+    "text-transform": "uppercase",
+    "text-size": ["interpolate", ["linear"], ["zoom"], 5, 8.5, 10, 11.5],
+    "text-letter-spacing": 0.14,
+    "text-max-width": 7,
+    "text-padding": 4,
+  },
+  paint: { "text-color": C.countyText, "text-halo-color": C.halo, "text-halo-width": 1.4 },
+};
 
 export function baseStyle(opts: { mask?: MaskMode } = {}): StyleSpecification {
   const mask = opts.mask ?? MASK_MODE;
@@ -92,7 +331,10 @@ export function baseStyle(opts: { mask?: MaskMode } = {}): StyleSpecification {
       hillshadeDem: { type: "raster-dem", tiles: [TERRARIUM], encoding: "terrarium", tileSize: 256, maxzoom: 15, attribution: TERRAIN_ATTR },
       terrainDem: { type: "raster-dem", tiles: [TERRARIUM], encoding: "terrarium", tileSize: 256, maxzoom: 14 },
       caMask: { type: "geojson", data: "/data/ca-mask.geojson" },
-      caOutline: { type: "geojson", data: "/data/ca-outline.geojson" },
+      caBorder: { type: "geojson", data: "/data/ca-border.geojson" },
+      caCounties: { type: "geojson", data: "/data/ca-county-lines.geojson" },
+      caCountyLabels: { type: "geojson", data: "/data/ca-county-labels.geojson" },
+      caLabels: { type: "geojson", data: "/data/ca-labels.geojson" },
     },
     layers: [
       { id: "bg", type: "background", paint: { "background-color": C.land } },
@@ -147,124 +389,21 @@ export function baseStyle(opts: { mask?: MaskMode } = {}): StyleSpecification {
           "line-width": ["interpolate", ["linear"], ["zoom"], 6, ["match", ["get", "class"], "river", 0.9, 0.3], 12, ["match", ["get", "class"], "river", 2.2, 0.9]],
         },
       },
-      { id: "water", type: "fill", source: "omt", "source-layer": "water", paint: { "fill-color": C.water } },
+      // Roads sit under the water (and under the mask outside California); bridges are redrawn above.
+      ...roadLayers(false),
+      ...maskLayers(mask),
       {
-        id: "boundary-county",
-        type: "line",
+        id: "water",
+        type: "fill",
         source: "omt",
-        "source-layer": "boundary",
-        minzoom: 7,
-        filter: ["all", ["==", ["get", "admin_level"], 6], ["!=", ["coalesce", ["get", "maritime"], 0], 1]],
-        paint: { "line-color": C.boundary, "line-width": 0.6, "line-dasharray": [2, 2], "line-opacity": 0.55 },
+        "source-layer": "water",
+        paint: { "fill-color": C.water },
       },
-      {
-        id: "boundary-state",
-        type: "line",
-        source: "omt",
-        "source-layer": "boundary",
-        filter: ["all", ["<=", ["coalesce", ["get", "admin_level"], 99], 4], ["!=", ["coalesce", ["get", "maritime"], 0], 1]],
-        paint: { "line-color": C.boundary, "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.8, 10, 1.6], "line-dasharray": [3, 2] },
-      },
-      {
-        id: "road-major-case",
-        type: "line",
-        source: "omt",
-        "source-layer": "transportation",
-        minzoom: 6,
-        filter: ["match", ["get", "class"], ["motorway", "trunk", "primary"], true, false],
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": C.roadCase, "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.6, 10, 2.2, 14, 7], "line-opacity": 0.8 },
-      },
-      {
-        id: "road-minor",
-        type: "line",
-        source: "omt",
-        "source-layer": "transportation",
-        minzoom: 10,
-        filter: ["match", ["get", "class"], ["secondary", "tertiary", "minor", "service", "track"], true, false],
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": C.road, "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.5, 14, 3], "line-opacity": 0.9 },
-      },
-      {
-        id: "road-major",
-        type: "line",
-        source: "omt",
-        "source-layer": "transportation",
-        minzoom: 6,
-        filter: ["match", ["get", "class"], ["motorway", "trunk", "primary"], true, false],
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": C.roadMajor, "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.3, 10, 1.4, 14, 5] },
-      },
-      {
-        id: "water-name-line",
-        type: "symbol",
-        source: "omt",
-        "source-layer": "waterway",
-        minzoom: 9,
-        filter: ["==", ["get", "class"], "river"],
-        layout: { "symbol-placement": "line", "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]], "text-font": FONT_IT, "text-size": 11, "text-letter-spacing": 0.05 },
-        paint: { "text-color": C.waterText, "text-halo-color": C.halo, "text-halo-width": 1.2 },
-      },
-      {
-        id: "water-name",
-        type: "symbol",
-        source: "omt",
-        "source-layer": "water_name",
-        layout: {
-          "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
-          "text-font": FONT_IT,
-          "text-size": ["interpolate", ["linear"], ["zoom"], 4, 11, 10, 13],
-          "text-letter-spacing": 0.08,
-          "text-max-width": 8,
-        },
-        paint: { "text-color": C.waterText, "text-halo-color": "rgba(247,243,234,0.6)", "text-halo-width": 1 },
-      },
-      {
-        id: "peak",
-        type: "symbol",
-        source: "omt",
-        "source-layer": "mountain_peak",
-        minzoom: 10,
-        filter: ["has", "name"],
-        layout: { "text-field": ["concat", "▲ ", ["get", "name"]], "text-font": FONT, "text-size": 10, "text-anchor": "top", "text-optional": true },
-        paint: { "text-color": "#7c6f55", "text-halo-color": C.halo, "text-halo-width": 1 },
-      },
-      {
-        id: "place-minor",
-        type: "symbol",
-        source: "omt",
-        "source-layer": "place",
-        minzoom: 9,
-        filter: ["match", ["get", "class"], ["village", "hamlet", "suburb", "neighbourhood"], true, false],
-        layout: { "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]], "text-font": FONT, "text-size": 11 },
-        paint: { "text-color": C.text, "text-halo-color": C.halo, "text-halo-width": 1.2 },
-      },
-      {
-        id: "place-town",
-        type: "symbol",
-        source: "omt",
-        "source-layer": "place",
-        minzoom: 6,
-        filter: ["==", ["get", "class"], "town"],
-        layout: { "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]], "text-font": FONT, "text-size": ["interpolate", ["linear"], ["zoom"], 6, 10.5, 12, 13] },
-        paint: { "text-color": C.text, "text-halo-color": C.halo, "text-halo-width": 1.3 },
-      },
-      {
-        id: "place-city",
-        type: "symbol",
-        source: "omt",
-        "source-layer": "place",
-        minzoom: 4,
-        filter: ["==", ["get", "class"], "city"],
-        layout: {
-          "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
-          "text-font": FONT_B,
-          "text-size": ["interpolate", ["linear"], ["zoom"], 4, 10.5, 10, 15],
-          "symbol-sort-key": ["coalesce", ["get", "rank"], 99],
-        },
-        paint: { "text-color": C.textStrong, "text-halo-color": C.halo, "text-halo-width": 1.5 },
-      },
-      ...frameLayers(mask),
+      ...countyLayers(),
+      ...roadLayers(true),
+      ...frameLines(mask),
+      ...labelLayers(),
+      countyLabel,
     ],
   };
 }
