@@ -38,6 +38,7 @@ export function FilterPanel({ f, set, counties, waterbodies, methods }: Props) {
 
   return (
     <div className="space-y-4 text-sm">
+      <p className="-mb-2.5 text-[11.5px] font-semibold text-ink-soft">Quick filters <DataLabel kind="estimate" title="Estimate: both use this map's classification; this map assigns candidates for review, not the state" /></p>
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Quick filters">
         <button type="button" aria-pressed={isPre} className={chip(isPre)} onClick={() => set(isPre ? { ...EMPTY, q: f.q } : pre1960)} title="Cable, pipeline, water and power leases with an estimated issue date before 1960">
           Pre-1960 infrastructure
@@ -115,7 +116,7 @@ export function FilterPanel({ f, set, counties, waterbodies, methods }: Props) {
             <input type="checkbox" checked={f.firstOnly} onChange={(e) => set({ ...f, firstOnly: e.target.checked })} className="mt-0.5 accent-[#a4553f]" />
             <span className="text-[12.5px] text-ink">
               Candidates for review only <DataLabel kind="estimate" title={methods.candidates} />
-              <span className="block text-[11px] text-ink-faint">This map assigns it; the state does not. Plus case studies.</span>
+              <span className="block text-[11px] text-ink-faint">This map assigns it; the State Lands Commission does not. Plus case studies <DataLabel kind="finding" />.</span>
             </span>
           </label>
         </div>

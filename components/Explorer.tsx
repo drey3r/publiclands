@@ -13,7 +13,7 @@ import { LeaseSwatch, MapControls, type LayerToggle, type Preset } from "./MapCo
 import { LAND, NONPROFIT_COLOR, landOf, type LandKey } from "@/lib/legend";
 import { PlaceCard, type Place } from "./PlaceCard";
 import { SearchBox, type Suggestion } from "./SearchBox";
-import { FixtureBadge, ScoreRing, StageTracker, WhatDot, eraLabel, whatLabel } from "./ui";
+import { DataLabel, FixtureBadge, ScoreRing, StageTracker, WhatDot, eraLabel, whatLabel } from "./ui";
 import type { Bounds, ColorBy } from "./MapView";
 import type * as maplibregl from "maplibre-gl";
 import { AUTO_PITCH, AUTO_ZOOM, bearingWithin, type Camera, type CameraOverride } from "@/lib/camera";
@@ -472,7 +472,7 @@ export default function Explorer() {
     on: show[k],
     status: countText(k),
     onToggle: () => toggle(k),
-    title: k === "leases" ? "State Lands Commission lease sites" : LAND.find((x) => x.key === k)?.note,
+    title: k === "leases" ? "State Lands Commission lease sites (source data: one point per lease, approximate)" : `${LAND.find((x) => x.key === k)?.note}. Source data: CPAD's owner level (AGNCY_LEV).`,
     swatch: k === "leases" ? <LeaseSwatch /> : landSwatch(k),
   }));
   const preset = PRESETS.find((x) => x.openOnly === openOnly && SHOW_KEYS.every((k) => x.show[k] === show[k]))?.key ?? "";
@@ -563,7 +563,7 @@ export default function Explorer() {
                         <span className="absolute bottom-1.5 right-2 text-[10px] font-semibold text-paper drop-shadow">Fly in →</span>
                       </div>
                       <div className="p-2.5">
-                        <div className="text-[11px] font-semibold text-ink-faint">Lake Tahoe · PRC {s.prc}</div>
+                        <div className="text-[11px] font-semibold text-ink-faint">Lake Tahoe · PRC {s.prc}<DataLabel kind={s.kicker === "Completed" ? "finding" : "estimate"} title={s.kicker === "Completed" ? undefined : "Estimate: this map assigns \u201ccandidate for review\u201d; the State Lands Commission does not"} /></div>
                         <div className="text-[14px] font-semibold leading-snug text-ink">{s.title}</div>
                         <p className="mt-0.5 text-[12px] leading-snug text-ink-soft">{s.blurb}</p>
                       </div>
@@ -744,18 +744,22 @@ function SelectedPreview({ l, onClose, onFly }: { l: MiniLease; onClose: () => v
       <div className="flex items-start gap-3">
         <ScoreRing s={l.s} size={40} />
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-semibold text-ink-faint">PRC {l.p}{l.x ? " · Completed" : l.f ? " · Candidate for review" : ""}</div>
+          <div className="text-[11px] font-semibold text-ink-faint">
+            PRC {l.p}<DataLabel kind="source" />
+            {l.x ? <> · Completed<DataLabel kind="finding" /></> : l.f ? <> · Candidate for review<DataLabel kind="estimate" title="Estimate: this map assigns it; the State Lands Commission does not" /></> : null}
+          </div>
           <h2 className="text-[16px] font-semibold leading-snug text-ink">{l.n}</h2>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[12px] text-ink-soft">
             <span className="inline-flex items-center gap-1"><WhatDot t={l.t} k={l.k} />{whatLabel(l.t, l.k)}</span>
             <span>{eraLabel(l.e)}</span>
             {l.w && <span>{l.w}</span>}
-            <span className="text-[10px] uppercase tracking-wide text-ink-faint">(est.)</span>
+            <DataLabel kind="estimate" />
           </p>
         </div>
         <button type="button" onClick={onClose} className="rounded-full px-1.5 text-ink-faint hover:text-ink" aria-label="Close selection">✕</button>
       </div>
-      <div className="mt-3"><StageTracker stage={l.st} completed={!!l.x} /></div>
+      <p className="mt-3 text-[11px] font-semibold text-ink-faint">Review stage<DataLabel kind="finding" /></p>
+      <div className="mt-1"><StageTracker stage={l.st} completed={!!l.x} /></div>
       <div className="mt-3 flex gap-2">
         <Link href={`/lease/${encodeURIComponent(l.p)}`} className="flex-1 rounded-full bg-ink py-2 text-center text-[13px] font-semibold text-paper hover:bg-ink-soft">Open lease page</Link>
         <button type="button" onClick={onFly} className="rounded-full border border-line px-3 py-2 text-[13px] font-medium text-ink-soft hover:border-ink-soft">Fly in</button>
@@ -772,7 +776,7 @@ function SourceNote({ meta, manifest, overlays }: { meta?: LeasesPayload["meta"]
       {meta.fixture && <FixtureBadge label={`Fixture: ${meta.counts.leases}-lease sample`} />}
       <p className="text-ink-soft">{meta.source.label}.</p>
       <p>{meta.source.completeness} “Active” is the record status in the layer, not evidence that anything is in use.</p>
-      <p>Type, era, region, county, waterbody and score are estimates; each lease page shows why. The score means “read this file first”, not a finding about any lessee.</p>
+      <p>Three labels: <b className="font-semibold text-ink-soft">Source data</b> is the official record; <b className="font-semibold text-ink-soft">Estimate</b> is this map&apos;s classification or score (category, kind, era, region, county, waterbody, score, candidates for review), each with its reason; <b className="font-semibold text-ink-soft">Finding</b> is an editorial determination, such as a case study. The score means “read this file first”, not a finding about any lessee.</p>
       {fx.length > 0 && <p>Placeholder layers (hand-drawn fixture outlines, not survey data): {fx.join(", ")}.</p>}
       {manifest &&
         Object.values(manifest)

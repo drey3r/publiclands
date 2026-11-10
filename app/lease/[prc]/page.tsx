@@ -76,13 +76,13 @@ export default async function LeasePage({ params }: Params) {
         <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-[12px]">
-              <span className="font-semibold text-ink-soft">PRC {l.prc}</span>
+              <span className="font-semibold text-ink-soft">PRC {l.prc}<DataLabel kind="source" /></span>
               {l.prcFlag && <span className="rounded-full bg-sand px-2 text-ink-soft" title={l.prcFlag}>Unusual PRC: {l.prcFlag}</span>}
-              {l.completed && <span className="rounded-full bg-sage-deep px-2 font-semibold text-paper">Completed</span>}
-              {l.derived.firstTarget && <span className="rounded-full bg-clay/15 px-2 font-semibold text-clay" title={meta.methods.candidates}>Candidate for review</span>}
+              {l.completed && <span><span className="rounded-full bg-sage-deep px-2 font-semibold text-paper">Completed</span><DataLabel kind="finding" /></span>}
+              {l.derived.firstTarget && <span><span className="rounded-full bg-clay/15 px-2 font-semibold text-clay" title={meta.methods.candidates}>Candidate for review</span><DataLabel kind="estimate" title="Estimate: this map assigns it; the State Lands Commission does not" /></span>}
             </div>
             <h1 className="display mt-1 text-[34px] text-ink sm:text-[42px]">{cs?.title ?? l.name}</h1>
-            <p className="mt-2 text-[15px] leading-relaxed text-ink-soft">{l.facts.location}</p>
+            <p className="mt-2 text-[15px] leading-relaxed text-ink-soft">{l.facts.location}<DataLabel kind="source" /></p>
             <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-soft">
               <span className="inline-flex items-center gap-1.5" title={`Why: ${l.category.reason}`}><WhatDot t={l.derived.typeKey} k={l.derived.categoryKey} />{whatLabel(l.derived.typeKey, l.derived.categoryKey)}<DataLabel kind="estimate" /></span>
               {l.facts.typeOfLease && <span className="inline-flex items-center">State lease type: {l.facts.typeOfLease}<DataLabel kind="source" /></span>}
@@ -95,7 +95,7 @@ export default async function LeasePage({ params }: Params) {
           </div>
 
           <section className="card p-4" aria-labelledby="tracker">
-            <h2 id="tracker" className="kicker mb-3">Where this site is in the 7-stage process</h2>
+            <h2 id="tracker" className="kicker mb-3">Where this site is in the 7-stage process <DataLabel kind="finding" title="Finding: this project's own record of the review, not the state's" /></h2>
             <StageTracker stage={l.stage} completed={l.completed} />
             <p className="mt-3 text-[13px] text-ink-soft">
               {l.completed ? "Every stage is done: the infrastructure was removed." : `Current stage: ${STAGES[stageIdx]?.label}. ${l.stage === "research" ? "Nobody has visited or assessed this site yet." : ""}`}
@@ -105,7 +105,7 @@ export default async function LeasePage({ params }: Params) {
 
         {cs && (
           <section className="mt-6 rounded-2xl border border-sage-deep/30 bg-sage-soft/30 p-5">
-            <h2 className="kicker">Case study</h2>
+            <h2 className="kicker">Case study <DataLabel kind="finding" /></h2>
             <p className="mt-2 text-[15px] leading-relaxed text-ink">{cs.summary}</p>
             {cs.layerCaveat && <p className="mt-2 text-[13px] text-ink-soft"><b>Note on the data:</b> {cs.layerCaveat}</p>}
             {cs.sources.length > 0 && (
@@ -122,13 +122,13 @@ export default async function LeasePage({ params }: Params) {
 
         {l.derived.firstTarget && (
           <section className="mt-6 rounded-2xl border border-clay/30 bg-clay/5 p-5" aria-labelledby="candidate">
-            <h2 id="candidate" className="kicker">Candidate for review</h2>
+            <h2 id="candidate" className="kicker">Candidate for review <DataLabel kind="estimate" title="Estimate: this map assigns it; the State Lands Commission does not" /></h2>
             <p className="mt-2 text-[15px] leading-relaxed text-ink">
               The lease&apos;s own description, written by the State Lands Commission, uses the word <b>&ldquo;{l.derived.stateText}&rdquo;</b>:
             </p>
             <blockquote className="mt-2 border-l-2 border-clay/40 pl-3 text-[14px] italic text-ink-soft">{l.facts.improvements}</blockquote>
             <p className="mt-2 text-[12px] text-ink-faint">
-              Why it&apos;s listed: {meta.candidates.find((c) => c.prc === l.prc)?.reason}. This is a reading list, not a finding: the record may already account for these facilities.
+              Why it&apos;s listed: {meta.candidates.find((c) => c.prc === l.prc)?.reason}. This map assigns &ldquo;candidate for review&rdquo;; the State Lands Commission does not. It is a reading list, not a finding: the record may already account for these facilities.
             </p>
           </section>
         )}
@@ -192,7 +192,7 @@ export default async function LeasePage({ params }: Params) {
         </div>
 
         <section className="mt-8" aria-labelledby="records">
-          <h2 id="records" className="display text-[22px] text-ink">Records found</h2>
+          <h2 id="records" className="display text-[22px] text-ink">Records found {cs?.milestones?.length ? <DataLabel kind="finding" title="Finding: this project's reading of the records (each line names its source)" /> : null}</h2>
           {cs?.milestones?.length ? (
             <ol className="mt-3 space-y-2 border-l-2 border-sage pl-4">
               {cs.milestones.map((m) => (
@@ -236,7 +236,7 @@ export default async function LeasePage({ params }: Params) {
                     <ScoreRing s={o.score.value} size={30} />
                     <span className="min-w-0">
                       <span className="block truncate text-[14px] font-semibold text-ink">{o.name}</span>
-                      <span className="text-[12px] text-ink-faint">PRC {o.prc} · {whatLabel(o.derived.typeKey, o.derived.categoryKey)} (estimate) · {d < 1 ? "<1" : Math.round(d)} km</span>
+                      <span className="text-[12px] text-ink-faint">PRC {o.prc} · {whatLabel(o.derived.typeKey, o.derived.categoryKey)}<DataLabel kind="estimate" /> · {d < 1 ? "<1" : Math.round(d)} km</span>
                     </span>
                   </Link>
                 </li>

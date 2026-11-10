@@ -57,6 +57,7 @@ export default function AboutPage() {
         <ul className="mt-3 space-y-2">
           <li><DataLabel kind="source" /> <b className="text-ink">Source data</b>: copied from the official record, here the Commission&apos;s public layers.</li>
           <li><DataLabel kind="estimate" /> <b className="text-ink">Estimate</b>: this map&apos;s classification or score. Every estimate shows its reason.</li>
+          <li><DataLabel kind="finding" /> <b className="text-ink">Finding</b>: an editorial determination by this project, such as a case study or a site&apos;s review stage, with its sources.</li>
         </ul>
 
         <h2 id="data" className="display mt-10 scroll-mt-16 text-[26px] text-ink">Where the data comes from</h2>

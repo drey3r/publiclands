@@ -6,6 +6,7 @@ import type { LayerManifest, LayerName, OverlayDef } from "@/lib/types";
 import type { ColorBy } from "./MapView";
 import { KindIcon } from "./KindIcon";
 import { DataDates } from "./DataDates";
+import { DataLabel } from "./ui";
 import type { Dataset, KindKey } from "@/lib/types";
 import type { ExploreKind } from "@/lib/filters";
 
@@ -221,6 +222,7 @@ export function MapControls(p: Props) {
   const seg = (on: boolean) => `flex-1 rounded-md px-1 py-1 text-[11.5px] font-medium ${on ? "bg-ink text-paper" : "text-ink-soft hover:text-ink"}`;
   const leaseKey = (
     <div className="space-y-2">
+      <p className="text-[11.5px] font-semibold text-ink-soft">What it is <DataLabel kind="estimate" title="Estimate: category and kind are this map's reading of the state's lease type and text" /></p>
       <p className="text-[11px] text-ink-faint">Click a row to show only that kind{p.kinds.active ? "; click it again to show all" : ""}.</p>
       <ul className="-mx-1 text-[12px] text-ink" aria-label="Explore by kind">
         {[
@@ -276,10 +278,10 @@ export function MapControls(p: Props) {
         </ul>
       )}
       <ul className="grid grid-cols-1 gap-y-1 text-[12px] text-ink-soft">
-        <li className="flex items-center gap-2"><span aria-hidden className="h-3.5 w-3.5 shrink-0 rounded-full border-[1.5px] border-clay" /> Candidate for review</li>
-        <li className="flex items-center gap-2"><span aria-hidden className="h-3.5 w-3.5 shrink-0 rounded-full border-[1.5px] border-sage-deep" /> Completed</li>
+        <li className="flex items-center gap-2"><span aria-hidden className="h-3.5 w-3.5 shrink-0 rounded-full border-[1.5px] border-clay" /> Candidate for review<DataLabel kind="estimate" title="Estimate: this map assigns it; the State Lands Commission does not" /></li>
+        <li className="flex items-center gap-2"><span aria-hidden className="h-3.5 w-3.5 shrink-0 rounded-full border-[1.5px] border-sage-deep" /> Completed<DataLabel kind="finding" /></li>
       </ul>
-      <p className="text-[11px] text-ink-faint">Category, infrastructure type, era and score are estimates; the state&apos;s lease type is source data.</p>
+      <p className="text-[11px] text-ink-faint">Category, kind, era and score are estimates; the state&apos;s lease type is source data; case studies and review stages are findings.</p>
     </div>
   );
 

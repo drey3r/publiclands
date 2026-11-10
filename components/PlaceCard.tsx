@@ -1,4 +1,5 @@
 "use client";
+import { DataLabel } from "./ui";
 
 export type Place = {
   id: string;
@@ -32,6 +33,7 @@ export function PlaceCard({ p, selected, onSelect, onFly }: { p: Place; selected
     <li className={`card relative p-3 ${selected ? "border-ink/60 bg-white" : "hover:border-sage"}`}>
       <div className="flex items-center gap-1.5 text-[11px]">
         <span className="font-semibold uppercase tracking-wide text-sage-deep">{p.kind ?? "Public land"}</span>
+        <DataLabel kind="source" title="Source data: name, manager, owner level and access as published in CPAD" />
         {p.fixture && <span className="rounded-full border border-dashed border-clay/60 px-1.5 text-clay">fixture outline</span>}
       </div>
       <h3 className="text-[15px] font-semibold leading-snug text-ink">
@@ -44,7 +46,6 @@ export function PlaceCard({ p, selected, onSelect, onFly }: { p: Place; selected
         <dd className="flex flex-wrap items-center gap-x-1.5">
           <span className={`rounded-full px-1.5 text-[11px] font-semibold ${ACCESS_STYLE[p.access ?? ""] ?? "bg-sand text-ink-soft"}`}>{p.access ?? "Unknown"}</span>
           <span className="text-[11.5px] text-ink-soft">{ACCESS_GLOSS[p.access ?? ""] ?? ""}</span>
-          <span className="text-[10px] uppercase tracking-wide text-ink-faint" title="CPAD's ACCESS_TYP field, as published">source data</span>
         </dd>
       </dl>
       {p.visit && <p className="mt-1.5 text-[12px] text-ink-soft">{p.visit}</p>}

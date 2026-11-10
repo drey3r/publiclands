@@ -71,12 +71,28 @@ export function FixtureBadge({ label = "Fixture data" }: { label?: string }) {
   );
 }
 
-/** The two data labels: the official record vs. this map's classification or score. */
-export function DataLabel({ kind, title }: { kind: "source" | "estimate"; title?: string }) {
-  return kind === "source" ? (
-    <span title={title ?? "Source data: copied from the State Lands Commission lease layer"} className="ml-1 inline-block rounded border border-sage-deep/40 px-1 align-middle text-[10px] font-medium uppercase tracking-wide text-sage-deep">Source data</span>
-  ) : (
-    <span title={title ?? "Estimate: this map's classification or score"} className="ml-1 inline-block rounded border border-dashed border-ink-faint/60 px-1 align-middle text-[10px] font-medium uppercase tracking-wide text-ink-faint">Estimate</span>
+export type LabelKind = "source" | "estimate" | "finding";
+export const LABEL_TEXT: Record<LabelKind, string> = { source: "Source data", estimate: "Estimate", finding: "Finding" };
+export const LABEL_TITLE: Record<LabelKind, string> = {
+  source: "Source data: the official record, copied from the State Lands Commission or CPAD",
+  estimate: "Estimate: this map's classification or score, with its reason",
+  finding: "Finding: an editorial determination by this project, such as a case study",
+};
+/**
+ * The three data labels, used everywhere a value is shown: Source data (the official record),
+ * Estimate (this map's classification or score, with its reason), Finding (an editorial determination).
+ */
+export function DataLabel({ kind, title }: { kind: LabelKind; title?: string }) {
+  const style =
+    kind === "source"
+      ? "border-sage-deep/40 text-sage-deep"
+      : kind === "estimate"
+        ? "border-dashed border-ink-faint/60 text-ink-faint"
+        : "border-clay/50 bg-clay/5 text-clay";
+  return (
+    <span title={title ?? LABEL_TITLE[kind]} className={`ml-1 inline-block whitespace-nowrap rounded border px-1 align-middle text-[10px] font-medium uppercase leading-[1.4] tracking-wide ${style}`}>
+      {LABEL_TEXT[kind]}
+    </span>
   );
 }
 

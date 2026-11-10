@@ -113,6 +113,11 @@ const ICON_KINDS: KindKey[] = ["cable", "pipeline", "outfall", "power", "roads",
 const ICON_FILLS = [...new Set([LEASE_TIER[1].fill, LEASE_TIER[2].fill, LEASE_TIER[3].fill, ...CATS.map((c) => c.color), ...TYPES.map((t) => t.color), ...ERAS.map((e) => e.color), ERA_UNKNOWN, ...SCORE_BANDS.map((b) => b.color), SCORE_UNKNOWN])];
 const iconOf = (l: MiniLease) => (l.k === "infra" && l.t !== "other" ? l.t : l.k === "roads" || l.k === "shore" ? l.k : "");
 
+/** The data labels inside map popups (plain HTML). */
+const tipLabel = (text: string, color: string, dashed = false) =>
+  `<span style="display:inline-block;margin-left:3px;padding:0 3px;border:1px ${dashed ? "dashed" : "solid"} ${color};border-radius:3px;font-size:9.5px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:${color};vertical-align:1px">${text}</span>`;
+const TIP_LABEL = { source: tipLabel("Source data", "#56664f"), estimate: tipLabel("Estimate", "#736e63", true) };
+
 function toGeoJSON(ls: MiniLease[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
   const features: GeoJSON.Feature<GeoJSON.Point>[] = [];
   for (const l of ls)
@@ -273,7 +278,7 @@ export default function MapView(props: Props) {
         if (cb.current.hover !== p) cb.current.onHover(p);
         const l = byPrc.current.get(p);
         if (!l) return;
-        const html = `<div style="font-size:12px;line-height:1.35;max-width:220px"><div style="font-weight:600;color:#2b2a26">${esc(l.n)}</div><div style="color:#57534a">PRC ${esc(l.p)} · ${l.k === "infra" ? (l.ts ?? [l.t]).map((t) => TYPE_LABEL[t]).join(" + ") : CAT_LABEL[l.k]} <span style="color:#736e63">(estimate)</span></div></div>`;
+        const html = `<div style="font-size:12px;line-height:1.35;max-width:220px"><div style="font-weight:600;color:#2b2a26">${esc(l.n)}</div><div style="color:#57534a">PRC ${esc(l.p)} ${TIP_LABEL.source}</div><div style="color:#57534a">${l.k === "infra" ? (l.ts ?? [l.t]).map((t) => TYPE_LABEL[t]).join(" + ") : CAT_LABEL[l.k]} ${TIP_LABEL.estimate}</div></div>`;
         popup.current ??= new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 10, className: "lease-tip" });
         popup.current.setLngLat((f.geometry as GeoJSON.Point).coordinates as [number, number]).setHTML(html).addTo(m);
       });
