@@ -3,6 +3,34 @@
 Changes to the California Public Lands Map, newest first. Data snapshots and
 counts are unchanged unless an entry says otherwise.
 
+## 2026-11-10 · Round 3: lease data you can read
+
+**Data:** same lease snapshot (CSLC layer pulled 2026-11-06, 4,206 leases). The classification
+changed, so some estimates changed (see below). The 7 candidates for review are unchanged.
+
+- **Categories from the state's own lease type.** Each lease now has a category (Estimate),
+  grouped from the layer's TypeofLease field (Source data): Infrastructure 744 (17.7%) ·
+  Recreation 1,965 (46.7%) · Public agency 820 (19.5%) · Commercial and industrial 214 (5.1%) ·
+  Other 463 (11.0%). "Other" was 3,255 of 4,206 (77.4%).
+- **Infrastructure type (cable, pipeline, water/outfall, power) only from the Improvements text**,
+  and only for Infrastructure leases: 219 cable, 142 pipeline, 278 water/outfall, 105 power. It no
+  longer reads the lease type text (every "Oil & Gas Lease" used to count as a pipeline), and
+  recreational leases no longer count dock accessories ("electrical conduit", "water intake",
+  dock "cables") as infrastructure. Among facility words, the first in the text wins.
+- **Screen scores:** 221 leases changed (214 down, 7 up), almost all recreational docks and oil
+  and gas leases losing the infrastructure points they got from accessory or lease-type words.
+- **Priority by strength, not color.** Lease marks stay gold. Infrastructure is the strongest mark
+  (full gold, dark outline, larger); public agency and commercial are lighter; recreation and other
+  are small and pale but outlined. Color by Category, Type, Era or Score stays opt-in in the lease
+  key. Power is purple when coloring by type (gold is the lease color).
+- **Filters as plain questions:** What is it? · When was it authorized? · What's its status? (term
+  current, expired, or no end date on file; the state's own non-operational wording; candidates for
+  review). "Advanced" holds the score slider, region, county and waterbody. Filters stay in the URL
+  (`cat=`, `type=`, `era=`, `status=`, `nonop=1`, …); old links still work (`type=other` now means
+  the four non-infrastructure categories).
+- **Labels:** the state's lease type says Source data; category and infrastructure type say
+  Estimate, with the words that triggered them.
+
 ## 2026-11-10 · Round 2: greens, every park, layers you peel back (plus Round 1 adjustments)
 
 **Data:** same CPAD snapshot (2026-11-06, CPAD 2026a, 17,930 units) and lease snapshot. The public
