@@ -3,6 +3,21 @@
 Changes to the California Public Lands Map, newest first. Data snapshots and
 counts are unchanged unless an entry says otherwise.
 
+## 2026-11-10 · Classifier fixes: missed utilities, bridge mentions
+
+**Data:** same lease snapshot. Infrastructure 744 → **758**; the 7 candidates for review are unchanged.
+
+- **Missed utilities added.** "Overhead wire" and "wire crossing" (8 Right of Way leases) and "power
+  conduit" (1) are now Power; water lines named "water transportation/transmission/supply/distribution/
+  conveyance line, main or pipe" and "waterline" are now Water (5 more leases). On recreational leases
+  these words stay dock accessories.
+- **A mention is not a lease.** A road or bridge counts for Roads and bridges only when it is the leased
+  facility, not when the text mentions damage to one (PRC 1615, a channel restoration, is now Other).
+- Categories: Infrastructure 758 · Roads and bridges 181 · Shoreline protection 148 · Recreation 1,965 ·
+  Public agency 696 · Commercial and industrial 214 · Other 244. Primary kind: cable 219, pipeline 139,
+  water/outfall 286, power 114 (any kind: 240 / 144 / 302 / 125). Three water pipelines that read
+  Pipeline now read Water (3228, 7818, 9350). Screen scores rose for the 14 new infrastructure leases.
+
 ## 2026-11-10 · Round 3 icons: kinds you can see and browse
 
 **Data:** same lease snapshot (CSLC layer pulled 2026-11-06, 4,206 leases). Infrastructure is
