@@ -1,7 +1,10 @@
 // Shapes produced by scripts/sync-data.mjs from the CSLC lease layer snapshot.
 // FACTS come from the layer; every Inferred field carries its reason.
 
+/** Infrastructure type (Estimate from the Improvements text); "other" = none. */
 export type TypeKey = "cable" | "pipeline" | "outfall" | "power" | "other";
+/** Lease category (Estimate: a grouping of the state's TypeofLease, plus the text). */
+export type CatKey = "infra" | "rec" | "agency" | "commercial" | "other";
 export type StageKey = "research" | "site-visit" | "assess" | "share" | "engage-gov" | "plan" | "execute";
 
 export type Inferred<T> = { value: T; inferred: true; reason: string };
@@ -11,6 +14,11 @@ export type MiniLease = {
   p: string; // PRC
   n: string; // name
   t: TypeKey;
+  k: CatKey;
+  /** Term status from the expiration date (source data): current, expired, no expiration on file. */
+  xs: "c" | "e" | "n";
+  /** The lease text uses the state's words for a facility that no longer operates. */
+  no: 0 | 1;
   e: number | null; // estimated decade (see meta.methods.mapEra)
   s: number | null; // score
   r: string; // region (inferred)
@@ -68,6 +76,7 @@ export type FullLease = {
   era: Inferred<string>;
   eraFromPrc: (Inferred<string> & { year: number }) | null;
   likelyType: Inferred<string>;
+  category: Inferred<string>;
   region: Inferred<string>;
   score: Inferred<number | null> & { why: string[] };
   renewedLegacy: Inferred<boolean>;
@@ -81,6 +90,8 @@ export type FullLease = {
   };
   derived: {
     typeKey: TypeKey;
+    categoryKey: CatKey;
+    expiry: "current" | "expired" | "none";
     county: Inferred<string> | null;
     waterbody: Inferred<string> | null;
     mapEra: { decade: number | null; basis: "prc" | "start" | null };

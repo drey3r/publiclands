@@ -14,22 +14,98 @@ const toDate = (v) => {
 const yearOf = (d) => (d ? Number(d.slice(0, 4)) : null);
 const est = (value, reason) => ({ value, inferred: true, reason });
 
-// ---------- type ----------
-// First matching rule over Improvements + TypeofLease. Anchor/mooring cables are ignored.
+// ---------- infrastructure type (Estimate, from the Improvements text only) ----------
+// Strong words name the facility ("fiber optic", "sewer outfall", "115 kV"); weak words are
+// often accessories ("electrical conduit" on a dock, a marina's "fuel dock"). Among strong
+// matches the one that comes first in the text wins (the text usually leads with the main
+// facility); weak words count only on right-of-way, public agency and industrial leases.
+// Anchor and mooring cables are ignored.
 const TYPE_RULES = [
-  { key: "power", label: "Electric power", re: /\b(electric(?:al)?|power (?:cable|line)|transmission line|kilovolt|\d+\s?kv)\b/i },
-  { key: "cable", label: "Cable / telecom", re: /\b(telephone|telegraph|telecom\w*|fib(?:er|re)[- ]?optic|communications?|coaxial|submarine cables?|cables?)\b/i },
-  { key: "outfall", label: "Water & sewer", re: /\b(outfall|sewer|wastewater|effluent|storm ?drain|intake|diffuser|water (?:main|line|pipe(?:line)?)|force main)\b/i },
-  { key: "pipeline", label: "Pipeline", re: /\b(pipelines?|gas|oil|petroleum|fuel|crude)\b/i },
+  {
+    key: "power", label: "Electric power",
+    strong: /\b(power (?:cables?|lines?)|transmission lines?|distribution lines?|kilovolts?|\d+\s?kv|electric(?:al)? (?:transmission|distribution|cables?|lines?)|overhead (?:electric|power))\b/i,
+    weak: /\b(electric(?:al)?)\b/i,
+  },
+  {
+    key: "cable", label: "Cable / telecom",
+    strong: /\b(telephone|telegraph|telecom\w*|fib(?:er|re)[- ]?optic|communications?|coaxial|submarine cables?)\b/i,
+    weak: /\b(cables?)\b/i,
+  },
+  {
+    key: "outfall", label: "Water & sewer",
+    strong: /\b(outfall|sewer|wastewater|effluent|storm ?drain|intake|diffuser|water (?:main|line|pipe(?:line)?s?)|force main|discharge (?:pipe|line|conduit))\w*/i,
+    weak: null,
+  },
+  {
+    key: "pipeline", label: "Pipeline",
+    strong: /\b(pipelines?|petroleum|crude|natural gas|gas lines?|oil lines?)\b/i,
+    weak: /\b(gas|oil|fuel)\b/i,
+  },
 ];
-export const TYPE_LABELS = Object.fromEntries([...TYPE_RULES.map((r) => [r.key, r.label]), ["other", "Other"]]);
-function typeOf(text) {
-  const t = (text ?? "").replace(/\b(anchor|mooring)\w*[\w\s-]{0,30}?cables?\b/gi, " ");
+export const TYPE_LABELS = Object.fromEntries([...TYPE_RULES.map((r) => [r.key, r.label]), ["other", "None"]]);
+const WEAK_OK = /^(Right of Way Use|Public Agency Use|Industrial Use)$/;
+function infraTypeOf(improvements, typeOfLease) {
+  const t = (improvements ?? "").replace(/\b(anchor|mooring)\w*[\w\s-]{0,30}?cables?\b/gi, " ");
+  let best = null;
   for (const r of TYPE_RULES) {
-    const m = r.re.exec(t);
-    if (m) return { key: r.key, ...est(r.label, `lease text mentions "${m[0]}"`) };
+    const m = r.strong.exec(t);
+    if (m && (!best || m.index < best.m.index)) best = { r, m };
   }
-  return { key: "other", ...est("Other", "no infrastructure keyword in Improvements or Type of lease") };
+  if (!best && WEAK_OK.test(typeOfLease ?? "")) {
+    for (const r of TYPE_RULES) {
+      const m = r.weak?.exec(t);
+      if (m && (!best || m.index < best.m.index)) best = { r, m };
+    }
+  }
+  if (!best) return null;
+  return { key: best.r.key, label: best.r.label, word: best.m[0] };
+}
+
+// ---------- category (Estimate: a grouping of the state's own TypeofLease, plus the text) ----------
+// The state's lease type decides, except that infrastructure words in the text move a lease
+// into Infrastructure (recreational leases never: there the words are dock accessories), and
+// Commercial Use leases that are marinas go to Recreation.
+export const CATEGORIES = [
+  { key: "infra", label: "Infrastructure" },
+  { key: "rec", label: "Recreation" },
+  { key: "agency", label: "Public agency" },
+  { key: "commercial", label: "Commercial and industrial" },
+  { key: "other", label: "Other" },
+];
+const CAT_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.key, c.label]));
+/** State TypeofLease value -> category when the text names no infrastructure. Anything unlisted is Other. */
+export const CATEGORY_OF_LEASE_TYPE = {
+  "Recreational Use": "rec",
+  "Recreational and Protective Structure Use": "rec",
+  "Recreational Pier Lease": "rec",
+  "Residential and Recreational Use": "rec",
+  "Public Agency Use": "agency",
+  "Streets and Highways - DOT Code 101.5": "agency",
+  "Commercial Use": "commercial",
+  "Industrial Use": "commercial",
+  "Oil & Gas Lease": "commercial",
+  "Oil & Gas/Mineral Lease-Non SLC Land": "commercial",
+  "Mineral Lease": "commercial",
+  "Mineral Prospect Permit": "commercial",
+  "Geothermal Lease": "commercial",
+  "Dredging": "commercial",
+  "Grazing Use": "commercial",
+  "Agricultural Use": "commercial",
+  "Forestry Management Agreement": "commercial",
+  "Salvage": "commercial",
+};
+const MARINA = /\b(marinas?|berths?|boat slips?|yacht club|boat (?:harbor|launch\w*))\b/i;
+function categoryOf(typeOfLease, improvements, infra) {
+  const lt = (typeOfLease ?? "").trim();
+  const base = CATEGORY_OF_LEASE_TYPE[lt] ?? "other";
+  const said = lt ? `state lease type "${lt}"` : "no state lease type";
+  if (base === "rec") return { key: "rec", ...est(CAT_LABEL.rec, said) };
+  if (lt === "Commercial Use") {
+    const m = MARINA.exec(improvements ?? "");
+    if (m) return { key: "rec", ...est(CAT_LABEL.rec, `${said}; the text mentions "${m[0]}"`) };
+  }
+  if (infra) return { key: "infra", ...est(CAT_LABEL.infra, `${said}; the text mentions "${infra.word}"`) };
+  return { key: base, ...est(CAT_LABEL[base], base === "other" && lt ? `${said} is not in the other groups` : said) };
 }
 
 // ---------- PRC kind ----------
@@ -165,7 +241,13 @@ export function buildLeases(root, { snapshot, curated }) {
     const lo = be ? Math.floor(b.num / BAND) * BAND : null;
     const eraFromPrc = be ? { ...est(decade(be.year), `~${be.year}: 10th-percentile start date of PRC ${lo}–${lo + BAND - 1} (n=${be.n})`), year: be.year } : null;
     const era = b.startYear ? est(decade(b.startYear), `current term began ${f.leaseStart}`) : eraFromPrc ? est(eraFromPrc.value, "no start date on file; estimated from the PRC number") : est("Unknown", "no start date on file");
-    const type = typeOf(`${f.improvements ?? ""} ${f.typeOfLease ?? ""}`);
+    const infra0 = infraTypeOf(f.improvements, f.typeOfLease);
+    const category = categoryOf(f.typeOfLease, f.improvements, infra0);
+    // The infrastructure type is only given to leases in the Infrastructure category.
+    const infra = category.key === "infra" ? infra0 : null;
+    const type = infra
+      ? { key: infra.key, ...est(infra.label, `the Improvements text mentions "${infra.word}"`) }
+      : { key: "other", ...est("None", category.key === "rec" ? "recreational lease: utility words there are dock accessories" : "no cable, pipeline, water or power words in the Improvements text") };
     const county = countyOf(counties, lng, lat);
     const region = county ? est(REGION[county.value] ?? "Other", `${county.value} County`) : est("Offshore", "no county within 25 km");
     const renewed = !!(eraFromPrc && eraFromPrc.year < 1960 && b.startYear && b.startYear >= 1980);
@@ -201,9 +283,10 @@ export function buildLeases(root, { snapshot, curated }) {
       startYear: b.startYear,
       era, eraFromPrc,
       likelyType: { value: type.value, inferred: true, reason: type.reason },
+      category: { value: category.value, inferred: true, reason: category.reason },
       region, score, renewedLegacy,
       caseStudy: cs,
-      _typeKey: type.key, _county: county, _waterbody: waterbody, _stateText: stateText?.[0] ?? null,
+      _typeKey: type.key, _cat: category.key, _county: county, _waterbody: waterbody, _stateText: stateText?.[0] ?? null,
     });
   }
 
@@ -223,11 +306,13 @@ export function buildLeases(root, { snapshot, curated }) {
 
   // Era used on the map: estimated issue decade from the PRC number, otherwise the current term's start decade.
   const full = leases
-    .map(({ _typeKey, _county, _waterbody, _stateText, ...l }) => ({
+    .map(({ _typeKey, _cat, _county, _waterbody, _stateText, ...l }) => ({
       ...l,
       stage: l.completed ? "execute" : "research",
       derived: {
         typeKey: _typeKey,
+        categoryKey: _cat,
+        expiry: !l.facts.expiration ? "none" : pulled && l.facts.expiration < pulled ? "expired" : "current",
         county: _county,
         waterbody: _waterbody,
         mapEra: l.eraFromPrc ? { decade: Math.floor(l.eraFromPrc.year / 10) * 10, basis: "prc" } : l.startYear ? { decade: Math.floor(l.startYear / 10) * 10, basis: "start" } : { decade: null, basis: null },
@@ -238,7 +323,8 @@ export function buildLeases(root, { snapshot, curated }) {
     .sort((a, b) => (b.score.value ?? -1) - (a.score.value ?? -1));
 
   const methods = {
-    likelyType: "First matching keyword rule over the Improvements and Type of lease text (electric power, cable/telecom, water & sewer, pipeline; anchor and mooring cables ignored). One label per lease.",
+    likelyType: "Infrastructure type, only for leases in the Infrastructure category: keywords in the Improvements text (electric power, cable/telecom, water & sewer, pipeline). The first facility-naming word in the text wins; general words such as \"electrical\", \"cable\" or \"fuel\" count only on right-of-way, public agency and industrial leases. Anchor and mooring cables are ignored. One label per lease.",
+    category: "Grouping of the state's own lease type (TypeofLease): Recreation (recreational uses, piers, docks; also Commercial Use leases whose text describes a marina), Public agency (Public Agency Use, Streets and Highways), Commercial and industrial (commercial, industrial, oil, gas, mineral, geothermal, dredging, grazing, agricultural, forestry, salvage), Other (everything else). A lease that is not recreational moves to Infrastructure when its Improvements text names a cable, pipeline, water/sewer line or power line.",
     era: "Decade the current term began (LeaseStartDate). Renewed leases show their latest term, so the map uses the estimated issue decade instead when it can.",
     eraFromPrc: "Estimated issue year from the PRC number: the 10th-percentile start year among leases in the same band of 250 PRC numbers (at least 5 leases). PRC numbers were issued roughly in order.",
     renewedLegacy: "Estimated issue year before 1960 and current term starting 1980 or later: an old lease likely renewed on a new term.",

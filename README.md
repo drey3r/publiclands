@@ -111,7 +111,8 @@ All in `scripts/sync/leases.mjs`. Each one is also explained on every lease page
 
 | Field | Method |
 |---|---|
-| Likely type | First keyword rule over the Improvements and Type of lease text (electric, cable/telecom, water & sewer, pipeline) |
+| Category | Grouping of the state's own lease type (TypeofLease): Infrastructure · Recreation · Public agency · Commercial and industrial · Other. A non-recreational lease whose Improvements text names a cable, pipeline, water/sewer line or power line is Infrastructure; Commercial Use marinas are Recreation |
+| Infrastructure type | Only for Infrastructure: the first facility word in the Improvements text (cable/telecom, pipeline, water & sewer, electric power); general words like "electrical" or "fuel" count only on right-of-way, public agency and industrial leases |
 | Issue year | 10th-percentile start year of leases in the same band of 250 PRC numbers (numbers were issued roughly in order) |
 | Renewed legacy | Estimated issue before 1960, current term starting 1980 or later |
 | County / region | Point in county polygon (US Census); regions group counties |
