@@ -4,7 +4,9 @@
 /** Infrastructure type (Estimate from the Improvements text); "other" = none. */
 export type TypeKey = "cable" | "pipeline" | "outfall" | "power" | "other";
 /** Lease category (Estimate: a grouping of the state's TypeofLease, plus the text). */
-export type CatKey = "infra" | "rec" | "agency" | "commercial" | "other";
+export type CatKey = "infra" | "roads" | "shore" | "rec" | "agency" | "commercial" | "other";
+/** A kind with its own icon: the four infrastructure types plus Roads and bridges and Shoreline protection. */
+export type KindKey = Exclude<TypeKey, "other"> | "roads" | "shore";
 export type StageKey = "research" | "site-visit" | "assess" | "share" | "engage-gov" | "plan" | "execute";
 
 export type Inferred<T> = { value: T; inferred: true; reason: string };
@@ -15,6 +17,8 @@ export type MiniLease = {
   n: string; // name
   t: TypeKey;
   k: CatKey;
+  /** Every infrastructure kind in the text, primary first (only when more than one). */
+  ts?: TypeKey[];
   /** Term status from the expiration date (source data): current, expired, no expiration on file. */
   xs: "c" | "e" | "n";
   /** The lease text uses the state's words for a facility that no longer operates. */
@@ -77,6 +81,8 @@ export type FullLease = {
   eraFromPrc: (Inferred<string> & { year: number }) | null;
   likelyType: Inferred<string>;
   category: Inferred<string>;
+  /** Every infrastructure kind in the text, primary first (only when more than one). */
+  kinds?: Inferred<string[]> & { keys: TypeKey[] };
   region: Inferred<string>;
   score: Inferred<number | null> & { why: string[] };
   renewedLegacy: Inferred<boolean>;
@@ -90,6 +96,7 @@ export type FullLease = {
   };
   derived: {
     typeKey: TypeKey;
+    typeKeys: TypeKey[];
     categoryKey: CatKey;
     expiry: "current" | "expired" | "none";
     county: Inferred<string> | null;

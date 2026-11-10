@@ -107,12 +107,12 @@ second. Raw pages are cached in `data/cache/` (gitignored); add `-- --refresh` t
 
 ## How the estimates work
 
-All in `scripts/sync/leases.mjs`. Each one is also explained on every lease page.
+All in `scripts/sync/leases.mjs`, except Category and Infrastructure kinds, which come from `lib/lease-classifier.mjs` (standalone: no imports, reusable in other projects; types in `lib/lease-classifier.d.ts`). Each one is also explained on every lease page.
 
 | Field | Method |
 |---|---|
-| Category | Grouping of the state's own lease type (TypeofLease): Infrastructure · Recreation · Public agency · Commercial and industrial · Other. A non-recreational lease whose Improvements text names a cable, pipeline, water/sewer line or power line is Infrastructure; Commercial Use marinas are Recreation |
-| Infrastructure type | Only for Infrastructure: the first facility word in the Improvements text (cable/telecom, pipeline, water & sewer, electric power); general words like "electrical" or "fuel" count only on right-of-way, public agency and industrial leases |
+| Category | Grouping of the state's own lease type (TypeofLease): Infrastructure · Roads and bridges · Shoreline protection · Recreation · Public agency · Commercial and industrial · Other. A non-recreational lease whose Improvements text names a cable, pipeline, water/sewer line or power line is Infrastructure; Commercial Use marinas are Recreation; Streets and Highways leases and Right of Way leases whose text names a road, bridge or highway are Roads and bridges; Protective Structure Use is Shoreline protection |
+| Infrastructure kinds | Only for Infrastructure: every facility kind named in the Improvements text (cable/telecom, pipeline, water & sewer, electric power); the one named first is the primary (its icon). General words like "electrical" or "fuel" count only on right-of-way, public agency and industrial leases, and only when no facility is named. Filters match any kind |
 | Issue year | 10th-percentile start year of leases in the same band of 250 PRC numbers (numbers were issued roughly in order) |
 | Renewed legacy | Estimated issue before 1960, current term starting 1980 or later |
 | County / region | Point in county polygon (US Census); regions group counties |

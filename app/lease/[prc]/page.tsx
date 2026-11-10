@@ -52,7 +52,9 @@ export default async function LeasePage({ params }: Params) {
 
   const inferred: [string, Inferred<unknown> | null, string?][] = [
     ["Category", l.category],
-    ["Infrastructure type", l.likelyType],
+    l.kinds
+      ? ["Infrastructure kinds", { ...l.kinds, value: l.kinds.value.map((v, i) => (i === 0 ? `${v} (primary)` : v)).join(" · ") }]
+      : ["Infrastructure type", l.likelyType],
     ["Era (current term)", l.era],
     ["Estimated original issue", l.eraFromPrc ? { ...l.eraFromPrc, value: `~${l.eraFromPrc.year} (${l.eraFromPrc.value})` } : null],
     ["Renewed legacy lease", { ...l.renewedLegacy, value: l.renewedLegacy.value ? "Likely yes" : "No" }],

@@ -51,6 +51,8 @@ const min = L.full.map((l) => ({
   n: l.name,
   t: l.derived.typeKey,
   k: l.derived.categoryKey,
+  // Every infrastructure kind in the text, primary first; only when there is more than one.
+  ...(l.derived.typeKeys.length > 1 ? { ts: l.derived.typeKeys } : {}),
   xs: l.derived.expiry === "expired" ? "e" : l.derived.expiry === "current" ? "c" : "n",
   no: l.derived.stateText ? 1 : 0,
   e: l.derived.mapEra.decade,

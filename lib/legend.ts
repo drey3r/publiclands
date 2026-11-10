@@ -20,10 +20,12 @@ export const TYPE_LABEL = Object.fromEntries(TYPES.map((t) => [t.key, t.label]))
  */
 export const CATS: { key: CatKey; label: string; short: string; color: string; tier: 1 | 2 | 3; note: string }[] = [
   { key: "infra", label: "Infrastructure", short: "Infrastructure", color: "#b8452c", tier: 1, note: "Cable, pipeline, water/outfall and power lines" },
-  { key: "agency", label: "Public agency", short: "Public agency", color: "#3f4f93", tier: 2, note: "Public Agency Use, Streets and Highways" },
+  { key: "roads", label: "Roads and bridges", short: "Roads and bridges", color: "#6b7078", tier: 2, note: "Streets and Highways, and Right of Way leases whose text names a road, bridge or highway" },
+  { key: "shore", label: "Shoreline protection", short: "Shoreline", color: "#4f7f7a", tier: 2, note: "Protective Structure Use: seawalls, riprap, bulkheads" },
+  { key: "agency", label: "Public agency", short: "Public agency", color: "#3f4f93", tier: 2, note: "Public Agency Use without utility words" },
   { key: "commercial", label: "Commercial and industrial", short: "Commercial", color: "#5e5141", tier: 2, note: "Commercial, industrial, oil and gas, mineral, geothermal, dredging, grazing" },
   { key: "rec", label: "Recreation", short: "Recreation", color: "#e3cf9c", tier: 3, note: "Piers, docks, marinas, buoys" },
-  { key: "other", label: "Other", short: "Other", color: "#c9c2b2", tier: 3, note: "Right of way without utility words, protective structures, surveys, other" },
+  { key: "other", label: "Other", short: "Other", color: "#c9c2b2", tier: 3, note: "Right of way with no utility or road words, surveys, compensatory agreements, other" },
 ];
 export const CAT_LABEL = Object.fromEntries(CATS.map((c) => [c.key, c.label])) as Record<CatKey, string>;
 export const CAT_COLOR = Object.fromEntries(CATS.map((c) => [c.key, c.color])) as Record<CatKey, string>;

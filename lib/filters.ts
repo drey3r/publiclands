@@ -7,7 +7,7 @@ export const STATUSES: { key: Status; code: MiniLease["xs"]; label: string; note
   { key: "expired", code: "e", label: "Term expired", note: "Expiration date already passed; the layer still lists it" },
   { key: "none", code: "n", label: "No end date on file", note: "The layer has no expiration date" },
 ];
-const CAT_KEYS: CatKey[] = ["infra", "rec", "agency", "commercial", "other"];
+const CAT_KEYS: CatKey[] = ["infra", "roads", "shore", "rec", "agency", "commercial", "other"];
 const TYPE_KEYS: TypeKey[] = ["cable", "pipeline", "outfall", "power"];
 
 export type Filters = {
@@ -61,8 +61,9 @@ export function applyFilters(all: MiniLease[], f: Filters): MiniLease[] {
   const codes = new Set(STATUSES.filter((s) => f.status.includes(s.key)).map((s) => s.code));
   const eras = f.eras.length ? ERAS.filter((e) => f.eras.includes(e.key)) : null;
   return all.filter((l) => {
-    // Infrastructure narrows to the picked types when any are picked.
-    if (what && !(l.k === "infra" ? (types.size ? types.has(l.t) : cats.has("infra")) : cats.has(l.k))) return false;
+    // Infrastructure narrows to the picked types when any are picked; a lease matches when
+    // any of its kinds (not only the primary) is picked.
+    if (what && !(l.k === "infra" ? (types.size ? (l.ts ?? [l.t]).some((t) => types.has(t)) : cats.has("infra")) : cats.has(l.k))) return false;
     if (codes.size && !codes.has(l.xs)) return false;
     if (f.nonop && !l.no) return false;
     if (eras) {
