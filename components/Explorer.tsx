@@ -791,7 +791,7 @@ function SourceNote({ meta, manifest, overlays }: { meta?: LeasesPayload["meta"]
       <p className="font-medium text-ink-soft">{DISCLAIMER}</p>
       <p>
         <a href={ABOUT_URL} className="underline underline-offset-2 hover:text-ink">About</a> ·{" "}
-        <a href={REPO_URL} className="underline underline-offset-2 hover:text-ink">Source code and corrections</a>
+        <a href={REPO_URL} className="underline underline-offset-2 hover:text-ink">Source code</a>
         {BACK_URL && <> · <a href={BACK_URL} className="underline underline-offset-2 hover:text-ink">{BACK_LABEL}</a></>}
       </p>
       <p>Basemap © OpenMapTiles © OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrain Tiles.</p>

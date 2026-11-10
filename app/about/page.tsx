@@ -1,0 +1,136 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { DataDates } from "@/components/DataDates";
+import { DataLabel } from "@/components/ui";
+import { BACK_LABEL, BACK_URL, CSLC_URL, DISCLAIMER, REPO_URL } from "@/lib/config";
+import { CATS, STAGES, TYPES } from "@/lib/legend";
+import { loadFull } from "@/lib/server";
+
+export const metadata: Metadata = {
+  title: "About and methodology",
+  description: "What the California Public Lands Map shows, where its data comes from, and how leases are categorized and screened.",
+};
+
+/** What each stage of the review means. */
+const STAGE_NOTE: Record<string, string> = {
+  research: "Read the lease record, the Commission's staff reports and any removal conditions.",
+  "site-visit": "Go and look at what is there, from public land or the water.",
+  assess: "Work out what remains, its condition, and who is responsible for it.",
+  share: "Publish what was found, with the records behind it.",
+  "engage-gov": "Bring it to the State Lands Commission and other agencies with the evidence.",
+  plan: "Agree on a removal or restoration plan with the responsible parties.",
+  execute: "The work is done and confirmed.",
+};
+
+export default function AboutPage() {
+  const { data } = loadFull();
+  const { meta, leases } = data;
+  const n = (k: string) => leases.filter((l) => l.derived.categoryKey === k).length;
+  const infra = n("infra");
+  const kindAny = (t: string) => leases.filter((l) => l.derived.categoryKey === "infra" && l.derived.typeKeys.includes(t as never)).length;
+
+  return (
+    <div className="min-h-screen bg-cream">
+      <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-line bg-cream/95 px-4 py-2.5 backdrop-blur">
+        <Link href="/" className="rounded-full border border-line bg-paper px-3 py-1.5 text-[13px] font-medium text-ink hover:border-ink-soft">← Back to map</Link>
+        <nav className="flex gap-3 text-[13px] font-medium text-ink-soft">
+          <a href="#data" className="hover:text-ink">Data</a>
+          <a href="#methodology" className="hover:text-ink">Methodology</a>
+          <a href="#changes" className="hover:text-ink">Changes</a>
+          {BACK_URL && <a href={BACK_URL} className="hover:text-ink">{BACK_LABEL}</a>}
+        </nav>
+      </header>
+
+      <main className="prose-about mx-auto max-w-3xl px-4 pb-16 pt-8 text-[15px] leading-relaxed text-ink-soft">
+        <h1 className="display text-[36px] text-ink">About this map</h1>
+        <p className="mt-3">
+          This map shows the leases the California State Lands Commission has issued on state-owned land, mostly the beds of
+          rivers, lakes, bays and the ocean, together with public land from the California Protected Areas Database and the
+          Commission&apos;s own reference layers. It is a reading aid for public records: each lease links to what the state&apos;s
+          layer says about it and to this map&apos;s estimates, each with its reason.
+        </p>
+        <p className="mt-3">
+          It is not an official record. For official records, contact the <a href={CSLC_URL} className="text-water underline underline-offset-2">State Lands Commission</a>.
+        </p>
+
+        <h2 className="display mt-10 text-[26px] text-ink">How to read the labels</h2>
+        <ul className="mt-3 space-y-2">
+          <li><DataLabel kind="source" /> <b className="text-ink">Source data</b>: copied from the official record, here the Commission&apos;s public layers.</li>
+          <li><DataLabel kind="estimate" /> <b className="text-ink">Estimate</b>: this map&apos;s classification or score. Every estimate shows its reason.</li>
+        </ul>
+
+        <h2 id="data" className="display mt-10 scroll-mt-16 text-[26px] text-ink">Where the data comes from</h2>
+        <p className="mt-2">When each dataset was pulled for this map, and the source&apos;s own last-updated date where it publishes one.</p>
+        <div className="mt-4"><DataDates datasets={meta.datasets} /></div>
+
+        <h2 id="methodology" className="display mt-10 scroll-mt-16 text-[26px] text-ink">Methodology</h2>
+
+        <h3 className="mt-6 text-[18px] font-semibold text-ink">How leases are categorized</h3>
+        <p className="mt-2">
+          The state&apos;s lease type (the layer&apos;s TypeofLease field) is <b className="text-ink">source data</b>. The category and the
+          infrastructure kind are <b className="text-ink">estimates</b> by this map: the category groups the state&apos;s lease type, and
+          the text of the lease (the Improvements field) can move a lease into Infrastructure or Roads and bridges.
+        </p>
+        <ul className="mt-3 space-y-1.5">
+          {CATS.map((c) => (
+            <li key={c.key}><b className="text-ink">{c.label}</b> ({n(c.key).toLocaleString()}): {c.note}.</li>
+          ))}
+        </ul>
+        <p className="mt-3">
+          Infrastructure kinds come from the Improvements text only: {TYPES.filter((t) => t.key !== "other").map((t) => `${t.label.toLowerCase()} (${kindAny(t.key)})`).join(", ")}.
+          A lease can have more than one kind; the one named first is its primary kind and sets its icon. Utility words on a
+          recreational lease (a dock&apos;s electrical conduit or water intake) do not count.
+        </p>
+        <details className="mt-3 text-[13px]">
+          <summary className="cursor-pointer text-ink-faint">The exact rules</summary>
+          <ul className="mt-2 space-y-1.5">
+            <li><b className="text-ink">Category</b>: {meta.methods.category}</li>
+            <li><b className="text-ink">Infrastructure kinds</b>: {meta.methods.likelyType}</li>
+            <li><b className="text-ink">Era</b>: {meta.methods.eraFromPrc}</li>
+            <li><b className="text-ink">County</b>: {meta.methods.county}</li>
+          </ul>
+        </details>
+
+        <h3 className="mt-6 text-[18px] font-semibold text-ink">The screen score</h3>
+        <p className="mt-2">
+          {meta.methods.score} It is an <b className="text-ink">estimate</b>; each lease page lists what went into its score.
+        </p>
+
+        <h3 className="mt-6 text-[18px] font-semibold text-ink">Candidates for review</h3>
+        <p className="mt-2">
+          {meta.methods.candidates} There are {meta.counts.candidates} now.
+        </p>
+        <p className="mt-2 text-ink">
+          This map assigns &ldquo;candidate for review&rdquo;; the State Lands Commission does not. It means &ldquo;read this file first&rdquo;,
+          not that anything is wrong: the record may already account for these facilities.
+        </p>
+
+        <h3 className="mt-6 text-[18px] font-semibold text-ink">The 7-stage review</h3>
+        <p className="mt-2">Each lease page shows where its site is in this process. Most sites have not been looked at yet and are at Research.</p>
+        <ol className="mt-3 space-y-1.5">
+          {STAGES.map((s, i) => (
+            <li key={s.key}><b className="text-ink">{i + 1}. {s.label}</b>: {STAGE_NOTE[s.key]}</li>
+          ))}
+        </ol>
+
+        <h2 id="changes" className="display mt-10 scroll-mt-16 text-[26px] text-ink">Changes to our numbers</h2>
+        <ul className="mt-3 space-y-3">
+          <li>
+            <b className="text-ink">November 10, 2026.</b> We narrowed the infrastructure classifier, so the infrastructure count went from
+            842 to {infra.toLocaleString()}. The earlier count included leases where a utility word was an accessory (a dock&apos;s
+            electrical conduit, a marina&apos;s fuel dock) or came from the lease type (every oil and gas lease counted as a pipeline);
+            it now reads only the lease&apos;s description and needs words that name a facility, which also found water and power
+            lines the old word list missed.
+          </li>
+        </ul>
+
+        <footer className="mt-12 border-t border-line pt-4 text-[12px] text-ink-faint">
+          <p className="font-medium text-ink-soft">{DISCLAIMER}</p>
+          <p className="mt-1">
+            <a href={REPO_URL} className="underline underline-offset-2 hover:text-ink">Source code</a> · Map: © OpenMapTiles © OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrain Tiles.
+          </p>
+        </footer>
+      </main>
+    </div>
+  );
+}

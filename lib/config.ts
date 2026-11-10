@@ -1,7 +1,7 @@
 /** Public URL of this map app (for OG images and share links). */
 export const MAP_URL = process.env.NEXT_PUBLIC_MAP_URL ?? "http://localhost:3100";
-/** About the project. */
-export const ABOUT_URL = "https://tahoelead.com";
+/** About and methodology, inside the app. */
+export const ABOUT_URL = "/about";
 /** Source code, issues and corrections. */
 export const REPO_URL = "https://github.com/drey3r/publiclands";
 /** Optional "back" link for a private deployment. Unset in the public build. */

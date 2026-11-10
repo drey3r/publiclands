@@ -3,7 +3,7 @@
 An interactive map of the California State Lands Commission's public lease records, shown next to the parks and
 protected lands people can visit.
 
-**Live:** https://publiclands-map.vercel.app · **About:** https://tahoelead.com
+**Live:** https://publiclands-map.vercel.app · **About and methodology:** https://publiclands-map.vercel.app/about
 
 ![Statewide view: 4,206 lease sites clustered over California, with the list of leases in view](docs/screenshots/statewide.jpg)
 
