@@ -3,6 +3,29 @@
 Changes to the California Public Lands Map, newest first. Data snapshots and
 counts are unchanged unless an entry says otherwise.
 
+## 2026-11-09 · Round 1 fixes: California fills the frame, quiet outside, more names, county lines
+
+No data changes: same CSLC lease snapshot (2026-11-06, 4,206 leases) and CPAD layer.
+
+- **Home fills the map with California** at every window size: the state is fitted to the map area
+  (clear of the top-left buttons) instead of reserving a column for the view panel. The view panel
+  floats over Nevada and is capped so it ends above California's border at Home; it scrolls inside.
+- **The map stays on California:** no zooming out past Home, and panning stays within the Home view
+  plus a small margin. Resizing the window re-frames Home if the map was showing it.
+- **Quiet outside California:** one flat neutral over neighboring land (no relief, roads or land
+  cover), water still drawn as water, neighboring state lines as hairlines. No labels outside the
+  state. The coastline comes from the basemap, so it stays exact. `?mask=fade|outline` still compare.
+- **More California place names**, tiered by zoom: statewide shows big cities, mountain ranges, the
+  ocean and the largest bays and lakes; around zoom 7 towns, main rivers, more lakes and bays, smaller
+  ranges and major passes; from zoom 9 villages, the basemap's river and lake names and peaks. A short
+  hand-placed list (`data/ref/ca-labels.geojson`) covers ranges, rivers, bays, lakes and passes.
+  Labels slide aside or drop rather than sit under a lease mark. Park names start at zoom 10, below
+  place names.
+- **County lines:** faint shared county borders appear as you zoom in. "County lines" in Reference
+  layers makes them stronger and names the counties.
+- **List headers:** "Public spaces" and "Leases" headers no longer have the cards' Fly in and
+  Visitor info buttons drawn through them while scrolling.
+
 ## 2026-11-09 · Round 1: fixes, the California frame, new layout, Fly in
 
 No data changes: same CSLC lease snapshot (2026-11-06, 4,206 leases) and CPAD layer.
