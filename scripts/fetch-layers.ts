@@ -2,13 +2,14 @@
 //
 //   npm run fetch:layers             # reuse today's cached pages if present
 //   npm run fetch:layers -- --refresh
+//   npm run fetch:layers -- --retile # public land only: repair + re-tile the last snapshot, no new pull
 //
 // Polygons are generalized on the server (maxAllowableOffset) so the files stay
 // small enough for the web. Display only: not for boundary determinations.
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { queryAll } from "./lib/arcgis.ts";
+import { getJson, queryAll } from "./lib/arcgis.ts";
 
 const CSLC = "https://services3.arcgis.com/5aaQCuq3e4GRvkFG/arcgis/rest/services";
 const root = path.resolve(import.meta.dirname, "..");
@@ -16,6 +17,7 @@ const outDir = path.join(root, "data/layers");
 const cacheDir = path.join(root, "data/cache/layers");
 const today = new Date().toISOString().slice(0, 10);
 const refresh = process.argv.includes("--refresh");
+const retile = process.argv.includes("--retile");
 const round = (n: unknown, d = 1) => (typeof n === "number" ? Math.round(n * 10 ** d) / 10 ** d : null);
 const str = (v: unknown) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim() || null : v == null ? null : String(v));
 
@@ -138,10 +140,70 @@ const SPECS: Spec[] = [
   },
 ];
 
+/**
+ * True when generalization collapsed a polygon: no ring part keeps 3 distinct corners
+ * and a real area. Tiny parks (a fraction of an acre) end up like this, and tile
+ * building then drops them, so they would never appear at any zoom.
+ */
+function collapsed(g: any): boolean {
+  if (!g || (g.type !== "Polygon" && g.type !== "MultiPolygon")) return false;
+  const polys: number[][][][] = g.type === "Polygon" ? [g.coordinates] : g.coordinates;
+  return polys.every((poly) => {
+    const ring = poly[0] ?? [];
+    const distinct = new Set(ring.map((p) => `${p[0]},${p[1]}`)).size;
+    let a = 0;
+    for (let i = 0; i < ring.length - 1; i++) a += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
+    return distinct < 3 || Math.abs(a / 2) < 1e-9;
+  });
+}
+
+/** Re-requests collapsed units at full detail (no generalization), by OBJECTID. Returns how many. */
+async function repairCollapsed(features: any[], objectIds: (number | string)[], url: string): Promise<{ found: number; fixed: number }> {
+  const bad = features.map((f, i) => (collapsed(f.geometry) ? i : -1)).filter((i) => i >= 0);
+  let fixed = 0;
+  for (let k = 0; k < bad.length; k += 100) {
+    const chunk = bad.slice(k, k + 100);
+    const q = new URLSearchParams({ objectIds: chunk.map((i) => objectIds[i]).join(","), outFields: "OBJECTID", outSR: "4326", geometryPrecision: "6", f: "geojson" });
+    const page = await getJson(`${url}/query?${q}`);
+    const byId = new Map(page.features.map((f: any) => [String(f.properties?.OBJECTID ?? f.id), f.geometry]));
+    for (const i of chunk) {
+      const g = byId.get(String(objectIds[i]));
+      if (g && !collapsed(g)) {
+        features[i].geometry = g;
+        fixed++;
+      }
+    }
+  }
+  return { found: bad.length, fixed };
+}
+
+/** Public land as PMTiles. Tiny polygons are kept at every zoom where they're drawn. */
+function tile(file: string, outFile: string, layer: string) {
+  return spawnSync(
+    "tippecanoe",
+    ["-q", "-o", outFile, "-l", layer, "-Z4", "-z12", "--drop-densest-as-needed", "--extend-zooms-if-still-dropping", "--no-tiny-polygon-reduction", "--force", file],
+    { stdio: "inherit" },
+  );
+}
+
+if (retile) {
+  const spec = SPECS.find((s) => s.name === "access")!;
+  const file = path.join(cacheDir, "access.geojson");
+  const fc = JSON.parse(fs.readFileSync(file, "utf8"));
+  const r = await repairCollapsed(fc.features, fc.features.map((f: any) => f.properties.id), spec.sources[0].url);
+  console.log(`access: ${r.found} collapsed outlines, ${r.fixed} re-fetched at full detail`);
+  fs.writeFileSync(file, JSON.stringify(fc));
+  const t = tile(file, path.join(outDir, "access.pmtiles"), "access");
+  if (t.error || t.status !== 0) throw new Error("tippecanoe failed");
+  console.log(`access.pmtiles ${(fs.statSync(path.join(outDir, "access.pmtiles")).size / 1e6).toFixed(1)} MB (index.json unchanged: same snapshot)`);
+  process.exit(0);
+}
+
 fs.mkdirSync(outDir, { recursive: true });
 const index: Record<string, unknown>[] = [];
 for (const spec of SPECS) {
   const features: any[] = [];
+  const objectIds: (number | string)[] = [];
   let lastEdit: string | null = null;
   let attribution = spec.attribution;
   for (const s of spec.sources) {
@@ -156,7 +218,16 @@ for (const spec of SPECS) {
     lastEdit = r.lastEdit ?? lastEdit;
     const release = /CPAD\s*\d{4}[ab]/i.exec(`${r.meta.description ?? ""} ${r.meta.copyrightText ?? ""}`)?.[0];
     if (release && spec.name === "access") attribution = attribution.replace("(CPAD)", `(${release.replace(/\s+/, " ")})`);
-    for (const f of r.features) if (f.geometry) features.push({ type: "Feature", geometry: s.simplify ? simplify(f.geometry, s.simplify) : f.geometry, properties: s.props(f.properties ?? {}) });
+    const from = features.length;
+    for (const f of r.features)
+      if (f.geometry) {
+        features.push({ type: "Feature", geometry: s.simplify ? simplify(f.geometry, s.simplify) : f.geometry, properties: s.props(f.properties ?? {}) });
+        objectIds.push(f.properties?.OBJECTID ?? f.id);
+      }
+    if (spec.name === "access") {
+      const rep = await repairCollapsed(features.slice(from), objectIds.slice(from), s.url).catch(() => null);
+      if (rep) console.log(`  ${rep.found} collapsed outlines, ${rep.fixed} re-fetched at full detail`);
+    }
   }
   // Public spaces (CPAD) are drawn from vector tiles so the layer can be on by default.
   // tippecanoe turns the GeoJSON into one PMTiles file; the GeoJSON stays in the cache.
@@ -166,7 +237,7 @@ for (const spec of SPECS) {
   let outFile = file;
   if (tiled) {
     outFile = path.join(outDir, `${spec.name}.pmtiles`);
-    const r = spawnSync("tippecanoe", ["-q", "-o", outFile, "-l", spec.name, "-Z4", "-z12", "--drop-densest-as-needed", "--extend-zooms-if-still-dropping", "--force", file], { stdio: "inherit" });
+    const r = tile(file, outFile, spec.name);
     if (r.error || r.status !== 0) {
       console.warn("  tippecanoe not available: writing GeoJSON instead (slower). Install it: brew install tippecanoe");
       outFile = path.join(outDir, `${spec.name}.geojson`);
