@@ -62,28 +62,26 @@ const curated = (kinds: string[]) =>
 const CURATED_WATER = ["Lake Tahoe", "Salton Sea", "Mono Lake", "Shasta Lake", "Clear Lake", "Lake Oroville", "Lake Almanor", "Eagle Lake", "Goose Lake", "Lake Berryessa", "Folsom Lake", "Trinity Lake", "Lake Isabella", "Honey Lake", "San Luis Reservoir", "New Melones Lake", "Don Pedro Reservoir", "Big Bear Lake", "Lake Elsinore", "Millerton Lake", "San Francisco Bay", "Monterey Bay", "San Pablo Bay", "Suisun Bay", "Humboldt Bay", "Santa Monica Bay", "San Pedro Bay", "San Diego Bay", "Tomales Bay", "Drakes Bay", "Morro Bay", "Pacific Ocean", "North Pacific Ocean"];
 
 /**
- * Outside California: one flat neutral over the land (no relief, roads or labels),
- * water redrawn on top so the ocean still reads as water, neighbors as hairlines.
- * Drawn above the land layers and roads, below water.
+ * Outside California, in two steps around the relief:
+ *  outside-base  opaque neutral over land cover and roads (no roads or towns outside, ever)
+ *  ...hillshade, major rivers and lakes are drawn here, everywhere...
+ *  outside-veil  the same neutral again, mostly opaque: outside, the relief, lakes and rivers
+ *                remain only as a faint landscape ("light"); fully opaque for "flat"
+ * The ocean is drawn above the veil so it always reads as water.
  */
-function maskLayers(mode: MaskMode): LayerSpecification[] {
-  if (mode === "outline") return [];
-  return [
-    {
-      id: "outside-mask",
-      type: "fill",
-      source: "caMask",
-      paint: {
-        "fill-color": C.outside,
-        // blank (default): flat. fade: the Round 1 wash, for comparison (?mask=fade).
-        "fill-opacity": mode === "blank" ? 1 : ["interpolate", ["linear"], ["zoom"], 5, 0.7, 8, 0.6, 11, 0.42, 14, 0.32],
-        "fill-antialias": false,
-      },
-    },
-  ];
+function outsideBase(): LayerSpecification {
+  return { id: "outside-base", type: "fill", source: "caMask", paint: { "fill-color": C.outside, "fill-antialias": false } };
+}
+function outsideVeil(mode: MaskMode): LayerSpecification {
+  return {
+    id: "outside-veil",
+    type: "fill",
+    source: "caMask",
+    paint: { "fill-color": C.outside, "fill-opacity": mode === "flat" ? 1 : ["interpolate", ["linear"], ["zoom"], 5, 0.62, 8, 0.56, 11, 0.44, 14, 0.38], "fill-antialias": false },
+  };
 }
 
-function frameLines(mode: MaskMode): LayerSpecification[] {
+function frameLines(): LayerSpecification[] {
   return [
     {
       id: "outside-states",
@@ -91,7 +89,7 @@ function frameLines(mode: MaskMode): LayerSpecification[] {
       source: "omt",
       "source-layer": "boundary",
       filter: ["all", ["<=", ["coalesce", ["get", "admin_level"], 99], 4], ["!=", ["coalesce", ["get", "maritime"], 0], 1]],
-      paint: { "line-color": C.outsideLine, "line-width": 0.5, "line-opacity": mode === "outline" ? 0 : 0.8 },
+      paint: { "line-color": C.outsideLine, "line-width": 0.5, "line-opacity": 0.8 },
     },
     {
       id: "ca-outline",
@@ -100,8 +98,8 @@ function frameLines(mode: MaskMode): LayerSpecification[] {
       layout: { "line-join": "round" },
       paint: {
         "line-color": C.caLine,
-        "line-width": ["interpolate", ["linear"], ["zoom"], 4, mode === "outline" ? 1.8 : 0.9, 10, mode === "outline" ? 3 : 1.6],
-        "line-opacity": mode === "outline" ? 0.85 : 0.7,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.9, 10, 1.6],
+        "line-opacity": 0.7,
       },
     },
   ];
@@ -366,6 +364,20 @@ export function baseStyle(opts: { mask?: MaskMode } = {}): StyleSpecification {
         paint: { "fill-color": C.urban, "fill-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0.4, 12, 0.8] },
       },
       { id: "park", type: "fill", source: "omt", "source-layer": "park", paint: { "fill-color": C.park, "fill-opacity": 0.55 } },
+      { id: "park-outline", type: "line", source: "omt", "source-layer": "park", minzoom: 8, paint: { "line-color": C.parkLine, "line-width": 0.7, "line-opacity": 0.8 } },
+      {
+        id: "waterway",
+        type: "line",
+        source: "omt",
+        "source-layer": "waterway",
+        paint: {
+          "line-color": C.waterLine,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 6, ["match", ["get", "class"], "river", 0.9, 0.3], 12, ["match", ["get", "class"], "river", 2.2, 0.9]],
+        },
+      },
+      // Roads sit under the water (bridges are redrawn above) and under the outside mask.
+      ...roadLayers(false),
+      outsideBase(),
       {
         id: "hillshade",
         type: "hillshade",
@@ -378,30 +390,36 @@ export function baseStyle(opts: { mask?: MaskMode } = {}): StyleSpecification {
           "hillshade-illumination-direction": 315,
         },
       },
-      { id: "park-outline", type: "line", source: "omt", "source-layer": "park", minzoom: 8, paint: { "line-color": C.parkLine, "line-width": 0.7, "line-opacity": 0.8 } },
+      // Major rivers again above the outside base, so they show (faintly) beyond the state line.
       {
-        id: "waterway",
+        id: "waterway-river",
         type: "line",
         source: "omt",
         "source-layer": "waterway",
-        paint: {
-          "line-color": C.waterLine,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 6, ["match", ["get", "class"], "river", 0.9, 0.3], 12, ["match", ["get", "class"], "river", 2.2, 0.9]],
-        },
+        filter: ["==", ["get", "class"], "river"],
+        paint: { "line-color": C.waterLine, "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.9, 12, 2.2] },
       },
-      // Roads sit under the water (and under the mask outside California); bridges are redrawn above.
-      ...roadLayers(false),
-      ...maskLayers(mask),
-      {
-        id: "water",
-        type: "fill",
-        source: "omt",
-        "source-layer": "water",
-        paint: { "fill-color": C.water },
-      },
+      { id: "water", type: "fill", source: "omt", "source-layer": "water", filter: ["!=", ["get", "class"], "ocean"], paint: { "fill-color": C.water } },
+      outsideVeil(mask),
+      // Lakes and major rivers once more, part-strength: unchanged inside California (water over
+      // water), muted water outside. Off for "flat".
+      ...(mask === "flat"
+        ? []
+        : ([
+            { id: "water-muted", type: "fill", source: "omt", "source-layer": "water", filter: ["!=", ["get", "class"], "ocean"], paint: { "fill-color": C.water, "fill-opacity": 0.55 } },
+            {
+              id: "waterway-river-muted",
+              type: "line",
+              source: "omt",
+              "source-layer": "waterway",
+              filter: ["==", ["get", "class"], "river"],
+              paint: { "line-color": C.waterLine, "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.9, 12, 2.2], "line-opacity": 0.5 },
+            },
+          ] as LayerSpecification[])),
+      { id: "water-ocean", type: "fill", source: "omt", "source-layer": "water", filter: ["==", ["get", "class"], "ocean"], paint: { "fill-color": C.water } },
       ...countyLayers(),
       ...roadLayers(true),
-      ...frameLines(mask),
+      ...frameLines(),
       ...labelLayers(),
       countyLabel,
     ],
