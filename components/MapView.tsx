@@ -307,7 +307,8 @@ export default function MapView(props: Props) {
       pmtilesReady.current ??= import("pmtiles").then(({ Protocol }) => maplibregl.addProtocol("pmtiles", new Protocol().tile));
       await pmtilesReady.current;
     }
-    const before = "cluster";
+    // Land layers sit under county lines, bridges and every place name (labels must never be washed out).
+    const before = m.getLayer("county-line") ? "county-line" : "cluster";
     for (const name of want) {
       const def = man[name]!;
       const src = `ov-${name}`;
@@ -348,7 +349,7 @@ export default function MapView(props: Props) {
             paint: { "text-color": "#56664f", "text-halo-color": "#f7f3ea", "text-halo-width": 1.2 },
           },
           // Park names rank below California's place names (placed after them).
-          m.getLayer("label-range") ? "label-range" : before,
+          m.getLayer("label-range") ? "label-range" : "cluster",
         );
     }
     syncLayers();
