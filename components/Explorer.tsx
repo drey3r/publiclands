@@ -70,6 +70,12 @@ export default function Explorer() {
   const [hover, setHover] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<string | null>(null);
+  /** Lease chosen by search or link: its card is pinned to the top of the list. */
+  const [pinned, setPinned] = useState<string | null>(null);
+  /** ?prc= that isn't in the lease layer. */
+  const [missingPrc, setMissingPrc] = useState<string | null>(null);
+  /** Public spaces arrive from map tiles; until the first batch, counts read "Loading". */
+  const [spacesReady, setSpacesReady] = useState(false);
   const [colorBy, setColorBy] = useState<ColorBy>("type");
   // Public spaces (access) follow the big "Public spaces" button; the other land layers start off.
   const [layers, setLayers] = useState<Record<LayerName, boolean>>({ access: true, granted: false, school: false, waterlines: false });
@@ -80,6 +86,7 @@ export default function Explorer() {
   const [limit, setLimit] = useState(PAGE);
   const [sheet, setSheet] = useState<Sheet>("peek");
   const mobile = useIsMobile();
+  const [findParam, setFindParam] = useState<string | null>(null);
   const map = useRef<MLMap | null>(null);
   const initial = useRef<URLSearchParams | null>(null);
 
@@ -88,6 +95,7 @@ export default function Explorer() {
     initial.current = new URLSearchParams(window.location.search);
     setFilters(fromQuery(initial.current));
     setShow(showFromQuery(initial.current));
+    setFindParam(initial.current.get("find"));
     fetch("/data/overlays/index.json")
       .then((r) => (r.ok ? r.json() : []))
       .then((o: OverlayDef[]) => {
@@ -121,7 +129,11 @@ export default function Explorer() {
   const byPrc = useMemo(() => new Map(all.map((l) => [l.p, l])), [all]);
   const filtered = useMemo(() => applyFilters(all, filters), [all, filters]);
   const deferredFiltered = useDeferredValue(filtered);
-  const inView = useMemo(() => sortForList(inBounds(deferredFiltered, bounds)), [deferredFiltered, bounds]);
+  const inView = useMemo(() => {
+    const ls = sortForList(inBounds(deferredFiltered, bounds));
+    const i = pinned ? ls.findIndex((l) => l.p === pinned) : -1;
+    return i > 0 ? [ls[i], ...ls.slice(0, i), ...ls.slice(i + 1)] : ls;
+  }, [deferredFiltered, bounds, pinned]);
   // Public spaces in view come from the map's rendered tiles; largest first.
   const placesInView = useMemo(() => [...places].sort((a, b) => (b.acres ?? 0) - (a.acres ?? 0)), [places]);
   const counties = useMemo(() => [...new Set(all.map((l) => l.c).filter(Boolean) as string[])].sort(), [all]);
@@ -151,6 +163,7 @@ export default function Explorer() {
   const select = useCallback(
     (p: string | null, fly = false) => {
       setSelected(p);
+      setPinned((x) => (x === p ? x : null));
       if (p) {
         setSelectedPlace(null);
         setShow((v) => ({ ...v, leases: true }));
@@ -184,7 +197,7 @@ export default function Explorer() {
       const story = sp?.get("story");
       const prc = sp?.get("prc");
       if (story) setTimeout(() => playStory(story), 300);
-      else if (prc) setTimeout(() => setSelected(prc), 0);
+      else if (prc) setTimeout(() => { setSelected(prc); setPinned(prc); }, 0);
     },
     [playStory],
   );
@@ -195,14 +208,24 @@ export default function Explorer() {
     const prc = initial.current?.get("prc");
     if (flewInitial.current || !prc || !map.current || !byPrc.size || initial.current?.get("story")) return;
     const l = byPrc.get(prc);
-    if (l) {
-      flewInitial.current = true;
-      focusLease(l);
+    flewInitial.current = true;
+    if (l) focusLease(l);
+    else {
+      setMissingPrc(prc);
+      setSelected(null);
+      setPinned(null);
     }
   });
 
+  const scrollListTop = () => requestAnimationFrame(() => document.getElementById("list-scroll")?.scrollTo({ top: 0, behavior: reduceMotion() ? "auto" : "smooth" }));
+
   const onPick = (s: Suggestion) => {
-    if (s.kind === "lease") select(s.l.p, true);
+    setMissingPrc(null);
+    if (s.kind === "lease") {
+      select(s.l.p, true);
+      setPinned(s.l.p);
+      scrollListTop();
+    }
     else if (s.kind === "filter") {
       const next = { ...filters, q: s.q };
       setFilters(next);
@@ -225,6 +248,8 @@ export default function Explorer() {
   const atStatewide = !bounds || bounds[2] - bounds[0] > 6;
 
   const counts: Record<ShowKey, number> = { spaces: placesInView.length, leases: inView.length };
+  const loaded: Record<ShowKey, boolean> = { spaces: spacesReady || !hasPlaces, leases: !!data && !!bounds };
+  const countText = (k: ShowKey) => (loaded[k] ? `${counts[k].toLocaleString()} in view` : "Loading…");
   const toggle = (k: ShowKey) => setShow((v) => ({ ...v, [k]: !v[k] }));
 
   // ---- panel contents (shared by desktop sidebar and mobile sheet)
@@ -243,13 +268,24 @@ export default function Explorer() {
               {SHOW_LABEL[k]}
               <span aria-hidden className={`h-3.5 w-3.5 rounded-full border-2 ${show[k] ? "border-paper bg-paper" : "border-ink-faint"}`} />
             </span>
-            <span className={`text-[12px] ${show[k] ? "text-paper/75" : "text-ink-faint"}`}>{show[k] ? `${counts[k].toLocaleString()} in view` : "Off"}</span>
+            <span className={`text-[12px] ${show[k] ? "text-paper/75" : "text-ink-faint"}`}>{show[k] ? countText(k) : "Off"}</span>
           </button>
         ))}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-3" id="list-scroll">
         {error && <p className="rounded-lg bg-clay/10 p-3 text-sm text-clay">Could not load map data: {error}</p>}
+        {missingPrc && (
+          <div role="alert" className="mb-4 rounded-2xl border border-clay/40 bg-clay/5 p-3.5 text-[13px]">
+            <div className="flex items-start justify-between gap-2">
+              <p className="font-semibold text-ink">PRC {missingPrc} isn&apos;t in the lease layer.</p>
+              <button type="button" onClick={() => setMissingPrc(null)} className="rounded-full px-1.5 text-ink-faint hover:text-ink" aria-label="Dismiss">✕</button>
+            </div>
+            <p className="mt-1 text-ink-soft">
+              This map shows the State Lands Commission&apos;s public lease layer{meta?.file ? ` (snapshot ${meta.file.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? ""})` : ""}. The number may be mistyped, or the lease may have ended or not be mapped. Search above for another PRC or a place.
+            </p>
+          </div>
+        )}
         {sel && <SelectedPreview l={sel} onClose={() => setSelected(null)} onZoom={() => focusLease(sel, 13.5)} />}
             {show.leases && atStatewide && !filters.q && nActive === 0 && (
               <section aria-label="Featured stories" className="mb-4">
@@ -280,8 +316,9 @@ export default function Explorer() {
 
         {show.spaces && (
           <section id="sec-spaces" aria-labelledby="h-spaces" className="mb-6">
-            <SectionHead id="h-spaces" title="Public spaces" count={placesInView.length} note="Parks, beaches and protected lands in view (CPAD), largest first." />
-            {placesInView.length === 0 && <div className="card p-3 text-[13px] text-ink-soft">None in this view yet. Pan or zoom the map.</div>}
+            <SectionHead id="h-spaces" title="Public spaces" count={placesInView.length} loading={!loaded.spaces} note="Parks, beaches and protected lands in view (CPAD), largest first." />
+            {!loaded.spaces && <ListSkeleton />}
+            {loaded.spaces && placesInView.length === 0 && <div className="card p-3 text-[13px] text-ink-soft">None in this view yet. Pan or zoom the map.</div>}
             <ul className="space-y-2">
               {placesInView.slice(0, spacesOpen ? PLACE_MAX : 4).map((p) => (
                 <PlaceCard key={p.id} p={p} selected={selectedPlace === p.id} onSelect={(pl) => { setSelectedPlace(pl.id); fit(pl.bbox, 13); }} />
@@ -301,9 +338,11 @@ export default function Explorer() {
               id="h-leases"
               title="Leases"
               count={inView.length}
+              loading={!loaded.leases}
               note={`State Lands Commission lease sites in view${filtered.length !== all.length ? ` · ${filtered.length.toLocaleString()} match filters` : ""}. Sorted: case studies, candidates, score.`}
             />
-            {inView.length === 0 && data && (
+            {!loaded.leases && !error && <ListSkeleton />}
+            {inView.length === 0 && loaded.leases && (
               <div className="card p-4 text-sm text-ink-soft">
                 No lease sites here with these filters. Zoom out or{" "}
                 <button className="underline" onClick={() => setFilters(EMPTY)}>clear filters</button>.
@@ -333,7 +372,7 @@ export default function Explorer() {
       <header className="relative z-30 flex items-center gap-3 border-b border-line bg-cream/95 px-3 py-2 backdrop-blur md:px-4">
         <Brand />
         <div className="min-w-0 flex-1 md:max-w-md">
-          <SearchBox leases={all} places={places} applied={filters.q} onPick={onPick} onClear={() => setFilters((f) => ({ ...f, q: "" }))} />
+          <SearchBox leases={all} places={places} applied={filters.q} onPick={onPick} onClear={() => setFilters((f) => ({ ...f, q: "" }))} autoFind={findParam} />
         </div>
         {meta?.fixture && <span className="hidden lg:inline"><FixtureBadge label={`Fixture data · ${all.length} leases`} /></span>}
         <nav className="ml-auto hidden shrink-0 items-center gap-4 text-[13px] font-medium text-ink-soft md:flex" aria-label="Site">
@@ -360,7 +399,10 @@ export default function Explorer() {
             colorBy={colorBy}
             layers={{ ...layers, access: show.spaces }}
             showLeases={show.leases}
-            onSpaces={setPlaces}
+            onSpaces={(sp) => {
+              setPlaces(sp);
+              setSpacesReady(true);
+            }}
             manifest={manifest}
             terrain={terrain}
             overlays={overlays}
@@ -420,7 +462,7 @@ export default function Explorer() {
         </div>
 
         {/* Mobile bottom sheet */}
-        {mobile && <BottomSheet state={sheet} setState={setSheet} title={SHOW_KEYS.filter((k) => show[k]).map((k) => `${SHOW_LABEL[k]} ${counts[k].toLocaleString()}`).join(" · ") || "Nothing switched on"}>{panel}</BottomSheet>}
+        {mobile && <BottomSheet state={sheet} setState={setSheet} title={SHOW_KEYS.filter((k) => show[k]).map((k) => `${SHOW_LABEL[k]} ${loaded[k] ? counts[k].toLocaleString() : "…"}`).join(" · ") || "Nothing switched on"}>{panel}</BottomSheet>}
       </div>
     </div>
   );
@@ -539,11 +581,19 @@ function BottomSheet({ state, setState, title, children }: { state: Sheet; setSt
   );
 }
 
-function SectionHead({ id, title, count, note }: { id: string; title: string; count: number; note: string }) {
+function ListSkeleton() {
+  return (
+    <ul className="space-y-2" aria-hidden>
+      {[0, 1, 2].map((i) => <li key={i} className="card h-[84px] animate-pulse bg-sand/60" />)}
+    </ul>
+  );
+}
+
+function SectionHead({ id, title, count, note, loading = false }: { id: string; title: string; count: number; note: string; loading?: boolean }) {
   return (
     <div className="sticky top-[-12px] z-10 -mx-4 mb-2 border-b border-line bg-cream/95 px-4 pb-1.5 pt-2 backdrop-blur">
       <h2 id={id} className="flex items-baseline justify-between text-[15px] font-semibold text-ink">
-        {title} <span className="text-[12px] font-medium text-ink-faint">{count.toLocaleString()} in view</span>
+        {title} <span className="text-[12px] font-medium text-ink-faint" aria-live="polite">{loading ? "Loading…" : `${count.toLocaleString()} in view`}</span>
       </h2>
       <p className="text-[11.5px] text-ink-faint">{note}</p>
     </div>

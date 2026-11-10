@@ -17,7 +17,12 @@ type Props = {
   applied: string;
   onPick: (s: Suggestion) => void;
   onClear: () => void;
+  /** Run this search once leases are loaded, as if typed and Enter pressed (from ?find= links). */
+  autoFind?: string | null;
 };
+
+/** "1579", "PRC 944", "478-26", "173/ 21-3": a PRC number, not a place name. */
+export const looksLikePrc = (q: string) => /^(prc\s*)?\d[\d\s\-/.a-z]*$/i.test(q.trim());
 
 // Place search: Photon (OpenStreetMap data), limited to California. Free, no key; light use only.
 async function geocode(q: string, signal: AbortSignal): Promise<Suggestion[]> {
@@ -36,13 +41,18 @@ async function geocode(q: string, signal: AbortSignal): Promise<Suggestion[]> {
     }));
 }
 
-export function SearchBox({ leases, places, applied, onPick, onClear }: Props) {
+export function SearchBox({ leases, places, applied, onPick, onClear, autoFind }: Props) {
   const [q, setQ] = useState(applied);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [geo, setGeo] = useState<Suggestion[]>([]);
+  const [geoBusy, setGeoBusy] = useState(false);
+  const [searching, setSearching] = useState(false);
+  // True once the visitor arrows or hovers through the list; then Enter takes the highlighted row.
+  const moved = useRef(false);
   const id = useId();
   const box = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => setQ(applied), [applied]);
 
@@ -61,17 +71,32 @@ export function SearchBox({ leases, places, applied, onPick, onClear }: Props) {
   useEffect(() => {
     const t = q.trim();
     setGeo([]);
-    if (t.length < 3 || /^(prc\s*)?\d/i.test(t)) return;
+    setGeoBusy(false);
+    if (t.length < 3 || looksLikePrc(t)) return;
     const ac = new AbortController();
-    const h = setTimeout(() => geocode(t, ac.signal).then(setGeo).catch(() => {}), 280);
+    setGeoBusy(true);
+    const h = setTimeout(
+      () =>
+        geocode(t, ac.signal)
+          .then(setGeo)
+          .catch(() => {})
+          .finally(() => !ac.signal.aborted && setGeoBusy(false)),
+      280,
+    );
     return () => {
       clearTimeout(h);
       ac.abort();
     };
   }, [q]);
 
-  const items = [...local, ...geo];
-  useEffect(() => setActive(0), [q]);
+  // A place name lists places first; a PRC number lists leases first.
+  const prcLike = looksLikePrc(q);
+  const placeFirst = (xs: Suggestion[]) => [...geo, ...xs.filter((s) => s.kind === "place"), ...xs.filter((s) => s.kind !== "place")];
+  const items = prcLike ? [...local, ...geo] : placeFirst(local);
+  useEffect(() => {
+    setActive(0);
+    moved.current = false;
+  }, [q]);
 
   useEffect(() => {
     const close = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
@@ -87,6 +112,49 @@ export function SearchBox({ leases, places, applied, onPick, onClear }: Props) {
     onPick(s);
   };
 
+  /** Enter: the highlighted row if the visitor chose one; otherwise the place for a place name, the lease for a PRC. */
+  const enter = async (text = q) => {
+    const t = text.trim();
+    if (!t) return;
+    if (moved.current && items[active]) return pick(items[active]);
+    if (looksLikePrc(t)) {
+      const n = t.toLowerCase().replace(/^prc\s*/, "");
+      const exact = leases.find((l) => l.p.toLowerCase() === n);
+      const first = exact ? ({ kind: "lease", l: exact } as Suggestion) : items[0];
+      if (first) return pick(first);
+      return setOpen(true); // shows "no matches"
+    }
+    // Towns, lakes and counties (place search) first, then parks on the map, then leases.
+    const best = (g: Suggestion[]) => g.find((s) => s.kind === "geo" && s.name.toLowerCase() === t.toLowerCase()) ?? g[0];
+    if (geo[0] && q.trim() === t) return pick(best(geo));
+    setSearching(true);
+    try {
+      const g = t.length >= 2 ? await geocode(t, new AbortController().signal).catch(() => [] as Suggestion[]) : [];
+      if (g[0]) return pick(best(g));
+      const tl = t.toLowerCase();
+      const park = places.find((p) => p.name.toLowerCase().includes(tl));
+      if (park) return pick({ kind: "place", p: park });
+      const ls = leases.filter((l) => matchesQuery(l, t));
+      if (ls.length > 1) return pick({ kind: "filter", q: t, n: ls.length });
+      if (ls[0]) return pick({ kind: "lease", l: ls[0] });
+      setOpen(true);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  // ?find= links (from the not-found page): run once the leases are in.
+  const ranAuto = useRef(false);
+  useEffect(() => {
+    if (!autoFind || ranAuto.current || !leases.length) return;
+    ranAuto.current = true;
+    setQ(autoFind);
+    enter(autoFind);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoFind, leases.length]);
+
+  const noMatch = open && q.trim().length > 0 && items.length === 0 && !geoBusy && !searching;
+
   return (
     <div ref={box} className="relative w-full">
       <label htmlFor={`${id}-q`} className="sr-only">Search PRC number or place name</label>
@@ -95,6 +163,7 @@ export function SearchBox({ leases, places, applied, onPick, onClear }: Props) {
         <input
           id={`${id}-q`}
           role="combobox"
+          ref={input}
           aria-expanded={open && items.length > 0}
           aria-controls={`${id}-list`}
           aria-autocomplete="list"
@@ -108,9 +177,9 @@ export function SearchBox({ leases, places, applied, onPick, onClear }: Props) {
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={(e) => {
-            if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(a + 1, items.length - 1)); }
-            else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
-            else if (e.key === "Enter" && items[active]) { e.preventDefault(); pick(items[active]); }
+            if (e.key === "ArrowDown") { e.preventDefault(); moved.current = true; setOpen(true); setActive((a) => Math.min(a + 1, items.length - 1)); }
+            else if (e.key === "ArrowUp") { e.preventDefault(); moved.current = true; setActive((a) => Math.max(a - 1, 0)); }
+            else if (e.key === "Enter") { e.preventDefault(); enter(); }
             else if (e.key === "Escape") setOpen(false);
           }}
           className="h-10 min-w-0 flex-1 bg-transparent px-2.5 text-[14px] text-ink placeholder:text-ink-faint focus:outline-none"
@@ -127,7 +196,7 @@ export function SearchBox({ leases, places, applied, onPick, onClear }: Props) {
               id={`${id}-opt-${i}`}
               role="option"
               aria-selected={i === active}
-              onMouseEnter={() => setActive(i)}
+              onMouseEnter={() => { moved.current = true; setActive(i); }}
               onMouseDown={(e) => { e.preventDefault(); pick(s); }}
               className={`cursor-pointer px-3 py-2 text-[13px] ${i === active ? "bg-sand" : ""}`}
             >
@@ -139,6 +208,21 @@ export function SearchBox({ leases, places, applied, onPick, onClear }: Props) {
           ))}
           {geo.length > 0 && <li className="px-3 pb-1 pt-1.5 text-[10px] text-ink-faint">Place search: Photon · © OpenStreetMap contributors</li>}
         </ul>
+      )}
+      {(noMatch || searching) && (
+        <div role="status" className="absolute left-0 right-0 top-12 z-40 rounded-xl border border-line bg-paper px-3 py-2.5 text-[13px] shadow-[0_10px_30px_rgba(43,42,38,0.14)]">
+          {searching ? (
+            <span className="text-ink-soft">Looking up “{q.trim()}”…</span>
+          ) : (
+            <>
+              <p className="font-semibold text-ink">No lease or place matches “{q.trim()}”.</p>
+              <p className="mt-0.5 text-ink-soft">
+                {looksLikePrc(q) ? "That PRC number isn't in the State Lands Commission lease layer. Check the number, or " : "Check the spelling, or "}
+                try a PRC number (1579), a lake, bay or river (Lake Tahoe), a county, or a town (Monterey).
+              </p>
+            </>
+          )}
+        </div>
       )}
     </div>
   );

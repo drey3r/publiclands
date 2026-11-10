@@ -203,6 +203,8 @@ export default function MapView(props: Props) {
         const cbk = cb.current.onSpaces;
         if (!cbk) return;
         if (!m.getSource("ov-access") || !cb.current.layers.access) return cbk([]);
+        // Not loaded yet: wait for the next idle rather than reporting zero.
+        if (!m.isSourceLoaded("ov-access")) return void (spacesDirty.current = true);
         const def = cb.current.manifest?.access;
         const feats = m.querySourceFeatures("ov-access", def?.kind === "pmtiles" ? { sourceLayer: def.sourceLayer } : undefined);
         const b = m.getBounds();
