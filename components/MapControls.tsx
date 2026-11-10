@@ -81,10 +81,10 @@ export function MapControls(p: Props) {
             onClick={t.onToggle}
             className={`flex w-full items-center rounded-xl border-2 text-left transition-colors ${sheet ? "gap-1.5 px-2 py-1.5" : "gap-2.5 px-2.5 py-2"} ${t.on ? "border-ink bg-ink text-paper" : "border-line bg-paper text-ink-soft hover:border-ink-soft"}`}
           >
-            <span aria-hidden className="flex h-5 w-5 shrink-0 items-center justify-center">{t.swatch}</span>
+            {!(sheet && p.toggles.length > 2) && <span aria-hidden className="flex h-5 w-5 shrink-0 items-center justify-center">{t.swatch}</span>}
             <span className="min-w-0 flex-1 leading-tight">
               <span className={`block truncate font-semibold ${sheet ? "text-[12.5px]" : "text-[13.5px]"}`}>{t.label}</span>
-              <span className={`block text-[11.5px] ${t.on ? "text-paper/75" : "text-ink-faint"}`}>{t.on ? t.status : "Off"}</span>
+              <span className={`block text-[11.5px] ${t.on ? "text-paper/75" : "text-ink-faint"}`}>{t.on ? (sheet ? t.status.replace(/ (in view|found)$/, "") : t.status) : "Off"}</span>
             </span>
             {!sheet && <span aria-hidden className={`h-3.5 w-3.5 shrink-0 rounded-full border-2 ${t.on ? "border-paper bg-paper" : "border-ink-faint"}`} />}
           </button>
