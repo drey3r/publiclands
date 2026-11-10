@@ -1,4 +1,5 @@
-import type { StyleSpecification } from "maplibre-gl";
+import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
+import { MASK_MODE, type MaskMode } from "./config";
 
 // Basemap: OpenFreeMap vector tiles (OpenMapTiles schema, no key).
 // Terrain: AWS Open Data Terrain Tiles (Terrarium encoding), for hillshade and 3D.
@@ -34,13 +35,55 @@ const C = {
   text: "#57534a",
   textStrong: "#2b2a26",
   halo: "#f7f3ea",
+  outside: "#ece8df",
+  outsideLine: "#b9af9c",
+  caLine: "#6f6656",
 };
 
 const FONT = ["Noto Sans Regular"];
 const FONT_IT = ["Noto Sans Italic"];
 const FONT_B = ["Noto Sans Bold"];
 
-export function baseStyle(): StyleSpecification {
+/** Outside-California treatment: drawn above the basemap, below every data layer. */
+function frameLayers(mode: MaskMode): LayerSpecification[] {
+  const out: LayerSpecification[] = [];
+  if (mode !== "outline")
+    out.push({
+      id: "outside-mask",
+      type: "fill",
+      source: "caMask",
+      paint: {
+        "fill-color": C.outside,
+        // Fade: strongest statewide, lighter up close so a border site keeps its context.
+        "fill-opacity": mode === "blank" ? 1 : ["interpolate", ["linear"], ["zoom"], 5, 0.7, 8, 0.6, 11, 0.42, 14, 0.32],
+        "fill-antialias": false,
+      },
+    });
+  // Neighboring states, faint, above the wash.
+  out.push({
+    id: "outside-states",
+    type: "line",
+    source: "omt",
+    "source-layer": "boundary",
+    filter: ["all", ["<=", ["coalesce", ["get", "admin_level"], 99], 4], ["!=", ["coalesce", ["get", "maritime"], 0], 1]],
+    paint: { "line-color": C.outsideLine, "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.6, 10, 1.1], "line-opacity": mode === "outline" ? 0 : 0.9 },
+  });
+  out.push({
+    id: "ca-outline",
+    type: "line",
+    source: "caOutline",
+    layout: { "line-join": "round" },
+    paint: {
+      "line-color": C.caLine,
+      "line-width": ["interpolate", ["linear"], ["zoom"], 4, mode === "outline" ? 1.8 : 1.1, 10, mode === "outline" ? 3 : 2],
+      "line-opacity": mode === "outline" ? 0.85 : 0.6,
+    },
+  });
+  return out;
+}
+
+export function baseStyle(opts: { mask?: MaskMode } = {}): StyleSpecification {
+  const mask = opts.mask ?? MASK_MODE;
   return {
     version: 8,
     glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
@@ -48,6 +91,8 @@ export function baseStyle(): StyleSpecification {
       omt: { type: "vector", url: "https://tiles.openfreemap.org/planet", attribution: ATTRIBUTION },
       hillshadeDem: { type: "raster-dem", tiles: [TERRARIUM], encoding: "terrarium", tileSize: 256, maxzoom: 15, attribution: TERRAIN_ATTR },
       terrainDem: { type: "raster-dem", tiles: [TERRARIUM], encoding: "terrarium", tileSize: 256, maxzoom: 14 },
+      caMask: { type: "geojson", data: "/data/ca-mask.geojson" },
+      caOutline: { type: "geojson", data: "/data/ca-outline.geojson" },
     },
     layers: [
       { id: "bg", type: "background", paint: { "background-color": C.land } },
@@ -109,7 +154,7 @@ export function baseStyle(): StyleSpecification {
         source: "omt",
         "source-layer": "boundary",
         minzoom: 7,
-        filter: ["all", ["==", ["get", "admin_level"], 6], ["!=", ["get", "maritime"], 1]],
+        filter: ["all", ["==", ["get", "admin_level"], 6], ["!=", ["coalesce", ["get", "maritime"], 0], 1]],
         paint: { "line-color": C.boundary, "line-width": 0.6, "line-dasharray": [2, 2], "line-opacity": 0.55 },
       },
       {
@@ -117,7 +162,7 @@ export function baseStyle(): StyleSpecification {
         type: "line",
         source: "omt",
         "source-layer": "boundary",
-        filter: ["all", ["<=", ["get", "admin_level"], 4], ["!=", ["get", "maritime"], 1]],
+        filter: ["all", ["<=", ["coalesce", ["get", "admin_level"], 99], 4], ["!=", ["coalesce", ["get", "maritime"], 0], 1]],
         paint: { "line-color": C.boundary, "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.8, 10, 1.6], "line-dasharray": [3, 2] },
       },
       {
@@ -219,6 +264,7 @@ export function baseStyle(): StyleSpecification {
         },
         paint: { "text-color": C.textStrong, "text-halo-color": C.halo, "text-halo-width": 1.5 },
       },
+      ...frameLayers(mask),
     ],
   };
 }

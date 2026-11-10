@@ -10,7 +10,23 @@ export const BACK_LABEL = process.env.NEXT_PUBLIC_BACK_LABEL || "Back";
 export const DISCLAIMER = "Not legal or survey data. See the California State Lands Commission for official records.";
 export const CSLC_URL = "https://www.slc.ca.gov/";
 
-export const CA_BOUNDS: [[number, number], [number, number]] = [[-124.6, 32.4], [-114.0, 42.1]];
+/** California's extent (from data/ref/ca-outline.geojson). Home frames exactly this. */
+export const CA_BOUNDS: [[number, number], [number, number]] = [[-124.42, 32.53], [-114.13, 42.01]];
+
+/**
+ * What the map does outside California:
+ *  fade    quiet neutral wash, neighbors and coast still faintly visible (default)
+ *  blank   solid neutral, only the outlines of neighboring states
+ *  outline no wash; a stronger California outline
+ * Override per visit with ?mask=fade|blank|outline to compare.
+ */
+export type MaskMode = "fade" | "blank" | "outline";
+export const MASK_MODE: MaskMode = "fade";
+export const maskFrom = (v: string | null | undefined): MaskMode => (v === "fade" || v === "blank" || v === "outline" ? v : MASK_MODE);
+
+/** California silhouette for the Home button and icon (24×24, Web Mercator, simplified). */
+export const CA_PATH =
+  "M7.1 11.9L6.2 12.5L7.3 13.4L7.0 14.1L8.2 16.0L9.4 17.2L9.7 18.8L11.4 18.8L13.3 19.7L15.3 21.3L15.9 23.0L20.6 22.6L20.4 21.1L21.4 19.1L20.5 17.5L17.3 14.4L10.6 8.3L10.6 1.0L2.8 1.0L3.1 2.4L2.6 5.3L3.5 6.3L3.7 8.4L5.2 10.6L7.1 11.9Z";
 
 /** Featured stories. Camera is tuned for 3D terrain. */
 export const STORIES = [

@@ -4,12 +4,12 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { Map as MLMap } from "maplibre-gl";
-import { ABOUT_URL, BACK_LABEL, BACK_URL, CA_BOUNDS, DISCLAIMER, REPO_URL, STORIES } from "@/lib/config";
+import { ABOUT_URL, BACK_LABEL, BACK_URL, CA_BOUNDS, DISCLAIMER, REPO_URL, STORIES, maskFrom, type MaskMode } from "@/lib/config";
 import { EMPTY, activeCount, applyFilters, fromQuery, inBounds, sortForList, toQuery, type Filters } from "@/lib/filters";
 import type { LayerManifest, LayerName, LeasesPayload, MiniLease, OverlayDef } from "@/lib/types";
 import { FilterPanel } from "./FilterPanel";
 import { LeaseCard } from "./LeaseCard";
-import { MapControls } from "./MapControls";
+import { MapControls, type LayerToggle } from "./MapControls";
 import { PlaceCard, type Place } from "./PlaceCard";
 import { SearchBox, type Suggestion } from "./SearchBox";
 import { FixtureBadge, ScoreRing, StageTracker, TypeDot, eraLabel, typeLabel } from "./ui";
@@ -41,6 +41,19 @@ function useIsMobile() {
     return () => q.removeEventListener("change", on);
   }, []);
   return m;
+}
+
+/** Width the view panel takes on the right of the map, plus a margin (desktop). */
+const VIEW_W = 300;
+/** Bottom-sheet height when collapsed on phones (title + layer toggles + controls button). */
+const PEEK = 178;
+function viewPanelRight() {
+  const el = document.getElementById("view-panel");
+  const host = el?.parentElement;
+  // Collapsed to a bar (small map, or by hand): it sits over Nevada's top corner; don't reserve a column.
+  if (el?.dataset.compact || (host && (host.clientWidth < 760 || host.clientHeight < 540))) return 28;
+  const w = el && el.offsetParent ? el.getBoundingClientRect().width : VIEW_W;
+  return Math.round(w + 28);
 }
 
 const reduceMotion = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -82,11 +95,18 @@ export default function Explorer() {
   const [terrain, setTerrain] = useState(false);
   const [show, setShow] = useState<Record<ShowKey, boolean>>({ spaces: true, leases: true });
   const [spacesOpen, setSpacesOpen] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
+  // ?panelw=520 tries another left-panel width (for choosing one).
+  const [panelW] = useState<number | null>(() => {
+    if (typeof window === "undefined") return null;
+    const n = Number(new URLSearchParams(window.location.search).get("panelw"));
+    return n >= 280 && n <= 800 ? n : null;
+  });
   const [limit, setLimit] = useState(PAGE);
   const [sheet, setSheet] = useState<Sheet>("peek");
   const mobile = useIsMobile();
   const [findParam, setFindParam] = useState<string | null>(null);
+  // Read before the map mounts: ?mask=fade|blank|outline compares outside-California treatments.
+  const [mask] = useState<MaskMode>(() => (typeof window === "undefined" ? maskFrom(null) : maskFrom(new URLSearchParams(window.location.search).get("mask"))));
   const map = useRef<MLMap | null>(null);
   const initial = useRef<URLSearchParams | null>(null);
 
@@ -118,6 +138,7 @@ export default function Explorer() {
     const keep = new URLSearchParams(window.location.search);
     const next = new URLSearchParams(qs);
     next.set("layers", SHOW_KEYS.filter((k) => show[k]).join(",") || "none");
+    for (const k of ["mask", "panelw"]) if (keep.get(k)) next.set(k, keep.get(k)!);
     if (selected) next.set("prc", selected);
     else keep.delete("prc");
     const q = next.toString().replace(/%2C/gi, ","); // readable deep links: ?layers=spaces,leases
@@ -146,6 +167,15 @@ export default function Explorer() {
   useEffect(() => setLimit(PAGE), [filters, bounds]);
 
   // ---- camera helpers
+  /** Frames California at Home: clear of the view panel on the right, and of the bottom sheet on phones. */
+  const homePadding = useCallback(() => {
+    if (window.innerWidth < 768) return { top: 20, bottom: PEEK + 12, left: 56, right: 16 };
+    return { top: 28, bottom: 36, left: 28, right: viewPanelRight() };
+  }, []);
+  const goHome = useCallback(() => {
+    setTerrain(false);
+    map.current?.fitBounds(CA_BOUNDS, { padding: homePadding(), pitch: 0, bearing: 0, duration: reduceMotion() ? 0 : 1000 });
+  }, [homePadding]);
   const padding = useCallback(() => (mobile ? { top: 70, bottom: Math.round(window.innerHeight * 0.45), left: 20, right: 20 } : 40), [mobile]);
   const fit = useCallback(
     (b: [number, number, number, number], maxZoom = 13) => map.current?.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: padding(), maxZoom, duration: reduceMotion() ? 0 : 1200 }),
@@ -252,27 +282,51 @@ export default function Explorer() {
   const countText = (k: ShowKey) => (loaded[k] ? `${counts[k].toLocaleString()} in view` : "Loading…");
   const toggle = (k: ShowKey) => setShow((v) => ({ ...v, [k]: !v[k] }));
 
+  const toggles: LayerToggle[] = SHOW_KEYS.map((k) => ({
+    key: k,
+    label: SHOW_LABEL[k],
+    on: show[k],
+    status: countText(k),
+    onToggle: () => toggle(k),
+    swatch: k === "spaces" ? <span className="h-3.5 w-4 rounded-[3px] border border-[#56664f] bg-[#7f9a6a]/60" /> : <span className="h-3 w-3 rounded-full border-2 border-paper bg-[#3f6075] shadow-[0_0_0_1px_#2b2a26]" />,
+  }));
+
+  const setTerrain3D = (t: boolean) => {
+    setTerrain(t);
+    if (t && map.current && map.current.getPitch() < 30) map.current.easeTo({ pitch: 55, duration: reduceMotion() ? 0 : 900 });
+    if (!t && map.current) map.current.easeTo({ pitch: 0, bearing: 0, duration: reduceMotion() ? 0 : 600 });
+  };
+
+  const controls = (variant: "panel" | "sheet") => (
+    <MapControls
+      variant={variant}
+      toggles={toggles}
+      colorBy={colorBy}
+      setColorBy={setColorBy}
+      leasesOn={show.leases}
+      layers={layers}
+      setLayers={setLayers}
+      manifest={manifest}
+      overlays={overlays}
+      overlayVis={overlayVis}
+      setOverlayVis={setOverlayVis}
+      terrain={terrain}
+      setTerrain={setTerrain3D}
+      filterCount={nActive}
+      filters={
+        <>
+          <FilterPanel f={filters} set={setFilters} counties={counties} waterbodies={waterbodies} methods={meta?.methods ?? {}} />
+          <p className="mt-3 text-[12px] text-ink-faint" aria-live="polite">{filtered.length.toLocaleString()} of {all.length.toLocaleString()} lease sites match.</p>
+        </>
+      }
+    />
+  );
+
   // ---- panel contents (shared by desktop sidebar and mobile sheet)
   const panel = (
     <div className="flex h-full flex-col">
-      <div className="grid gap-2 border-b border-line p-3" style={{ gridTemplateColumns: `repeat(${SHOW_KEYS.length}, minmax(0, 1fr))` }} role="group" aria-label="Show on map">
-        {SHOW_KEYS.map((k) => (
-          <button
-            key={k}
-            type="button"
-            aria-pressed={show[k]}
-            onClick={() => toggle(k)}
-            className={`flex flex-col items-start rounded-xl border-2 px-3 py-2 text-left transition-colors ${show[k] ? "border-ink bg-ink text-paper" : "border-line bg-paper text-ink-soft hover:border-ink-soft"}`}
-          >
-            <span className="flex w-full items-center justify-between gap-2 text-[13.5px] font-semibold">
-              {SHOW_LABEL[k]}
-              <span aria-hidden className={`h-3.5 w-3.5 rounded-full border-2 ${show[k] ? "border-paper bg-paper" : "border-ink-faint"}`} />
-            </span>
-            <span className={`text-[12px] ${show[k] ? "text-paper/75" : "text-ink-faint"}`}>{show[k] ? countText(k) : "Off"}</span>
-          </button>
-        ))}
-      </div>
-
+      {/* Phones: the view controls sit at the top of the bottom sheet. */}
+      {mobile && controls("sheet")}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-3" id="list-scroll">
         {error && <p className="rounded-lg bg-clay/10 p-3 text-sm text-clay">Could not load map data: {error}</p>}
         {missingPrc && (
@@ -312,7 +366,7 @@ export default function Explorer() {
               </section>
             )}
 
-        {!SHOW_KEYS.some((k) => show[k]) && <div className="card p-4 text-sm text-ink-soft">Everything is switched off. Turn on a layer above.</div>}
+        {!SHOW_KEYS.some((k) => show[k]) && <div className="card p-4 text-sm text-ink-soft">Everything is switched off. Turn on a layer in {mobile ? "the controls above" : "the panel on the right of the map"}.</div>}
 
         {show.spaces && (
           <section id="sec-spaces" aria-labelledby="h-spaces" className="mb-6">
@@ -390,7 +444,15 @@ export default function Explorer() {
 
       <div className="relative flex min-h-0 flex-1">
         {/* Desktop list */}
-        {!mobile && <aside className="w-[400px] shrink-0 border-r border-line bg-cream lg:w-[440px]" aria-label="Lease sites and places">{panel}</aside>}
+        {!mobile && (
+          <aside
+            className="w-[360px] shrink-0 border-r border-line bg-cream lg:w-[420px] xl:w-[480px]"
+            style={panelW ? { width: panelW } : undefined}
+            aria-label="Stories, lease sites and places"
+          >
+            {panel}
+          </aside>
+        )}
 
         {/* Map */}
         <div className="relative min-w-0 flex-1">
@@ -422,43 +484,12 @@ export default function Explorer() {
             }}
             onViewport={setBounds}
             onReady={onReady}
+            mask={mask}
+            homePadding={homePadding}
+            onHome={goHome}
           />
-          {/* Map key and filters live on the right; the list is on the left. */}
-          <div className={`pointer-events-none absolute right-3 ${mobile ? "top-[150px]" : "bottom-9"} z-10 flex flex-col items-end gap-2`}>
-            {showFilters && (
-              <div id="filters" className="pointer-events-auto max-h-[62vh] w-[min(440px,calc(100vw-24px))] overflow-auto rounded-2xl border border-line bg-cream p-4 shadow-[0_14px_40px_rgba(43,42,38,0.16)]">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-[15px] font-semibold text-ink">Filter lease sites</h2>
-                  <button type="button" onClick={() => setShowFilters(false)} className="rounded-full px-2 text-ink-faint hover:text-ink" aria-label="Close filters">✕</button>
-                </div>
-                <FilterPanel f={filters} set={setFilters} counties={counties} waterbodies={waterbodies} methods={meta?.methods ?? {}} />
-                <p className="mt-3 text-[12px] text-ink-faint">{filtered.length.toLocaleString()} of {all.length.toLocaleString()} lease sites match.</p>
-              </div>
-            )}
-            {(!mobile || sheet === "peek") && (
-              <MapControls
-                colorBy={colorBy}
-                setColorBy={setColorBy}
-                layers={layers}
-                setLayers={setLayers}
-                manifest={manifest}
-                overlays={overlays}
-                overlayVis={overlayVis}
-                setOverlayVis={setOverlayVis}
-                terrain={terrain}
-                setTerrain={(t) => {
-                  setTerrain(t);
-                  if (t && map.current && map.current.getPitch() < 30) map.current.easeTo({ pitch: 55, duration: reduceMotion() ? 0 : 900 });
-                  if (!t && map.current) map.current.easeTo({ pitch: 0, bearing: 0, duration: reduceMotion() ? 0 : 600 });
-                }}
-                collapsed={mobile}
-                filtersOpen={showFilters}
-                filterCount={nActive}
-                onFilters={() => setShowFilters((v) => !v)}
-                onHome={() => map.current?.fitBounds(CA_BOUNDS, { padding: padding(), pitch: 0, bearing: 0, duration: reduceMotion() ? 0 : 1000 })}
-              />
-            )}
-          </div>
+          {/* View controls on the right of the map (over Nevada); content on the left. */}
+          {!mobile && controls("panel")}
         </div>
 
         {/* Mobile bottom sheet */}
@@ -530,7 +561,7 @@ function SourceNote({ meta, manifest, overlays }: { meta?: LeasesPayload["meta"]
 }
 
 function BottomSheet({ state, setState, title, children }: { state: Sheet; setState: (s: Sheet) => void; title: string; children: React.ReactNode }) {
-  const heights: Record<Sheet, string> = { peek: "128px", half: "52dvh", full: "calc(100dvh - 64px)" };
+  const heights: Record<Sheet, string> = { peek: `${PEEK}px`, half: "52dvh", full: "calc(100dvh - 64px)" };
   const drag = useRef<{ y: number; h: number } | null>(null);
   const dragged = useRef(false);
   const ref = useRef<HTMLDivElement>(null);

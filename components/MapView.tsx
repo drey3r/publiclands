@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as MLMap, ExpressionSpecification, MapLayerMouseEvent } from "maplibre-gl";
 import { baseStyle } from "@/lib/mapStyle";
-import { CA_BOUNDS } from "@/lib/config";
+import { CA_BOUNDS, CA_PATH, type MaskMode } from "@/lib/config";
 import { ERAS, ERA_UNKNOWN, LAYER_INFO, TYPES, TYPE_LABEL } from "@/lib/legend";
 import type { LayerManifest, LayerName, MiniLease, OverlayDef } from "@/lib/types";
 import type { Place as Space } from "./PlaceCard";
@@ -35,7 +35,30 @@ type Props = {
   onSelectPlace: (id: string | null) => void;
   onViewport: (b: Bounds) => void;
   onReady: (map: MLMap) => void;
+  /** Outside-California treatment. */
+  mask: MaskMode;
+  /** Padding that frames California at Home (depends on the panels around the map). */
+  homePadding: () => maplibregl.PaddingOptions;
+  /** California Home button. */
+  onHome: () => void;
 };
+
+/** Map control: a California silhouette that returns to the whole state. */
+class HomeControl implements maplibregl.IControl {
+  private el?: HTMLDivElement;
+  constructor(private onClick: () => void) {}
+  onAdd() {
+    const el = document.createElement("div");
+    el.className = "maplibregl-ctrl maplibregl-ctrl-group ca-home";
+    el.innerHTML = `<button type="button" title="Show all of California" aria-label="Show all of California"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="${CA_PATH}" fill="currentColor" stroke="currentColor" stroke-width="0.8" stroke-linejoin="round"/></svg></button>`;
+    el.querySelector("button")!.addEventListener("click", () => this.onClick());
+    this.el = el;
+    return el;
+  }
+  onRemove() {
+    this.el?.remove();
+  }
+}
 
 const TYPE_EXPR = ["match", ["get", "t"], ...TYPES.flatMap((t) => [t.key, t.color]), "#8d887c"] as unknown as ExpressionSpecification;
 const ERA_EXPR = [
@@ -69,9 +92,9 @@ export default function MapView(props: Props) {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const m = new maplibregl.Map({
       container: el.current,
-      style: baseStyle(),
+      style: baseStyle({ mask: cb.current.mask }),
       bounds: CA_BOUNDS,
-      fitBoundsOptions: { padding: 20 },
+      fitBoundsOptions: { padding: cb.current.homePadding() },
       maxPitch: 75,
       attributionControl: false,
       fadeDuration: reduce ? 0 : 200,
@@ -79,13 +102,17 @@ export default function MapView(props: Props) {
     map.current = m;
     if (process.env.NODE_ENV !== "production") (window as unknown as { __map: MLMap }).__map = m; // dev: camera tuning
     m.on("error", (e) => console.warn("[map]", e.error?.message ?? e));
-    m.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: cb.current.attribution }), "bottom-right");
-    m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
-    m.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: false }, trackUserLocation: false }), "top-right");
+    // Compact (ⓘ) so credits never cover the bottom of the state; one tap opens them.
+    m.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: cb.current.attribution }), "bottom-right");
+    // Top left: Home, zoom/compass, locate. The right side holds the view controls.
+    m.addControl(new HomeControl(() => cb.current.onHome()), "top-left");
+    m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-left");
+    m.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: false }, trackUserLocation: false }), "top-left");
     m.addControl(new maplibregl.ScaleControl({ unit: "imperial", maxWidth: 90 }), "bottom-left");
     m.getCanvas().setAttribute("aria-label", "Map of California public lands and State Lands Commission lease sites");
 
     m.on("load", () => {
+      el.current?.querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show");
       m.setSky({ "sky-color": "#dfe5e0", "horizon-color": "#f4efe4", "fog-color": "#f4efe4", "sky-horizon-blend": 0.6, "horizon-fog-blend": 0.7, "fog-ground-blend": 0.25, "atmosphere-blend": 0 });
 
       m.addSource("leases", { type: "geojson", data: toGeoJSON([]), cluster: true, clusterRadius: 44, clusterMaxZoom: 9 });

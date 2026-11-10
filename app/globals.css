@@ -52,6 +52,8 @@ body { background: var(--cream); color: var(--ink); overflow-wrap: break-word; }
 
 /* MapLibre chrome in the site palette */
 .maplibregl-ctrl-group { background: var(--paper) !important; border: 1px solid var(--line); box-shadow: none !important; border-radius: 10px !important; }
+.ca-home button { width: 36px !important; height: 36px !important; display: flex; align-items: center; justify-content: center; color: var(--sage-deep); }
+.ca-home button:hover { color: var(--ink); background: var(--sand) !important; }
 .maplibregl-ctrl-attrib { background: rgb(250 247 240 / 0.88) !important; font-size: 11px; }
 .maplibregl-ctrl-attrib a { color: var(--ink-soft) !important; }
 .maplibregl-popup-content { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; box-shadow: 0 6px 24px rgb(43 42 38 / 0.12); font-family: var(--font-sans); }

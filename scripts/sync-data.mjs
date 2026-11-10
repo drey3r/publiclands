@@ -5,6 +5,7 @@
 //   data/cslc/leases-YYYY-MM-DD.geojson   newest snapshot of the CSLC lease layer
 //   data/layers/*.geojson + index.json    land layers (CPAD, granted, school, water lines)
 //   data/curated.json                     sourced case studies and extra review candidates
+//   data/ref/ca-outline.geojson           California outline (mask outside the state, Home framing)
 // Optional (off by default):
 //   OVERLAYS_DIR=path                     your own GeoJSON overlay layers (see README "Build your own layer")
 //   LAYERS_DIR=path                       use other land-layer files instead of data/layers
@@ -139,6 +140,16 @@ if (fs.existsSync(overlayDir)) {
   }
 }
 fs.writeFileSync(path.join(outOverlays, "index.json"), JSON.stringify(overlays, null, 1));
+
+// ---------- California frame ----------
+// The state outline (dissolved from data/ref/ca-counties.geojson) and its inverse,
+// a world polygon with California cut out, used to quiet everything outside the state.
+const outline = readJson(path.join(root, "data/ref/ca-outline.geojson"));
+const caRings = outline.features.flatMap((f) => (f.geometry.type === "MultiPolygon" ? f.geometry.coordinates.map((p) => p[0]) : [f.geometry.coordinates[0]]));
+const world = [[-179.9, -85], [179.9, -85], [179.9, 85], [-179.9, 85], [-179.9, -85]];
+const mask = { type: "FeatureCollection", features: [{ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [world, ...caRings.map((r) => [...r].reverse())] } }] };
+fs.writeFileSync(path.join(root, "public/data/ca-outline.geojson"), JSON.stringify(outline));
+fs.writeFileSync(path.join(root, "public/data/ca-mask.geojson"), JSON.stringify(mask));
 
 // MapLibre v6's ESM worker can't be resolved by webpack; serve it statically.
 mkdirp(path.join(root, "public/maplibre"));

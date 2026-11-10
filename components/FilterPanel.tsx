@@ -70,7 +70,7 @@ export function FilterPanel({ f, set, counties, waterbodies, methods }: Props) {
         <input id="f-score" type="range" min={0} max={90} step={10} value={f.minScore} onChange={(e) => set({ ...f, minScore: Number(e.target.value) })} className="w-full accent-[#56664f]" />
       </div>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2">
         <Select id="f-region" label="Region (est.)" value={f.region} onChange={(v) => set({ ...f, region: v })} options={[...REGIONS]} />
         <Select id="f-county" label="County (est.)" value={f.county} onChange={(v) => set({ ...f, county: v })} options={counties} />
         <Select id="f-water" label="Waterbody (est.)" value={f.waterbody} onChange={(v) => set({ ...f, waterbody: v })} options={waterbodies} />
