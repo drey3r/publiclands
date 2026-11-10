@@ -1,0 +1,4 @@
+{
+  "_readme": "Optional hand-tuned Fly-in cameras, keyed by PRC. Any of center [lng, lat], zoom, pitch (0-75), bearing (degrees). Missing fields come from the automatic camera. Entries here win over the story cameras in lib/config.ts. Copied to public/data/cameras.json by scripts/sync-data.mjs; no code change needed.",
+  "cameras": {}
+}

@@ -19,7 +19,7 @@ const ACCESS_STYLE: Record<string, string> = {
   "No Public Access": "bg-sand text-ink-soft",
 };
 
-export function PlaceCard({ p, selected, onSelect }: { p: Place; selected: boolean; onSelect: (p: Place) => void }) {
+export function PlaceCard({ p, selected, onSelect, onFly }: { p: Place; selected: boolean; onSelect: (p: Place) => void; onFly?: (p: Place) => void }) {
   return (
     <li className={`card relative p-3 ${selected ? "border-ink/60 bg-white" : "hover:border-sage"}`}>
       <div className="flex items-center gap-1.5 text-[11px]">
@@ -40,10 +40,19 @@ export function PlaceCard({ p, selected, onSelect }: { p: Place; selected: boole
         </dd>
       </dl>
       {p.visit && <p className="mt-1.5 text-[12px] text-ink-soft">{p.visit}</p>}
-      {p.url && (
-        <a href={p.url} target="_blank" rel="noopener" className="relative z-10 mt-1.5 inline-block text-[12px] font-medium text-water underline underline-offset-2">
-          Visitor info ↗
-        </a>
+      {(p.url || onFly) && (
+        <div className="relative z-10 mt-1.5 flex items-center gap-3">
+          {onFly && (
+            <button type="button" onClick={() => onFly(p)} className="rounded-full border border-line px-2.5 py-0.5 text-[12px] font-semibold text-ink-soft hover:border-ink-soft hover:text-ink" aria-label={`Fly in to ${p.name}`}>
+              Fly in
+            </button>
+          )}
+          {p.url && (
+            <a href={p.url} target="_blank" rel="noopener" className="text-[12px] font-medium text-water underline underline-offset-2">
+              Visitor info ↗
+            </a>
+          )}
+        </div>
       )}
     </li>
   );

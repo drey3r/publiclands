@@ -11,9 +11,10 @@ type Props = {
   selected: boolean;
   onHover: (p: string | null) => void;
   onSelect: (p: string) => void;
+  onFly?: (p: string) => void;
 };
 
-export const LeaseCard = memo(function LeaseCard({ l, active, selected, onHover, onSelect }: Props) {
+export const LeaseCard = memo(function LeaseCard({ l, active, selected, onHover, onSelect, onFly }: Props) {
   return (
     <li
       id={`card-${l.p}`}
@@ -50,13 +51,25 @@ export const LeaseCard = memo(function LeaseCard({ l, active, selected, onHover,
         </p>
         <div className="mt-2 w-28"><StageTracker stage={l.st} completed={!!l.x} compact /></div>
       </div>
-      <Link
-        href={`/lease/${encodeURIComponent(l.p)}`}
-        className="relative z-10 self-center rounded-full border border-line px-2.5 py-1 text-[12px] font-medium text-ink-soft hover:border-ink-soft hover:text-ink"
-        aria-label={`Open lease page for PRC ${l.p}, ${l.n}`}
-      >
-        Open
-      </Link>
+      <div className="relative z-10 flex shrink-0 flex-col items-stretch justify-center gap-1.5">
+        {onFly && (
+          <button
+            type="button"
+            onClick={() => onFly(l.p)}
+            className="rounded-full bg-ink px-2.5 py-1 text-[12px] font-semibold text-paper hover:bg-ink-soft"
+            aria-label={`Fly in to PRC ${l.p}, ${l.n}`}
+          >
+            Fly in
+          </button>
+        )}
+        <Link
+          href={`/lease/${encodeURIComponent(l.p)}`}
+          className="rounded-full border border-line px-2.5 py-1 text-center text-[12px] font-medium text-ink-soft hover:border-ink-soft hover:text-ink"
+          aria-label={`Open lease page for PRC ${l.p}, ${l.n}`}
+        >
+          Open
+        </Link>
+      </div>
     </li>
   );
 });

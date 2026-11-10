@@ -14,6 +14,8 @@ import { PlaceCard, type Place } from "./PlaceCard";
 import { SearchBox, type Suggestion } from "./SearchBox";
 import { FixtureBadge, ScoreRing, StageTracker, TypeDot, eraLabel, typeLabel } from "./ui";
 import type { Bounds, ColorBy } from "./MapView";
+import type * as maplibregl from "maplibre-gl";
+import { AUTO_PITCH, AUTO_ZOOM, bearingWithin, type Camera, type CameraOverride } from "@/lib/camera";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => <div className="absolute inset-0 animate-pulse bg-sand" /> });
 
@@ -116,6 +118,10 @@ export default function Explorer() {
     setFilters(fromQuery(initial.current));
     setShow(showFromQuery(initial.current));
     setFindParam(initial.current.get("find"));
+    fetch("/data/cameras.json")
+      .then((r) => (r.ok ? r.json() : {}))
+      .then(setCameras)
+      .catch(() => setCameras({}));
     fetch("/data/overlays/index.json")
       .then((r) => (r.ok ? r.json() : []))
       .then((o: OverlayDef[]) => {
@@ -172,11 +178,78 @@ export default function Explorer() {
     if (window.innerWidth < 768) return { top: 20, bottom: PEEK + 12, left: 56, right: 16 };
     return { top: 28, bottom: 36, left: 28, right: viewPanelRight() };
   }, []);
+  // ---- Fly in / fly out
+  const [cameras, setCameras] = useState<Record<string, CameraOverride>>({});
+  /** The view before the first fly-in, for "Back to previous view". */
+  const prevView = useRef<{ center: [number, number]; zoom: number; pitch: number; bearing: number; terrain: boolean } | null>(null);
+  const [flown, setFlown] = useState<string | null>(null);
+  const flySeq = useRef(0);
+
   const goHome = useCallback(() => {
+    prevView.current = null;
+    setFlown(null);
     setTerrain(false);
     map.current?.fitBounds(CA_BOUNDS, { padding: homePadding(), pitch: 0, bearing: 0, duration: reduceMotion() ? 0 : 1000 });
   }, [homePadding]);
-  const padding = useCallback(() => (mobile ? { top: 70, bottom: Math.round(window.innerHeight * 0.45), left: 20, right: 20 } : 40), [mobile]);
+  const padding = useCallback(
+    () => (mobile ? { top: 70, bottom: Math.round(window.innerHeight * 0.45), left: 20, right: 20 } : { top: 40, bottom: 40, left: 40, right: viewPanelRight() }),
+    [mobile],
+  );
+
+  /**
+   * Tilted 3D flight to a site. Camera: data/cameras.json override, then a story
+   * camera, then automatic (fixed pitch and zoom, bearing clear of terrain).
+   */
+  const flyTo3D = useCallback(
+    async (key: string, pts: [number, number][], opts: { camera?: Partial<Camera>; duration?: number; label: string }) => {
+      const m = map.current;
+      if (!m || !pts.length) return;
+      const seq = ++flySeq.current;
+      if (!prevView.current) {
+        const c = m.getCenter();
+        prevView.current = { center: [c.lng, c.lat], zoom: m.getZoom(), pitch: m.getPitch(), bearing: m.getBearing(), terrain };
+      }
+      if (mobile) setSheet("peek");
+      const pad = mobile ? { top: 70, bottom: PEEK + 10, left: 20, right: 20 } : padding();
+      const ov = { ...opts.camera, ...cameras[key] };
+      let center = ov.center;
+      let zoom = ov.zoom;
+      if (!center || zoom == null) {
+        const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+        const bb: [[number, number], [number, number]] = [[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]];
+        const fitCam = pts.length > 1 ? m.cameraForBounds(bb, { padding: pad, maxZoom: AUTO_ZOOM }) : null;
+        const c = fitCam?.center ? (fitCam.center as maplibregl.LngLat) : null;
+        center ??= c ? [c.lng, c.lat] : pts[0];
+        zoom ??= Math.min(AUTO_ZOOM, fitCam?.zoom ?? AUTO_ZOOM);
+      }
+      const pitch = ov.pitch ?? AUTO_PITCH;
+      const bearing = ov.bearing ?? (await bearingWithin(center, 900, pitch));
+      if (seq !== flySeq.current) return; // a newer flight started while we looked at the terrain
+      setTerrain(true);
+      setFlown(opts.label);
+      m.flyTo({ center, zoom, pitch, bearing, padding: pad, duration: reduceMotion() ? 0 : opts.duration ?? 4500, curve: 1.5, essential: true });
+    },
+    [cameras, mobile, padding, terrain],
+  );
+
+  const flyOut = useCallback(() => {
+    const m = map.current;
+    const v = prevView.current;
+    flySeq.current++;
+    prevView.current = null;
+    setFlown(null);
+    if (!m || !v) return;
+    setTerrain(v.terrain);
+    m.flyTo({ center: v.center, zoom: v.zoom, pitch: v.pitch, bearing: v.bearing, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: reduceMotion() ? 0 : 2500, essential: true });
+  }, []);
+
+  const flyInLease = useCallback(
+    (l: MiniLease, duration?: number) => {
+      const story = STORIES.find((x) => x.prc === l.p);
+      return flyTo3D(l.p, l.pts, { camera: story?.camera, duration, label: `PRC ${l.p}` });
+    },
+    [flyTo3D],
+  );
   const fit = useCallback(
     (b: [number, number, number, number], maxZoom = 13) => map.current?.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: padding(), maxZoom, duration: reduceMotion() ? 0 : 1200 }),
     [padding],
@@ -211,13 +284,23 @@ export default function Explorer() {
       const s = STORIES.find((x) => x.prc === prc);
       if (!s || !map.current) return;
       setFilters(EMPTY);
-      setTerrain(true);
       setSelected(prc);
       setShow((v) => ({ ...v, leases: true }));
-      if (mobile) setSheet("peek");
-      map.current.flyTo({ ...s.camera, padding: padding(), duration: reduceMotion() ? 0 : 7000, curve: 1.6, essential: true });
+      flyTo3D(prc, [s.camera.center], { camera: s.camera, duration: 7000, label: s.title });
     },
-    [mobile, padding],
+    [flyTo3D],
+  );
+
+  /** Fly in to a lease from a card or preview: select it too. */
+  const flyIn = useCallback(
+    (p: string) => {
+      const l = byPrc.get(p);
+      if (!l) return;
+      setSelected(p);
+      setShow((v) => ({ ...v, leases: true }));
+      flyInLease(l);
+    },
+    [byPrc, flyInLease],
   );
 
   const onReady = useCallback(
@@ -239,7 +322,9 @@ export default function Explorer() {
     if (flewInitial.current || !prc || !map.current || !byPrc.size || initial.current?.get("story")) return;
     const l = byPrc.get(prc);
     flewInitial.current = true;
-    if (l) focusLease(l);
+    // ?fly=1 (the lease page's Fly in link): straight into 3D.
+    if (l && initial.current?.get("fly") === "1") flyInLease(l, 5000);
+    else if (l) focusLease(l);
     else {
       setMissingPrc(prc);
       setSelected(null);
@@ -340,7 +425,7 @@ export default function Explorer() {
             </p>
           </div>
         )}
-        {sel && <SelectedPreview l={sel} onClose={() => setSelected(null)} onZoom={() => focusLease(sel, 13.5)} />}
+        {sel && <SelectedPreview l={sel} onClose={() => setSelected(null)} onFly={() => flyIn(sel.p)} />}
             {show.leases && atStatewide && !filters.q && nActive === 0 && (
               <section aria-label="Featured stories" className="mb-4">
                 <h2 className="kicker mb-2">Featured stories</h2>
@@ -353,7 +438,7 @@ export default function Explorer() {
                           <path d="M0 58 L40 46 L70 52 L110 40 L150 50 L200 44 L200 64 L0 64Z" fill="#56664f" opacity=".5" />
                         </svg>
                         <span className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${s.kicker === "Completed" ? "bg-sage-deep text-paper" : "bg-paper text-clay"}`}>{s.kicker}</span>
-                        <span className="absolute bottom-1.5 right-2 text-[10px] font-semibold text-paper drop-shadow">Fly in 3D →</span>
+                        <span className="absolute bottom-1.5 right-2 text-[10px] font-semibold text-paper drop-shadow">Fly in →</span>
                       </div>
                       <div className="p-2.5">
                         <div className="text-[11px] font-semibold text-ink-faint">Lake Tahoe · PRC {s.prc}</div>
@@ -375,7 +460,17 @@ export default function Explorer() {
             {loaded.spaces && placesInView.length === 0 && <div className="card p-3 text-[13px] text-ink-soft">None in this view yet. Pan or zoom the map.</div>}
             <ul className="space-y-2">
               {placesInView.slice(0, spacesOpen ? PLACE_MAX : 4).map((p) => (
-                <PlaceCard key={p.id} p={p} selected={selectedPlace === p.id} onSelect={(pl) => { setSelectedPlace(pl.id); fit(pl.bbox, 13); }} />
+                <PlaceCard
+                  key={p.id}
+                  p={p}
+                  selected={selectedPlace === p.id}
+                  onSelect={(pl) => { setSelectedPlace(pl.id); fit(pl.bbox, 13); }}
+                  onFly={(pl) => {
+                    setSelectedPlace(pl.id);
+                    const [w, so, e, n] = pl.bbox;
+                    flyTo3D(`place:${pl.id}`, [[w, so], [e, n]], { label: pl.name });
+                  }}
+                />
               ))}
             </ul>
             {placesInView.length > 4 && (
@@ -404,7 +499,7 @@ export default function Explorer() {
             )}
             <ul className="space-y-2" aria-label="Lease sites in view">
               {inView.slice(0, limit).map((l) => (
-                <LeaseCard key={l.p} l={l} active={hover === l.p} selected={selected === l.p} onHover={setHover} onSelect={(p) => select(p, true)} />
+                <LeaseCard key={l.p} l={l} active={hover === l.p} selected={selected === l.p} onHover={setHover} onSelect={(p) => select(p, true)} onFly={flyIn} />
               ))}
             </ul>
             {inView.length > limit && (
@@ -488,6 +583,15 @@ export default function Explorer() {
             homePadding={homePadding}
             onHome={goHome}
           />
+          {flown && (
+            <button
+              type="button"
+              onClick={flyOut}
+              className="absolute left-1/2 top-3 z-20 max-w-[calc(100%-140px)] -translate-x-1/2 truncate rounded-full border border-ink/20 bg-paper/95 px-4 py-2 text-[13px] font-semibold text-ink shadow-[0_4px_18px_rgba(43,42,38,0.14)] backdrop-blur hover:bg-white md:left-[calc(50%-150px)]"
+            >
+              ← Back to previous view
+            </button>
+          )}
           {/* View controls on the right of the map (over Nevada); content on the left. */}
           {!mobile && controls("panel")}
         </div>
@@ -499,7 +603,7 @@ export default function Explorer() {
   );
 }
 
-function SelectedPreview({ l, onClose, onZoom }: { l: MiniLease; onClose: () => void; onZoom: () => void }) {
+function SelectedPreview({ l, onClose, onFly }: { l: MiniLease; onClose: () => void; onFly: () => void }) {
   return (
     <section aria-label={`Selected: PRC ${l.p}`} className="mb-4 rounded-2xl border border-ink/50 bg-white p-3.5 shadow-[0_4px_16px_rgba(43,42,38,0.08)]">
       <div className="flex items-start gap-3">
@@ -519,7 +623,7 @@ function SelectedPreview({ l, onClose, onZoom }: { l: MiniLease; onClose: () => 
       <div className="mt-3"><StageTracker stage={l.st} completed={!!l.x} /></div>
       <div className="mt-3 flex gap-2">
         <Link href={`/lease/${encodeURIComponent(l.p)}`} className="flex-1 rounded-full bg-ink py-2 text-center text-[13px] font-semibold text-paper hover:bg-ink-soft">Open lease page</Link>
-        <button type="button" onClick={onZoom} className="rounded-full border border-line px-3 py-2 text-[13px] font-medium text-ink-soft hover:border-ink-soft">Zoom to</button>
+        <button type="button" onClick={onFly} className="rounded-full border border-line px-3 py-2 text-[13px] font-medium text-ink-soft hover:border-ink-soft">Fly in</button>
       </div>
     </section>
   );

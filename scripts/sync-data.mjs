@@ -5,8 +5,10 @@
 //   data/cslc/leases-YYYY-MM-DD.geojson   newest snapshot of the CSLC lease layer
 //   data/layers/*.geojson + index.json    land layers (CPAD, granted, school, water lines)
 //   data/curated.json                     sourced case studies and extra review candidates
+//   data/cameras.json                     optional hand-tuned Fly-in cameras by PRC
 //   data/ref/ca-outline.geojson           California outline (mask outside the state, Home framing)
 // Optional (off by default):
+//   CAMERAS_EXTRA=path                    more Fly-in camera overrides, same format as data/cameras.json
 //   OVERLAYS_DIR=path                     your own GeoJSON overlay layers (see README "Build your own layer")
 //   LAYERS_DIR=path                       use other land-layer files instead of data/layers
 //   DATA_SOURCE=fixture                   tiny development sample (data/fixtures/)
@@ -150,6 +152,15 @@ const world = [[-179.9, -85], [179.9, -85], [179.9, 85], [-179.9, 85], [-179.9, 
 const mask = { type: "FeatureCollection", features: [{ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [world, ...caRings.map((r) => [...r].reverse())] } }] };
 fs.writeFileSync(path.join(root, "public/data/ca-outline.geojson"), JSON.stringify(outline));
 fs.writeFileSync(path.join(root, "public/data/ca-mask.geojson"), JSON.stringify(mask));
+
+// ---------- Fly-in camera overrides (data/cameras.json; optional extra file via CAMERAS_EXTRA) ----------
+const cameras = {};
+for (const f of [path.join(root, "data/cameras.json"), process.env.CAMERAS_EXTRA && path.resolve(root, process.env.CAMERAS_EXTRA)].filter(Boolean)) {
+  if (!exists(f)) continue;
+  const j = readJson(f);
+  for (const [prc, c] of Object.entries(j.cameras ?? {})) cameras[prc] = { ...cameras[prc], ...c };
+}
+fs.writeFileSync(path.join(root, "public/data/cameras.json"), JSON.stringify(cameras));
 
 // MapLibre v6's ESM worker can't be resolved by webpack; serve it statically.
 mkdirp(path.join(root, "public/maplibre"));

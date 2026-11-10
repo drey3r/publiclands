@@ -64,6 +64,7 @@ export default async function LeasePage({ params }: Params) {
     <div className="min-h-screen bg-cream">
       <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-line bg-cream/95 px-4 py-2.5 backdrop-blur">
         <Link href={`/?prc=${encodeURIComponent(l.prc)}`} className="rounded-full border border-line bg-paper px-3 py-1.5 text-[13px] font-medium text-ink hover:border-ink-soft">← Back to map</Link>
+        <Link href={`/?prc=${encodeURIComponent(l.prc)}&fly=1`} className="rounded-full bg-ink px-3 py-1.5 text-[13px] font-semibold text-paper hover:bg-ink-soft">Fly in</Link>
         <HeaderLinks />
         {meta.fixture && <span className="ml-auto"><FixtureBadge /></span>}
       </header>
@@ -86,6 +87,7 @@ export default async function LeasePage({ params }: Params) {
           </div>
           <div className="relative h-[260px] overflow-hidden rounded-2xl border border-line bg-sand lg:row-span-2 lg:h-auto lg:min-h-[340px]">
             <MiniMapLazy points={pts} t={l.derived.typeKey} />
+            <Link href={`/?prc=${encodeURIComponent(l.prc)}&fly=1`} className="absolute bottom-3 left-3 z-10 rounded-full bg-ink/90 px-3 py-1.5 text-[12.5px] font-semibold text-paper shadow hover:bg-ink">Fly in on the full map →</Link>
           </div>
 
           <section className="card p-4" aria-labelledby="tracker">
