@@ -3,6 +3,20 @@
 Changes to the California Public Lands Map, newest first. Data snapshots and
 counts are unchanged unless an entry says otherwise.
 
+## 2026-11-11 · A living ocean and live clouds
+
+**Data:** counts unchanged. New: current cloud cover from Open-Meteo (NOAA HRRR and GFS models), via `/api/clouds`.
+
+- **The ocean moves.** Faint wave marks drift slowly shoreward and breathe in and out, like the marks on an engraved
+  chart. Past the continental shelf the water deepens, from the terrain tiles' own bathymetry, so Monterey Canyon and
+  the basins off Southern California read faintly. Land below sea level is never tinted.
+- **Live clouds.** Today's low, mid and high cloud cover over California, drawn as soft clouds with faint shadows,
+  drifting gently with the wind. They fade out as you zoom in (gone by zoom 10.5). "Clouds" switch next to 3D terrain,
+  on by default, with the model time. Refreshed every three hours (cached, so the weather API is called about eight
+  times a day). If the weather can't be loaded, the map simply shows none.
+- Animation runs at about 12 frames a second, stops while the tab is hidden, and is a still frame for readers who
+  prefer reduced motion.
+
 ## 2026-11-11 · Usability: tabs, cards, map clicks
 
 **Data:** counts unchanged (4,206 leases; categories, kinds and Worth watching groups as before). Lease titles are

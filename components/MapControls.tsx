@@ -64,6 +64,10 @@ type Props = {
   setOverlayVis: (v: Record<string, boolean>) => void;
   terrain: boolean;
   setTerrain: (t: boolean) => void;
+  /** Live clouds, and their model time once loaded. */
+  clouds: boolean;
+  setClouds: (on: boolean) => void;
+  cloudsAt: string | null;
   filterCount: number;
   /** Datasets with pull dates and the source's own last-updated date (map key). */
   datasets: Dataset[];
@@ -186,6 +190,22 @@ export function MapControls(p: Props) {
     >
       3D terrain
       <SwitchMark on={p.terrain} />
+    </button>
+  );
+
+  const cloudsTime = p.cloudsAt ? new Date(p.cloudsAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : null;
+  const cloudsSwitch = (
+    <button
+      type="button"
+      role="switch"
+      onClick={() => p.setClouds(!p.clouds)}
+      aria-checked={p.clouds}
+      className="flex min-h-9 items-center gap-2 rounded-lg px-2 text-[13px] font-semibold text-ink-soft hover:bg-sand hover:text-ink"
+      title={`Current cloud cover over California (Open-Meteo: NOAA HRRR and GFS models), refreshed every three hours${cloudsTime ? `. Model time ${cloudsTime}` : ""}`}
+    >
+      Clouds
+      {cloudsTime && <span className="font-normal text-ink-faint">{cloudsTime}</span>}
+      <SwitchMark on={p.clouds} />
     </button>
   );
 
@@ -385,7 +405,7 @@ export function MapControls(p: Props) {
         {presetSelect}
         {!sheet && stack}
         {p.stackNote}
-        <div className="flex justify-end">{terrainSwitch}</div>
+        <div className="flex justify-end gap-1">{cloudsSwitch}{terrainSwitch}</div>
         <QuickFilters f={fp.f} set={fp.set} />
         {matchLine}
       </div>

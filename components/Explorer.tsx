@@ -127,6 +127,8 @@ export default function Explorer() {
   // Public land (access) follows the State / Federal / Local rows; the reference layers start off.
   const [layers, setLayers] = useState<Record<LayerName, boolean>>({ access: true, granted: false, school: false, waterlines: false });
   const [terrain, setTerrain] = useState(false);
+  const [clouds, setClouds] = useState(true);
+  const [cloudsAt, setCloudsAt] = useState<string | null>(null);
   const [countyLines, setCountyLines] = useState(false);
   const [show, setShow] = useState<Record<ShowKey, boolean>>({ ...ALL_ON });
   /** "Parks only": public land CPAD marks Open Access. */
@@ -701,6 +703,9 @@ export default function Explorer() {
       setOverlayVis={setOverlayVis}
       terrain={terrain}
       setTerrain={setTerrain3D}
+      clouds={clouds}
+      setClouds={setClouds}
+      cloudsAt={cloudsAt}
       filterCount={nActive}
       presets={PRESETS}
       preset={preset}
@@ -927,12 +932,14 @@ export default function Explorer() {
             }}
             manifest={manifest}
             terrain={terrain}
+            clouds={clouds}
+            onCloudsTime={setCloudsAt}
             counties={countyLines}
             overlays={overlays}
             overlayVis={overlayVis}
             hover={hover}
             selected={selected}
-            attribution={`${meta?.fixture ? "FIXTURE · " : ""}Leases: <a href="https://www.slc.ca.gov/">California State Lands Commission</a> · Not legal or survey data`}
+            attribution={`${meta?.fixture ? "FIXTURE · " : ""}Leases: <a href="https://www.slc.ca.gov/">California State Lands Commission</a> · Clouds: <a href="https://open-meteo.com/">Open-Meteo</a> · Not legal or survey data`}
             onHover={setHover}
             onSelect={(p) => select(p)}
             selectedPlace={selPlace}

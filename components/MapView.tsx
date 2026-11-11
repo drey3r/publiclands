@@ -12,6 +12,7 @@ import type { KindKey, LayerManifest, LayerName, MiniLease, OverlayDef } from "@
 import type { Place as Space } from "./PlaceCard";
 import { OG_FILL_LAYERS, OG_POINT_LAYERS, addOg, addWaters, setOgSelPoint, syncOg, syncWaters, type OgData, type OgView } from "./ogLayers";
 import { LABEL, actionLabel, compLabel } from "@/lib/oilgas";
+import { addAmbience, type Ambience } from "@/lib/ambience";
 
 // Served by scripts/sync-data.mjs (webpack can't bundle the v6 module worker).
 maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
@@ -59,6 +60,10 @@ type Props = {
   waters: boolean;
   /** A well, terminal, footprint or former lease was clicked (null: clicked elsewhere). */
   onSelectOg: (sel: OgSel | null) => void;
+  /** Live clouds (Open-Meteo, via /api/clouds) drifting over the state. */
+  clouds: boolean;
+  /** The clouds' model time once loaded (ISO), or null if they couldn't be loaded. */
+  onCloudsTime?: (time: string | null) => void;
 };
 
 export type OgSel = { kind: "well" | "terminal" | "footprint" | "former"; id: string; coords?: [number, number] };
@@ -165,6 +170,7 @@ export default function MapView(props: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<MLMap | null>(null);
   const ready = useRef(false);
+  const ambience = useRef<Ambience | null>(null);
   const popup = useRef<maplibregl.Popup | null>(null);
   const cb = useRef(props);
   cb.current = props;
@@ -464,6 +470,8 @@ export default function MapView(props: Props) {
       m.on("moveend", () => (spacesDirty.current = true));
       m.on("sourcedata", (e) => { if (e.sourceId === "ov-access" && e.isSourceLoaded) spacesDirty.current = true; });
       ready.current = true;
+      // Moving water and live clouds (after the lease layers exist, so clouds sit under them).
+      ambience.current = addAmbience(m, { clouds: cb.current.clouds, onClouds: (t) => cb.current.onCloudsTime?.(t) });
       emit();
       syncAll();
       syncSelection();
@@ -472,6 +480,8 @@ export default function MapView(props: Props) {
 
     return () => {
       ready.current = false;
+      ambience.current?.destroy();
+      ambience.current = null;
       m.remove();
       map.current = null;
     };
@@ -756,6 +766,7 @@ export default function MapView(props: Props) {
   useEffect(syncLeasesVisible, [props.showLeases]);
   useEffect(syncUserOverlays, [props.overlays, props.overlayVis]);
   useEffect(syncTerrain, [props.terrain]);
+  useEffect(() => ambience.current?.setClouds(props.clouds), [props.clouds]);
   useEffect(syncCounties, [props.counties]);
   useEffect(syncOgLayers, [props.og]);
   useEffect(syncWatersLayer, [props.waters, props.manifest]);

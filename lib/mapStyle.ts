@@ -319,6 +319,32 @@ const countyLabel: LayerSpecification = {
   paint: { "text-color": C.countyText, "text-halo-color": C.halo, "text-halo-width": 1.4 },
 };
 
+/**
+ * The sea floor, from the same terrain tiles (their bathymetry: ETOPO1 and GMTED): the shelf keeps
+ * the plain water color, and the water deepens past the shelf edge, so the canyons and basins
+ * offshore (Monterey Canyon, the Channel Islands basins) read faintly. Transparent above -110 m,
+ * so land below sea level (Death Valley, -86 m; the Salton Sea floor) is never tinted.
+ */
+function oceanDepth(): LayerSpecification {
+  return {
+    id: "ocean-depth",
+    type: "color-relief",
+    source: "hillshadeDem",
+    paint: {
+      "color-relief-color": [
+        "interpolate", ["linear"], ["elevation"],
+        -5000, "#8aa6b8",
+        -3000, "#93adbf",
+        -1500, "#9db5c5",
+        -500, "#a6bdcb",
+        -180, "#adc2cf",
+        -110, "rgba(180,199,210,0)",
+      ],
+      "color-relief-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.9, 12, 0.75],
+    },
+  } as unknown as LayerSpecification;
+}
+
 export function baseStyle(opts: { mask?: MaskMode } = {}): StyleSpecification {
   const mask = opts.mask ?? MASK_MODE;
   return {
@@ -417,6 +443,7 @@ export function baseStyle(opts: { mask?: MaskMode } = {}): StyleSpecification {
             },
           ] as LayerSpecification[])),
       { id: "water-ocean", type: "fill", source: "omt", "source-layer": "water", filter: ["==", ["get", "class"], "ocean"], paint: { "fill-color": C.water } },
+      oceanDepth(),
       ...countyLayers(),
       ...roadLayers(true),
       ...frameLines(),
