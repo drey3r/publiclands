@@ -79,9 +79,11 @@ type Props = {
   onClearFilters: () => void;
   /** "panel": floating over the map (desktop). "sheet": inside the phone bottom sheet. */
   variant?: "panel" | "sheet";
-  /** County lines and names (stronger than the faint default lines). */
+  /** County lines (on by default) and, separately, county names. */
   counties: boolean;
   setCounties: (on: boolean) => void;
+  countyNames: boolean;
+  setCountyNames: (on: boolean) => void;
   /** Floating panel: tallest it may be (px) so it stays off California at Home; it scrolls inside. */
   maxHeight?: number | null;
   /** Worth watching (Estimate, map-wide): this map flags it; the state does not. */
@@ -377,8 +379,13 @@ export function MapControls(p: Props) {
       ))}
       <label className="flex min-h-9 cursor-pointer items-center gap-2.5 rounded-md px-1 hover:bg-sand">
         <input type="checkbox" checked={p.counties} onChange={(e) => p.setCounties(e.target.checked)} className="h-4 w-4 accent-[#2f6b3a]" />
-        <span aria-hidden className="h-0 w-3.5 border-t-[1.5px] border-dashed border-[#6f6656]" />
-        <span className="text-ink">County lines and names</span>
+        <span aria-hidden className="h-0 w-3.5 border-t-[1.5px] border-[#4d4538]" />
+        <span className="text-ink">County lines</span>
+      </label>
+      <label className="flex min-h-9 cursor-pointer items-center gap-2.5 rounded-md px-1 hover:bg-sand">
+        <input type="checkbox" checked={p.countyNames} onChange={(e) => p.setCountyNames(e.target.checked)} className="h-4 w-4 accent-[#2f6b3a]" />
+        <span aria-hidden className="w-3.5 text-center text-[9px] font-semibold leading-none tracking-wider text-[#7d7360]">Aa</span>
+        <span className="text-ink">County names</span>
       </label>
       {p.overlays.map((o) => (
         <label key={o.id} className="flex min-h-9 cursor-pointer items-center gap-2.5 rounded-md px-1 hover:bg-sand" title={o.description ?? undefined}>

@@ -40,8 +40,7 @@ const C = {
   outside: "#ebe7de",
   outsideLine: "#cfc6b4",
   caLine: "#8a806d",
-  county: "#9c8f76",
-  countyStrong: "#6f6656",
+  county: "#4d4538",
   countyText: "#7d7360",
   range: "#8a7b62",
   pass: "#6f6656",
@@ -283,22 +282,19 @@ function labelLayers(): LayerSpecification[] {
   ];
 }
 
-/** County lines: faint as you zoom in by default; "County lines" (reference layers) makes them stronger and names counties. */
+/**
+ * County lines, on by default ("County lines" in the Reference tab): a fine dark line that reads at
+ * statewide zoom over cream land and green public land alike, thin enough not to compete with either.
+ * "County names" adds the names.
+ */
 function countyLayers(): LayerSpecification[] {
   return [
     {
       id: "county-line",
       type: "line",
       source: "caCounties",
-      layout: { "line-join": "round" },
-      paint: { "line-color": C.county, "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.4, 12, 1.1], "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0.35, 8, 0.65, 12, 0.8] },
-    },
-    {
-      id: "county-line-strong",
-      type: "line",
-      source: "caCounties",
-      layout: { "line-join": "round", visibility: "none" },
-      paint: { "line-color": C.countyStrong, "line-width": ["interpolate", ["linear"], ["zoom"], 5, 1, 12, 2.2], "line-opacity": 0.9, "line-dasharray": [4, 2] },
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: { "line-color": C.county, "line-width": ["interpolate", ["linear"], ["zoom"], 5, 1, 8, 1.2, 12, 1.6], "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0.78, 8, 0.82, 12, 0.85] },
     },
   ];
 }

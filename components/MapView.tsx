@@ -28,8 +28,8 @@ type Props = {
   terrain: boolean;
   /** Public land shown: which owner levels, and whether only land open to the public. */
   land: { groups: LandKey[]; openOnly: boolean };
-  /** "County lines" reference layer: stronger lines plus county names. */
-  counties: boolean;
+  /** Reference tab: county lines (on by default) and county names. */
+  counties: { lines: boolean; names: boolean };
   /** "Leases" big button. */
   showLeases?: boolean;
   /** Public spaces rendered in the current view (from vector tiles), for the list. */
@@ -724,10 +724,10 @@ export default function MapView(props: Props) {
   function syncCounties() {
     const m = map.current;
     if (!m || !ready.current) return;
-    const on = cb.current.counties;
-    m.setLayoutProperty("county-line", "visibility", on ? "none" : "visible");
-    m.setLayoutProperty("county-line-strong", "visibility", on ? "visible" : "none");
-    m.setLayoutProperty("county-label", "visibility", on ? "visible" : "none");
+    const { lines, names } = cb.current.counties;
+    // The line layer stays in the style when hidden: land layers and clouds are placed relative to it.
+    m.setLayoutProperty("county-line", "visibility", lines ? "visible" : "none");
+    m.setLayoutProperty("county-label", "visibility", names ? "visible" : "none");
   }
 
   // ---- State oil & gas and State sovereign lands (added on first use)

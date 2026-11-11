@@ -322,6 +322,32 @@ await check("phone: clouds off by default and never fetched; waves are a still f
   assert(!(await page.evaluate(() => !!window.__map.getLayer("clouds"))), "cloud layer exists on a phone by default");
 }, { width: 390, height: 844 });
 
+await check("county lines: on by default, a Reference-tab toggle, kept in the link (?counties=0); names separate", async (page) => {
+  await cloudCalls(page, CLOUD_GRID);
+  await open(page);
+  const vis = (id) => page.evaluate((i) => window.__map.getLayoutProperty(i, "visibility") ?? "visible", id);
+  assert((await vis("county-line")) === "visible", "county lines hidden by default");
+  assert((await vis("county-label")) === "none", "county names shown by default");
+  assert(!url(page).searchParams.has("counties"), "counties= in the link while at the default");
+  await page.locator(`[aria-label="View panel"] [role=tab]`, { hasText: "Reference" }).click();
+  const lines = page.getByRole("checkbox", { name: "County lines" });
+  assert(await lines.isChecked(), "County lines not checked by default");
+  await lines.uncheck();
+  await page.waitForTimeout(300);
+  assert((await vis("county-line")) === "none", "county lines still drawn after switching off");
+  assert(url(page).searchParams.get("counties") === "0", "counties=0 not in the link");
+  await page.getByRole("checkbox", { name: "County names" }).check();
+  await page.waitForTimeout(300);
+  assert((await vis("county-label")) === "visible", "county names not shown");
+  await open(page, "/?counties=0");
+  assert((await vis("county-line")) === "none", "?counties=0 not restored");
+  await page.locator(`[aria-label="View panel"] [role=tab]`, { hasText: "Reference" }).click();
+  assert(!(await page.getByRole("checkbox", { name: "County lines" }).isChecked()), "County lines checked after ?counties=0");
+  // Public lands still go in under the (hidden) lines, and the clouds with them.
+  const ids = await page.evaluate(() => window.__map.getLayersOrder());
+  assert(ids.indexOf("access-fill") < ids.indexOf("county-line"), "public lands drawn over the county lines' slot");
+});
+
 // ---------------------------------------------------------------- nothing clipped
 for (const v of [{ width: 1280, height: 720 }, { width: 1440, height: 900 }, { width: 2000, height: 1086 }, { width: 390, height: 844 }]) {
   await check(`no clipping at ${v.width}×${v.height}`, async (page) => {

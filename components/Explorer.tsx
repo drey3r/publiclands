@@ -129,7 +129,10 @@ export default function Explorer() {
   const [terrain, setTerrain] = useState(false);
   const [clouds, setClouds] = useState(false);
   const [cloudsAt, setCloudsAt] = useState<string | null>(null);
-  const [countyLines, setCountyLines] = useState(false);
+  /** Reference tab: county lines (on by default; ?counties=0 in the link when off) and county names (?cnames=1). */
+  const [countyLines, setCountyLines] = useState(true);
+  const [countyNames, setCountyNames] = useState(false);
+  const countiesView = useMemo(() => ({ lines: countyLines, names: countyNames }), [countyLines, countyNames]);
   const [show, setShow] = useState<Record<ShowKey, boolean>>({ ...ALL_ON });
   /** "Parks only": public land CPAD marks Open Access. */
   const [openOnly, setOpenOnly] = useState(false);
@@ -163,6 +166,8 @@ export default function Explorer() {
     setFindParam(initial.current.get("find"));
     // Clouds: on by default on desktop; a switch only on phones and for readers who prefer reduced motion.
     setClouds(!window.matchMedia("(max-width: 600px)").matches && !reduceMotion());
+    setCountyLines(initial.current.get("counties") !== "0");
+    setCountyNames(initial.current.get("cnames") === "1");
     const t0 = initial.current.get("tab") as ListTab | null;
     if (t0 && LIST_TABS.includes(t0)) setTab(t0);
     fetch("/data/cameras.json")
@@ -204,9 +209,11 @@ export default function Explorer() {
     if (selected) next.set("prc", selected);
     else keep.delete("prc");
     if (tab !== "leases") next.set("tab", tab);
+    if (!countyLines) next.set("counties", "0");
+    if (countyNames) next.set("cnames", "1");
     const q = next.toString().replace(/%2C/gi, ","); // readable deep links: ?layers=state,leases,federal,local
     history.replaceState(null, "", `${location.pathname}${q ? `?${q}` : ""}`);
-  }, [filters, selected, show, openOnly, tab]);
+  }, [filters, selected, show, openOnly, tab, countyLines, countyNames]);
 
   const all = data?.leases ?? [];
   const hasPlaces = !!manifest?.access;
@@ -723,6 +730,8 @@ export default function Explorer() {
       maxHeight={variant === "panel" ? panelMaxH : null}
       counties={countyLines}
       setCounties={setCountyLines}
+      countyNames={countyNames}
+      setCountyNames={setCountyNames}
       datasets={meta?.datasets ?? []}
       kinds={{ counts: nKinds, active: kindOf(filters), onPick: (k) => setFilters((f) => withKind(f, k)) }}
       watch={{ on: filters.watch, set: (on) => setFilters((f) => ({ ...f, watch: on })), total: watchLeases + (show.oilgas ? watchFp.length + watchCounts.idle : 0) }}
@@ -940,7 +949,7 @@ export default function Explorer() {
             terrain={terrain}
             clouds={clouds}
             onCloudsTime={setCloudsAt}
-            counties={countyLines}
+            counties={countiesView}
             overlays={overlays}
             overlayVis={overlayVis}
             hover={hover}
