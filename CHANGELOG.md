@@ -3,6 +3,39 @@
 Changes to the California Public Lands Map, newest first. Data snapshots and
 counts are unchanged unless an entry says otherwise.
 
+## 2026-11-11 · Usability: tabs, cards, map clicks
+
+**Data:** counts unchanged (4,206 leases; categories, kinds and Worth watching groups as before). Lease titles are
+rewritten from the same location text (393 leases; the full text is unchanged on each lease page).
+
+- **Fixes.** The state sovereign lands tint now stops exactly at the basemap's coast in Baja California and Oregon
+  (OpenStreetMap's coastline there, instead of Natural Earth's; no tinted sliver at any zoom). Wells group into count
+  marks at zoom 11–13, so dense shores such as Huntington Beach stay readable; click a group to zoom in. The "Quick
+  filters" label no longer overlaps its chips. PRC 1579: fully removed September 17, 2025 (out of the lake November
+  2024, final shore section September 2025). County lines are a little darker.
+- **What the records show** (Finding) on lease pages, where the research export has read the lease's Commission
+  records: the outcome or condition, a short summary, the quotes with links to their PDF page, and the staff reports
+  read. Every label on a lease page links to its explanation on About.
+- **Left panel: one list at a time.** Tabs "Leases" and "Public lands", each with its count in view ("Oil & gas" too
+  while that family is on). The tab is kept in the link (`?tab=lands`). Leases sort by screen score. Featured stories
+  are gone from the panel (`?story=` links still fly in).
+- **Lease cards:** the kind icon under the score; titles from the place, two lines at most, never cut mid-word;
+  no data labels on list cards (they are on lease pages); the stage dots are gone from cards (the stage is on the
+  lease page). **Public-land cards:** manager under the name; a bubble only when CPAD lists access as restricted or
+  none; nothing for open land.
+- **Quiet backgrounds:** each card has a soft band in one of five settings (mountains, desert, riverlands,
+  farmlands, ocean), picked by a simple rule from the waterbody, region and name (see About).
+- **Right panel in tabs:** Views (quick view, layers, 3D, quick filters) · Types (what it is, kinds, color by) · Eras ·
+  Status (term, non-operational, candidates, Worth watching, score and place) · Reference (reference layers, State oil
+  & gas and sovereign lands keys) · Sources (data sources and dates). The layers are one click away on every tab.
+  Bigger switches and hit areas.
+- **Clicking the map.** Any green area selects its unit: a dark gold outline, a popup with its name, manager and Fly
+  in, and its card first in Public lands. A public-land card fits the map to the whole unit. A lease dot opens a
+  popup that stays until you click elsewhere or press Esc; click the popup for the lease page. Map, popup and list
+  always agree, both ways.
+- **Checks:** `npm run check:ui` (tests/ui.check.mjs) covers both panels' tabs, map and card selection, popups, old
+  deep links, search, Fly in, the phone sheet, and clipping at 1280×720, 1440×900, 2000×1086 and 390 px.
+
 ## 2026-11-11 · State oil & gas on public lands; state sovereign lands
 
 **Data:** new State oil & gas datasets (pulled 2026-11-11; see Data sources and dates). Lease snapshot unchanged.
