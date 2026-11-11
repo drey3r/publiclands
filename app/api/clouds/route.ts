@@ -19,7 +19,7 @@ import { NextResponse } from "next/server";
  * request as one call: ~400 × 8 = ~3,200 calls a day, under the free tier's 10,000 a day, 5,000 an
  * hour and 600 a minute. Only the public deployment asks: the private one sets NEXT_PUBLIC_CLOUDS_URL
  * to this route on the public site (hence the Access-Control-Allow-Origin header). Free tier:
- * non-commercial use only. Phones and reduced-motion readers don't ask unless they switch clouds on.
+ * non-commercial use only. Reduced-motion readers don't ask unless they switch clouds on.
  */
 
 export const dynamic = "force-dynamic";
@@ -42,7 +42,7 @@ const NEAR_ROWS: [number, number, number][] = [
   [40, -125, -119.5], [40.5, -125, -119.5], [41, -125, -119.5], [41.5, -125, -119.5], [42, -125, -119.5],
 ];
 const BATCH = 100;
-const VARS = "cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_850hPa,wind_direction_850hPa,wind_speed_300hPa,wind_direction_300hPa";
+const VARS = "cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_850hPa,wind_direction_850hPa,wind_speed_700hPa,wind_direction_700hPa,wind_speed_300hPa,wind_direction_300hPa";
 
 type Current = {
   time?: string;
@@ -51,6 +51,8 @@ type Current = {
   cloud_cover_high?: number;
   wind_speed_850hPa?: number;
   wind_direction_850hPa?: number;
+  wind_speed_700hPa?: number;
+  wind_direction_700hPa?: number;
   wind_speed_300hPa?: number;
   wind_direction_300hPa?: number;
 };
@@ -111,8 +113,8 @@ export async function GET() {
     const mid = layer((c) => c.cloud_cover_mid ?? 0);
     const high = layer((c) => c.cloud_cover_high ?? 0);
 
-    // Mean wind over California at cloud height: 850 hPa (~1.5 km) moves the low and mid cloud,
-    // 300 hPa (~9 km) the high cloud. Meteorological direction is where the wind comes from; u and
+    // Mean wind over California at cloud height: 850 hPa (~1.5 km) moves the low cloud, 700 hPa
+    // (~3 km) the mid cloud, 300 hPa (~9 km) the high cloud. Meteorological direction is where the wind comes from; u and
     // v point where it goes (east, north), m/s.
     const mean = (sp: (c: Current) => number | undefined, dir: (c: Current) => number | undefined): [number, number] => {
       let u = 0, v = 0, n = 0;
@@ -127,6 +129,7 @@ export async function GET() {
       return n ? [+(u / n).toFixed(2), +(v / n).toFixed(2)] : [3, 0];
     };
     const wind = mean((c) => c.wind_speed_850hPa, (c) => c.wind_direction_850hPa);
+    const windMid = mean((c) => c.wind_speed_700hPa, (c) => c.wind_direction_700hPa);
     const windHigh = mean((c) => c.wind_speed_300hPa, (c) => c.wind_direction_300hPa);
     // The model time of what is being served. The batches are cached separately and can be refreshed at
     // different moments, so this is the oldest of them: the map shows it as the clouds' "as of" time.
@@ -142,10 +145,10 @@ export async function GET() {
     console.log(
       `[clouds] ${time} ${pts.length} points; low/mid/high % at ` +
         SPOT.map(([name, la, lo]) => { const c = got.get(key(la, lo)) ?? {}; return `${name} ${c.cloud_cover_low}/${c.cloud_cover_mid}/${c.cloud_cover_high}`; }).join(", ") +
-        `; wind 850 hPa ${wind}, 300 hPa ${windHigh} m/s`,
+        `; wind 850 hPa ${wind}, 700 hPa ${windMid}, 300 hPa ${windHigh} m/s`,
     );
     return NextResponse.json(
-      { time, lat0: LAT0, lon0: LON0, step: STEP, nx: NX, ny: NY, low, mid, high, wind, windHigh, source: "Open-Meteo (NOAA HRRR/GFS)" },
+      { time, lat0: LAT0, lon0: LON0, step: STEP, nx: NX, ny: NY, low, mid, high, wind, windMid, windHigh, source: "Open-Meteo (NOAA HRRR/GFS)" },
       // Any origin may read it: the private deployment's pages fetch this route instead of their own.
       { headers: { "Cache-Control": `public, s-maxage=${cdnS}, stale-while-revalidate=600`, "Access-Control-Allow-Origin": "*" } },
     );

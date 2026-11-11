@@ -164,8 +164,8 @@ export default function Explorer() {
     setShow(v0.show);
     setOpenOnly(v0.openOnly);
     setFindParam(initial.current.get("find"));
-    // Clouds: on by default on desktop; a switch only on phones and for readers who prefer reduced motion.
-    setClouds(!window.matchMedia("(max-width: 600px)").matches && !reduceMotion());
+    // Clouds: on by default (phones draw one light, still layer); a switch only for readers who prefer reduced motion.
+    setClouds(!reduceMotion());
     setCountyLines(initial.current.get("counties") !== "0");
     setCountyNames(initial.current.get("cnames") === "1");
     const t0 = initial.current.get("tab") as ListTab | null;

@@ -100,16 +100,18 @@ Grant boundaries for Los Angeles, Long Beach, San Francisco and Oakland are not 
   and all but the first of several lessees); the lease page gives it exactly as indexed.
 - Caveat: the newest indexed item can lag a later assignment or name change.
 
-## Clouds: Open-Meteo (on by default on desktop)
+## Clouds: Open-Meteo (on by default)
 
 - [Open-Meteo](https://open-meteo.com/) forecast API, "best match" model (in the US, NOAA HRRR and GFS): current low,
-  mid and high cloud cover, and the wind at 850 hPa and 300 hPa (which way the low and the high cloud drift). Two sets
+  mid and high cloud cover, and the wind at 850, 700 and 300 hPa (which way the low, mid and high cloud drift). The
+  three covers are drawn as three layers, passed one after another as the reader zooms in; phones draw one light
+  layer from the three together, still. Two sets
   of points: every 0.5° over California and its coastal waters (278 points), and every 3° from 138°W to 102°W and
   23°N to 50°N (130 points: the open Pacific, Oregon, Nevada, Arizona, northern Mexico), about 400 in all. The site's
   server route `app/api/clouds/route.ts` asks Open-Meteo, merges them into one 0.5° grid and caches the answer for
   three hours (data cache and CDN), so Open-Meteo is called about eight times a day per deployment however many people
-  use the map. The reader's browser never calls Open-Meteo. Clouds are on by default on desktop; on phones, and for
-  readers who prefer reduced motion, nothing is requested until "Clouds" is switched on. If the request fails, the map
+  use the map. The reader's browser never calls Open-Meteo. Clouds are on by default; for readers who prefer reduced
+  motion, nothing is requested until "Clouds" is switched on. If the request fails, the map
   draws no clouds.
 - **Terms** (checked 2026-11-10: [terms](https://open-meteo.com/en/terms), [pricing](https://open-meteo.com/en/pricing),
   [licence](https://open-meteo.com/en/licence)): the free API is for non-commercial use only. Open-Meteo lists

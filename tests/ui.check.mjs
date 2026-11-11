@@ -257,7 +257,7 @@ const attribution = (page) => page.evaluate(() => document.querySelector(".mapli
 
 const order = (page) => page.evaluate(() => window.__map.getLayersOrder());
 
-await check("clouds: on by default on desktop (one request, Open-Meteo credit); above land fills and tints, below lines, names and marks; the switch hides them", async (page) => {
+await check("clouds: on by default (one request, Open-Meteo credit); above land fills and tints, below lines, names and marks; three layers passed in turn on the way down; the switch hides them", async (page) => {
   const calls = await cloudCalls(page, CLOUD_GRID);
   await open(page, "/?layers=state,leases,federal,local,waters");
   const sw = page.getByRole("switch", { name: "Clouds" });
@@ -276,10 +276,21 @@ await check("clouds: on by default on desktop (one request, Open-Meteo credit); 
   for (const id of below) assert(at(id) < c, `${id} is drawn over the clouds`);
   const above = ["county-line", "ca-outline", "label-range", "label-water", "place-town", "place-city", "cluster", "cluster-count", "lease-flag", "lease-pt", "lease-icon", "hl-ring", "access-sel-fill", "access-sel-line", "access-label"];
   for (const id of above) assert(at(id) > c, `clouds are drawn over ${id}`);
-  // Zooming in: gone before zoom 8 (lease detail), back at Home.
-  await jump(page, [-122.3, 37.8], 8);
-  assert(!(await page.evaluate(() => window.__ambience.cloudsShown())), "clouds still drawn at zoom 8");
-  assert(await page.evaluate(() => window.__ambience.running()), "wave animation not running at zoom 8");
+  // Descending: all three layers whole at Home; the high layer is passed first, then the mid, then the low;
+  // all gone 3.5 zoom levels below Home (before lease detail), while the water keeps moving.
+  const levels = () => page.evaluate(() => window.__ambience.cloudLevels());
+  const home = await levels();
+  assert(home.low === 1 && home.mid === 1 && home.high === 1 && !home.lite, `layers at Home: ${JSON.stringify(home)}`);
+  await jump(page, [-122.3, 37.8], home.base + 1.4);
+  let l = await levels();
+  assert(l.high === 0 && l.mid > 0 && l.mid < 1 && l.low === 1, `1.4 levels down: ${JSON.stringify(l)}`);
+  await jump(page, [-122.3, 37.8], home.base + 2.6);
+  l = await levels();
+  assert(l.high === 0 && l.mid === 0 && l.low > 0 && l.low < 1, `2.6 levels down: ${JSON.stringify(l)}`);
+  assert(await page.evaluate(() => window.__ambience.cloudsShown()), "low cloud not drawn 2.6 levels down");
+  await jump(page, [-122.3, 37.8], home.base + 3.6);
+  assert(!(await page.evaluate(() => window.__ambience.cloudsShown())), "clouds still drawn 3.6 zoom levels below Home");
+  assert(await page.evaluate(() => window.__ambience.running()), "wave animation not running there");
   await sw.click();
   await page.waitForTimeout(500);
   assert((await page.evaluate(() => window.__map.getLayoutProperty("clouds", "visibility"))) === "none", "cloud layer still visible after the switch");
@@ -377,13 +388,20 @@ await check("reduced motion: clouds off by default and never fetched; switched o
   assert(!(await page.evaluate(() => window.__ambience.running())), "animation started by the clouds with reduced motion");
 }, { width: 1440, height: 900 }, { reducedMotion: "reduce" });
 
-await check("phone: clouds off by default and never fetched; waves are a still frame", async (page) => {
+await check("phone: one light, still cloud layer by default (one request); waves are a still frame; nothing animates", async (page) => {
   const calls = await cloudCalls(page, CLOUD_GRID);
   await open(page);
   assert(await page.evaluate(() => !!window.__map.getLayer("ocean-waves")), "wave layer missing on phone");
+  await page.waitForFunction(() => window.__map.getLayer("clouds"), null, { timeout: 15000 });
+  await idle(page);
+  assert(calls.length === 1, `expected one clouds request on a phone, got ${calls.length}`);
+  const l = await page.evaluate(() => window.__ambience.cloudLevels());
+  assert(l.lite && l.low === 1 && l.mid === 0 && l.high === 0, `phone cloud layers: ${JSON.stringify(l)}`);
   assert(!(await page.evaluate(() => window.__ambience.running())), "animation running on a phone");
-  assert(calls.length === 0, `clouds fetched on a phone (${calls.length})`);
-  assert(!(await page.evaluate(() => !!window.__map.getLayer("clouds"))), "cloud layer exists on a phone by default");
+  await page.evaluate(() => { window.__renders = 0; window.__map.on("render", () => window.__renders++); });
+  await page.waitForTimeout(3000);
+  const n = await page.evaluate(() => window.__renders);
+  assert(n <= 2, `${n} map renders in 3 s at rest on a phone`);
 }, { width: 390, height: 844 });
 
 await check("county lines: on by default, a Reference-tab toggle, kept in the link (?counties=0); names separate", async (page) => {

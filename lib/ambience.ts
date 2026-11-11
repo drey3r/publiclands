@@ -4,8 +4,9 @@ import type { CustomLayerInterface, CustomRenderMethodInput, Map as MLMap, Style
  * Ambience: the ocean's moving wave marks, the surf line along the coast, and the live cloud layer.
  *
  * Both run off one slow ticker (about 12 frames a second, never 60) that only asks the map to
- * repaint, so the map can still rest and fire `idle` between frames. The clouds are shaded on the
- * GPU (one draw call a frame); the wave tile is a small canvas redrawn each tick. The ticker
+ * repaint, so the map can still rest and fire `idle` between frames. The clouds are three layers
+ * (high, mid, low) shaded on the GPU in one draw call a frame, passed one after another as the reader
+ * zooms in; phones get one light layer, still. The wave tile is a small canvas redrawn each tick. The ticker
  * stops past the zooms where waves and clouds have faded, while the tab is hidden, on screens
  * 600 px wide or less, and when the reader prefers reduced motion (one still frame instead).
  */
@@ -13,15 +14,25 @@ import type { CustomLayerInterface, CustomRenderMethodInput, Map as MLMap, Style
 const FPS = 12;
 /** Wave marks fade out by this zoom; past it the ticker stops (lease marks and icons own the water there). */
 export const WAVES_MAX_Z = 11;
-/** Clouds are whole up to this zoom, then thin, spread and fade, as if the reader descends through them… */
-const CLOUDS_FULL_Z = 5.9;
-/** …and are gone by this zoom, before lease detail matters. */
-export const CLOUDS_MAX_Z = 7.6;
-const cloudFade = (z: number) => 1 - smooth(CLOUDS_FULL_Z + 0.3, CLOUDS_MAX_Z, z);
-/** Drift along the wind, in screen pixels a second: slow enough to notice only after a few seconds. */
-const CLOUD_DRIFT_PX = 2.4;
-/** How far the field spreads from the map's centre by the time it has faded (0.2 = 20%). */
-const CLOUD_SPREAD = 0.2;
+/**
+ * Three cloud layers, each passed in turn as the reader comes down: high cloud first, then mid, then
+ * low cloud and fog. Per layer: [whole until, gone by] in zoom levels below Home, how far it sits off
+ * the ground at Home (its parallax when panning: 1 = on the ground), how much further it spreads from
+ * the map's centre while it is passed, and its drift in screen pixels a second.
+ */
+const CLOUD_LEVELS = {
+  low: { from: 1.5, to: 3.5, lift: 1.012, spread: 0.2, drift: 2.0 },
+  mid: { from: 0.8, to: 2.2, lift: 1.03, spread: 0.3, drift: 2.6 },
+  high: { from: 0.25, to: 1.3, lift: 1.055, spread: 0.42, drift: 3.4 },
+} as const;
+/** Phones draw one light layer (all three covers merged, no shading), still, gone a little sooner. */
+const CLOUD_LITE = { from: 1.2, to: 3.0 };
+/** "Home" for the descent: the map's lowest zoom, held to a sane range on very small or very large maps. */
+const cloudBase = (m: MLMap) => Math.min(6.2, Math.max(4.5, m.getMinZoom()));
+/** The zoom by which every cloud layer is gone, before lease detail matters. */
+export const cloudsMaxZoom = (m: MLMap, lite = false) => cloudBase(m) + (lite ? CLOUD_LITE.to : CLOUD_LEVELS.low.to);
+/** However overcast, the three layers together never pass this opacity: the map stays readable under them. */
+const CLOUD_CAP = 0.6;
 /**
  * Clouds sit right below this layer: above every land fill, tint and mask (the map inserts all of
  * those below the county lines), and below county lines, state lines, every name, mark and outline.
@@ -228,6 +239,8 @@ export type CloudGrid = {
   high: number[];
   /** Mean wind at low-cloud height (850 hPa), m/s, toward east (u) and north (v). */
   wind: [number, number];
+  /** Mean wind at mid-cloud height (700 hPa); the low wind if absent. */
+  windMid?: [number, number];
   /** Mean wind at high-cloud height (300 hPa); the low wind if absent. */
   windHigh?: [number, number];
   source: string;
@@ -289,12 +302,15 @@ void main() {
 }`;
 
 /**
- * Per pixel: where on the weather grid is this (smoothly interpolated cover), and does the drifting
- * noise there pass the threshold that cover sets? Thin cover leaves scattered puffs, full cover a
- * deck with soft cells in it. High cloud is a thinner, streakier veil. All of it is plain white at
- * low opacity, with wide soft edges; the only dark is a very faint shadow to the southeast.
+ * Per pixel and per layer: where on the weather grid is this (smoothly interpolated cover), and does the
+ * drifting noise there pass the threshold that cover sets? Thin cover leaves scattered puffs, full
+ * cover a deck with soft cells in it. Each layer is looked up a little further from the map's centre
+ * than the ground under it (its height), has its own drift, and is eroded and faded on its own as the
+ * reader descends past it. Low cloud and fog: broad billows, shaded on the side away from the light,
+ * with a faint ground shadow. Mid cloud: smaller, flatter cells. High cloud: thin streaks. All of it
+ * is white at low opacity with wide soft edges, and the sum is capped so an overcast sky stays a veil.
  */
-const CLOUD_FRAG = `#version 300 es
+const CLOUD_COMMON = `#version 300 es
 precision highp float;
 in vec2 v_m;
 uniform sampler2D u_cover;
@@ -302,12 +318,14 @@ uniform sampler2D u_noise;
 uniform vec4 u_ext;     // lon0, lat0, lon span, lat span of the grid points (degrees)
 uniform vec2 u_res;     // grid points across and up
 uniform vec2 u_center;  // the map's centre (mercator)
-uniform float u_spread; // >= 1: clouds slide outward from the centre as the reader zooms in
-uniform float u_fade;   // overall opacity for this zoom
-uniform float u_thin;   // 0..1: how far the reader has descended into them
+uniform vec3 u_spread;  // low, mid, high: >= 1, how far from the centre each layer is looked up
+uniform vec3 u_fade;    // low, mid, high: opacity for this zoom
+uniform vec3 u_thin;    // low, mid, high: 0..1, how far the reader has descended through each
 uniform vec2 u_d1;      // drift of the low cloud (noise units)
 uniform vec2 u_d2;      // drift of the high cloud
+uniform vec2 u_d3;      // drift of the mid cloud
 uniform float u_k;      // mercator -> noise units
+uniform float u_cap;
 out vec4 o;
 const float PI = 3.141592653589793;
 
@@ -327,13 +345,16 @@ vec3 cover(vec2 m) {
   vec2 e = min(uv, 1.0 - uv);
   return c * smoothstep(0.0, 0.07, e.x) * smoothstep(0.0, 0.07, e.y);
 }
-
+vec2 lifted(float s) { return u_center + (v_m - u_center) / s; }
 vec2 rot(vec2 p, float c, float s) { return vec2(p.x * c - p.y * s, p.x * s + p.y * c); }
+// All layers together, held under the cap (nearly linear for thin cloud, flattening toward overcast).
+float capped(float a) { return u_cap * (1.0 - exp(-2.0 * a)) / 0.8647; }
+`;
 
-// Low and mid cloud: billows from drifting noise at three scales (each turned a different way, so no
+const CLOUD_FRAG = CLOUD_COMMON + `
+// Low cloud and fog: billows from drifting noise at three scales (each turned a different way, so no
 // grid shows), eroded as the reader descends.
-float lowCloud(vec2 m, vec3 c) {
-  float d = 1.0 - (1.0 - c.x) * (1.0 - 0.8 * c.y);
+float lowCloud(vec2 m, float d) {
   if (d < 0.02) return 0.0;
   vec2 q = m * u_k;
   float n = 0.55 * texture(u_noise, rot(q, 0.94, 0.34) + u_d1).r
@@ -341,7 +362,7 @@ float lowCloud(vec2 m, vec3 c) {
           + 0.15 * texture(u_noise, rot(q, 0.5, 0.87) * 5.3 + u_d1 * 2.6).r;
   // Cover to threshold, leaning toward drawing: a point the model calls overcast always shows some cloud,
   // whatever the noise is doing there (a lone 100% point over Sacramento drew nothing with a linear map).
-  float th = 0.5 + 0.42 * (1.0 - 2.0 * pow(d, 0.62)) + 0.3 * u_thin;
+  float th = 0.5 + 0.42 * (1.0 - 2.0 * pow(d, 0.62)) + 0.3 * u_thin.x;
   float a = smoothstep(th - 0.13, th + 0.22, n) * smoothstep(0.02, 0.12, d);
   // Inside a deck: broad soft swells of thicker and thinner cloud, never a flat sheet.
   float swell = 0.6 * texture(u_noise, rot(q, 0.77, 0.64) * 1.7 + u_d1 * 1.3).g + 0.4 * texture(u_noise, rot(q, 0.26, -0.97) * 3.9 + u_d1 * 2.2).a;
@@ -349,31 +370,68 @@ float lowCloud(vec2 m, vec3 c) {
 }
 
 void main() {
-  // Lifted off the map: as the reader zooms in the field spreads from the centre a little faster
-  // than the ground does.
-  vec2 m = u_center + (v_m - u_center) / u_spread;
-  vec3 c = cover(m);
-  float lowRaw = lowCloud(m, c);
-  float low = 0.8 * lowRaw;
-  // High cloud: thin streaks.
-  float hi = 0.0;
-  if (c.z > 0.02) {
-    vec2 q = m * u_k;
-    float s = 0.7 * texture(u_noise, vec2(q.x * 0.55, q.y * 1.5) + u_d2).b + 0.3 * texture(u_noise, q * 1.9 + u_d2 * 1.4).r;
-    float th = 0.5 + 0.42 * (1.0 - 2.0 * c.z) + 0.3 * u_thin;
-    hi = 0.3 * smoothstep(th - 0.16, th + 0.34, s) * smoothstep(0.02, 0.15, c.z);
+  // Low.
+  vec2 m1 = lifted(u_spread.x);
+  float lowRaw = u_fade.x > 0.0 ? lowCloud(m1, cover(m1).x) : 0.0;
+  float low = 0.72 * lowRaw * u_fade.x;
+  // Mid: smaller, flatter cells in loose fields.
+  float mid = 0.0;
+  if (u_fade.y > 0.0) {
+    vec2 m2 = lifted(u_spread.y);
+    float d = cover(m2).y;
+    if (d > 0.02) {
+      vec2 q = m2 * u_k;
+      float n = 0.5 * texture(u_noise, rot(q, 0.6, 0.8) * 1.6 + u_d3).g
+              + 0.5 * texture(u_noise, rot(q, 0.98, -0.2) * 3.7 + u_d3 * 2.3).a;
+      float th = 0.5 + 0.4 * (1.0 - 2.0 * pow(d, 0.7)) + 0.3 * u_thin.y;
+      mid = 0.46 * smoothstep(th - 0.12, th + 0.26, n) * smoothstep(0.02, 0.14, d) * u_fade.y;
+    }
   }
-  float a = 1.0 - (1.0 - low) * (1.0 - hi);
-  // The same cloud a little toward the light (northwest, like the hillshade). Where it is thicker
+  // High: thin streaks.
+  float hi = 0.0;
+  if (u_fade.z > 0.0) {
+    vec2 m3 = lifted(u_spread.z);
+    float d = cover(m3).z;
+    if (d > 0.02) {
+      vec2 q = m3 * u_k;
+      float s = 0.7 * texture(u_noise, vec2(q.x * 0.55, q.y * 1.5) + u_d2).b + 0.3 * texture(u_noise, q * 1.9 + u_d2 * 1.4).r;
+      float th = 0.5 + 0.42 * (1.0 - 2.0 * d) + 0.3 * u_thin.z;
+      hi = 0.3 * smoothstep(th - 0.16, th + 0.34, s) * smoothstep(0.02, 0.15, d) * u_fade.z;
+    }
+  }
+  float a = capped(1.0 - (1.0 - low) * (1.0 - mid) * (1.0 - hi));
+  // The same low cloud a little toward the light (northwest, like the hillshade). Where it is thicker
   // there, this point is on a billow's far side: tint it a pale cool white, so the tops have form.
   // Where this point has no cloud, that neighbour casts a faint shadow on the ground. Over pale
   // land plain white has nothing to stand against; this modelling is what makes valley fog read.
-  vec2 ms = m - vec2(1.4, 1.4) / (u_k * float(${NOISE}));
-  float toward = lowCloud(ms, cover(ms));
-  float shade = clamp((toward - lowRaw) * 2.2, 0.0, 1.0);
-  vec3 body = mix(vec3(1.0), vec3(0.74, 0.8, 0.88), 0.75 * shade);
-  float sh = 0.16 * toward * (1.0 - a);
-  o = vec4(body * a + vec3(0.2, 0.26, 0.34) * sh, a + sh) * u_fade;
+  float shade = 0.0;
+  float sh = 0.0;
+  if (u_fade.x > 0.0) {
+    vec2 ms = m1 - vec2(1.4, 1.4) / (u_k * float(${NOISE}));
+    float toward = lowCloud(ms, cover(ms).x);
+    shade = clamp((toward - lowRaw) * 2.2, 0.0, 1.0) * low / max(a, 0.001);
+    sh = 0.16 * toward * (1.0 - a) * u_fade.x;
+  }
+  vec3 body = mix(vec3(1.0), vec3(0.74, 0.8, 0.88), 0.75 * clamp(shade, 0.0, 1.0));
+  o = vec4(body * a + vec3(0.2, 0.26, 0.34) * sh, a + sh);
+}`;
+
+/** Phones: one layer from the three covers merged, two noise lookups, no shading. */
+const CLOUD_FRAG_LITE = CLOUD_COMMON + `
+void main() {
+  if (u_fade.x <= 0.0) discard;
+  vec2 m = lifted(u_spread.x);
+  vec3 c = cover(m);
+  float d = 1.0 - (1.0 - c.x) * (1.0 - 0.8 * c.y) * (1.0 - 0.5 * c.z);
+  float a = 0.0;
+  if (d > 0.02) {
+    vec2 q = m * u_k;
+    float n = 0.65 * texture(u_noise, rot(q, 0.94, 0.34) + u_d1).r + 0.35 * texture(u_noise, rot(q, 0.8, -0.6) * 2.3 + u_d1 * 1.6).g;
+    float th = 0.5 + 0.42 * (1.0 - 2.0 * pow(d, 0.62)) + 0.3 * u_thin.x;
+    a = 0.8 * smoothstep(th - 0.13, th + 0.22, n) * smoothstep(0.02, 0.12, d) * u_fade.x;
+  }
+  a = capped(a);
+  o = vec4(a);
 }`;
 
 /**
@@ -387,8 +445,10 @@ class CloudLayer implements CustomLayerInterface {
   renderingMode = "2d" as const;
   /** Whether the layer draws (the switch). */
   on = true;
-  /** No drift and no spread: readers who prefer reduced motion, and phones. */
+  /** No drift: readers who prefer reduced motion, and phones. */
   still = false;
+  /** One light layer instead of three (phones). Set before the layer is added. */
+  lite = false;
   private map: MLMap | null = null;
   private program: WebGLProgram | null = null;
   private vao: WebGLVertexArrayObject | null = null;
@@ -400,6 +460,7 @@ class CloudLayer implements CustomLayerInterface {
   private dirty = true;
   private d1: [number, number] = [0.13, 0.71];
   private d2: [number, number] = [0.57, 0.29];
+  private d3: [number, number] = [0.31, 0.83];
   private last = 0;
 
   constructor(g: CloudGrid) {
@@ -422,14 +483,14 @@ class CloudLayer implements CustomLayerInterface {
     };
     const p = gl.createProgram()!;
     gl.attachShader(p, sh(gl.VERTEX_SHADER, CLOUD_VERT));
-    gl.attachShader(p, sh(gl.FRAGMENT_SHADER, CLOUD_FRAG));
+    gl.attachShader(p, sh(gl.FRAGMENT_SHADER, this.lite ? CLOUD_FRAG_LITE : CLOUD_FRAG));
     gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
       console.warn("[clouds] program", gl.getProgramInfoLog(p));
       return;
     }
     this.program = p;
-    for (const u of ["u_matrix", "u_cover", "u_noise", "u_ext", "u_res", "u_center", "u_spread", "u_fade", "u_thin", "u_d1", "u_d2", "u_k"]) this.uni[u] = gl.getUniformLocation(p, u);
+    for (const u of ["u_matrix", "u_cover", "u_noise", "u_ext", "u_res", "u_center", "u_spread", "u_fade", "u_thin", "u_d1", "u_d2", "u_d3", "u_k", "u_cap"]) this.uni[u] = gl.getUniformLocation(p, u);
     this.vao = gl.createVertexArray();
     this.buf = gl.createBuffer();
     this.cover = gl.createTexture();
@@ -497,13 +558,24 @@ class CloudLayer implements CustomLayerInterface {
     const m = this.map;
     if (!m || !this.program || !this.on) return;
     const z = m.getZoom();
-    const fade = cloudFade(z);
-    if (fade <= 0) return;
+    // How far below Home the reader is, and what that does to each layer.
+    const down = z - cloudBase(m);
+    const L = CLOUD_LEVELS;
+    const levels = this.lite ? [{ ...L.low, ...CLOUD_LITE }] : [L.low, L.mid, L.high];
+    const thin = [0, 0, 0];
+    const fade = [0, 0, 0];
+    const spread = [1, 1, 1];
+    levels.forEach((l, i) => {
+      thin[i] = smooth(l.from, l.to, down);
+      fade[i] = 1 - smooth(l.from + 0.25 * (l.to - l.from), l.to, down);
+      spread[i] = l.lift + l.spread * thin[i];
+    });
+    if (Math.max(...fade) <= 0) return;
     if (this.dirty) this.upload(gl);
     const g = this.grid;
     const k = 360 / NOISE_DEG;
-    // Drift: a steady few screen pixels a second along the real wind, whatever the zoom (advanced
-    // per frame, so zooming never makes the clouds jump).
+    // Drift: a steady few screen pixels a second along the real wind at each height, whatever the
+    // zoom (advanced per frame, so zooming never makes the clouds jump).
     const t = performance.now() / 1000;
     const dt = this.last ? Math.min(0.25, t - this.last) : 0;
     this.last = t;
@@ -515,22 +587,24 @@ class CloudLayer implements CustomLayerInterface {
         d[0] = (d[0] - (w[0] / sp) * pxPerS * perPx * dt) % 1;
         d[1] = (d[1] + (w[1] / sp) * pxPerS * perPx * dt) % 1;
       };
-      step(this.d1, g.wind, CLOUD_DRIFT_PX);
-      step(this.d2, g.windHigh ?? g.wind, CLOUD_DRIFT_PX * 1.5);
+      step(this.d1, g.wind, L.low.drift);
+      step(this.d3, g.windMid ?? g.wind, L.mid.drift);
+      step(this.d2, g.windHigh ?? g.wind, L.high.drift);
     }
-    const thin = this.still ? 0 : smooth(CLOUDS_FULL_Z, CLOUDS_MAX_Z, z);
     const c = m.getCenter();
     gl.useProgram(this.program);
     gl.uniformMatrix4fv(this.uni.u_matrix, false, args.defaultProjectionData.mainMatrix as Float32Array);
     gl.uniform4f(this.uni.u_ext, g.lon0, g.lat0, (g.nx - 1) * g.step, (g.ny - 1) * g.step);
     gl.uniform2f(this.uni.u_res, g.nx, g.ny);
     gl.uniform2f(this.uni.u_center, (c.lng + 180) / 360, 0.5 - mercY(c.lat) / (2 * Math.PI));
-    gl.uniform1f(this.uni.u_spread, 1 + CLOUD_SPREAD * thin);
-    gl.uniform1f(this.uni.u_fade, fade);
-    gl.uniform1f(this.uni.u_thin, thin);
+    gl.uniform3f(this.uni.u_spread, spread[0], spread[1], spread[2]);
+    gl.uniform3f(this.uni.u_fade, fade[0], fade[1], fade[2]);
+    gl.uniform3f(this.uni.u_thin, thin[0], thin[1], thin[2]);
     gl.uniform2f(this.uni.u_d1, this.d1[0], this.d1[1]);
     gl.uniform2f(this.uni.u_d2, this.d2[0], this.d2[1]);
+    gl.uniform2f(this.uni.u_d3, this.d3[0], this.d3[1]);
     gl.uniform1f(this.uni.u_k, k);
+    gl.uniform1f(this.uni.u_cap, CLOUD_CAP);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.cover);
     gl.uniform1i(this.uni.u_cover, 0);
@@ -558,6 +632,8 @@ export type Ambience = {
   running: () => boolean;
   /** Whether clouds are being drawn at this zoom (for the browser checks). */
   cloudsShown: () => boolean;
+  /** Each cloud layer's opacity (0..1) at this zoom, and the zoom the descent starts from (for the browser checks). */
+  cloudLevels: () => { low: number; mid: number; high: number; base: number; lite: boolean };
   destroy: () => void;
 };
 
@@ -632,7 +708,7 @@ export function addAmbience(
   let refetch: ReturnType<typeof setInterval> | null = null;
   let dead = false;
 
-  const cloudsVisible = () => !!(cloudsOn && layer && m.getZoom() < CLOUDS_MAX_Z);
+  const cloudsVisible = () => !!(cloudsOn && layer && m.getZoom() < cloudsMaxZoom(m, small.matches));
   const wavesVisible = () => opts.waves !== false && m.getZoom() < WAVES_MAX_Z;
 
   function frame() {
@@ -685,6 +761,7 @@ export function addAmbience(
         layer = new CloudLayer(g);
         layer.on = cloudsOn;
         layer.still = reduce();
+        layer.lite = small.matches;
         m.addLayer(layer, m.getLayer(CLOUDS_BELOW) ? CLOUDS_BELOW : undefined);
         // A custom layer has no source to carry a credit: an empty source with Open-Meteo's attribution,
         // used by a layer that is visible only while the clouds are, puts it in the attribution control.
@@ -701,8 +778,7 @@ export function addAmbience(
     }
   }
 
-  // Nothing is fetched until clouds are on (by default on desktop; a switch on phones and with reduced
-  // motion). A page left open then picks up new clouds every three hours (the route's cache period).
+  // Nothing is fetched until clouds are on (by default; a switch for readers who prefer reduced motion). A page left open then picks up new clouds every three hours (the route's cache period).
   function wantClouds() {
     if (refetch || dead) return;
     loadClouds();
@@ -714,6 +790,12 @@ export function addAmbience(
   return {
     running: () => timer !== null,
     cloudsShown: cloudsVisible,
+    cloudLevels() {
+      const down = m.getZoom() - cloudBase(m);
+      const lite = small.matches;
+      const f = (l: { from: number; to: number }) => +(1 - smooth(l.from + 0.25 * (l.to - l.from), l.to, down)).toFixed(3);
+      return { low: f(lite ? CLOUD_LITE : CLOUD_LEVELS.low), mid: lite ? 0 : f(CLOUD_LEVELS.mid), high: lite ? 0 : f(CLOUD_LEVELS.high), base: cloudBase(m), lite };
+    },
     setClouds(on) {
       cloudsOn = on;
       if (on) wantClouds();
