@@ -725,7 +725,7 @@ export default function Explorer() {
   ];
   const curTab: ListTab = tab === "oilgas" && !show.oilgas ? "leases" : tab;
   const tabBar = (
-    <div role="tablist" aria-label="Lists" className="flex shrink-0 gap-1 border-b border-line bg-cream px-3 pt-2 md:px-4">
+    <div role="tablist" aria-label="Lists" className="flex shrink-0 gap-1 overflow-x-auto border-b border-line bg-cream px-3 pt-2 md:px-4">
       {tabs.map((t) => (
         <button
           key={t.key}
@@ -735,7 +735,7 @@ export default function Explorer() {
           aria-selected={curTab === t.key}
           aria-controls="list-scroll"
           onClick={() => { setTab(t.key); scrollListTop(); }}
-          className={`-mb-px flex min-h-11 items-center gap-2 rounded-t-xl border px-3.5 text-[14.5px] font-semibold transition-colors ${curTab === t.key ? "border-line border-b-cream bg-cream text-ink" : "border-transparent text-ink-soft hover:text-ink"} ${t.on ? "" : "opacity-60"}`}
+          className={`-mb-px flex min-h-11 items-center gap-2 whitespace-nowrap rounded-t-xl border font-semibold transition-colors ${tabs.length > 2 ? "px-2.5 text-[13.5px]" : "px-3.5 text-[14.5px]"} ${curTab === t.key ? "border-line border-b-cream bg-cream text-ink" : "border-transparent text-ink-soft hover:text-ink"} ${t.on ? "" : "opacity-60"}`}
         >
           {t.label}
           <span className={`rounded-full px-2 py-0.5 text-[12px] tabular-nums ${curTab === t.key ? "bg-ink text-paper" : "bg-sand text-ink-soft"}`} aria-live="polite">{t.count == null ? "…" : t.count.toLocaleString()}</span>
