@@ -195,7 +195,27 @@ export function MapControls(p: Props) {
     </button>
   );
 
-  const cloudsTime = p.cloudsAt ? new Date(p.cloudsAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : null;
+  // Re-render once a minute while the clouds' time is shown, so its age stays true (the map is not touched).
+  const [, setMinute] = useState(0);
+  useEffect(() => {
+    if (!p.clouds || !p.cloudsAt) return;
+    const id = setInterval(() => setMinute((n) => n + 1), 60000);
+    return () => clearInterval(id);
+  }, [p.clouds, p.cloudsAt]);
+  // The model time of the cloud grid actually on the map (the route's `time`), and how old that is: the grid is
+  // cached for three hours, so a stale one should be plain to see.
+  const cloudsDate = p.cloudsAt ? new Date(p.cloudsAt) : null;
+  const cloudsOk = !!cloudsDate && !Number.isNaN(cloudsDate.getTime());
+  const cloudsAgeMin = cloudsOk ? Math.max(0, (Date.now() - cloudsDate!.getTime()) / 60000) : 0;
+  const cloudsTime = cloudsOk
+    ? `${cloudsDate!.toDateString() === new Date().toDateString() ? "" : `${cloudsDate!.toLocaleDateString([], { month: "short", day: "numeric" })}, `}${cloudsDate!.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZoneName: "short" })}`
+    : null;
+  const cloudsAge = cloudsAgeMin < 90 ? `${Math.round(cloudsAgeMin)} min old` : `about ${Math.round(cloudsAgeMin / 60)} h old`;
+  const cloudsAsOf = p.clouds && cloudsTime ? (
+    <p id="clouds-asof" className={`-mt-2 text-right text-[11px] ${cloudsAgeMin > 240 ? "font-medium text-clay" : "text-ink-faint"}`} title="The weather model's time for the cloud cover on the map now (Open-Meteo: NOAA HRRR and GFS). The map reads a new grid every three hours.">
+      Clouds as of {cloudsTime} · {cloudsAge}
+    </p>
+  ) : null;
   const cloudsSwitch = (
     <button
       type="button"
@@ -412,6 +432,7 @@ export function MapControls(p: Props) {
         {!sheet && stack}
         {p.stackNote}
         <div className="flex justify-end gap-1">{cloudsSwitch}{terrainSwitch}</div>
+        {cloudsAsOf}
         <QuickFilters f={fp.f} set={fp.set} />
         {matchLine}
       </div>

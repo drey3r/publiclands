@@ -128,8 +128,16 @@ export async function GET() {
     };
     const wind = mean((c) => c.wind_speed_850hPa, (c) => c.wind_direction_850hPa);
     const windHigh = mean((c) => c.wind_speed_300hPa, (c) => c.wind_direction_300hPa);
-    const t = answers[0][0].current?.time ?? "";
+    // The model time of what is being served. The batches are cached separately and can be refreshed at
+    // different moments, so this is the oldest of them: the map shows it as the clouds' "as of" time.
+    const times = answers.map((a) => a[0].current?.time ?? "").filter(Boolean).sort();
+    const t = times[0] ?? "";
     const time = !t || t.endsWith("Z") ? t : `${t}Z`;
+    // The server's data cache hands back a stale answer once while it refreshes (after a quiet night that
+    // can be many hours old). Such an answer is still served, with its true time, but the CDN keeps it for
+    // two minutes instead of three hours, so the refreshed grid replaces it almost at once.
+    const ageS = time ? (Date.now() - Date.parse(time)) / 1000 : 0;
+    const cdnS = ageS > CACHE_S + 1800 ? 120 : CACHE_S;
 
     console.log(
       `[clouds] ${time} ${pts.length} points; low/mid/high % at ` +
@@ -139,7 +147,7 @@ export async function GET() {
     return NextResponse.json(
       { time, lat0: LAT0, lon0: LON0, step: STEP, nx: NX, ny: NY, low, mid, high, wind, windHigh, source: "Open-Meteo (NOAA HRRR/GFS)" },
       // Any origin may read it: the private deployment's pages fetch this route instead of their own.
-      { headers: { "Cache-Control": `public, s-maxage=${CACHE_S}, stale-while-revalidate=86400`, "Access-Control-Allow-Origin": "*" } },
+      { headers: { "Cache-Control": `public, s-maxage=${cdnS}, stale-while-revalidate=600`, "Access-Control-Allow-Origin": "*" } },
     );
   } catch (e) {
     // No clouds is a fine fallback: the map simply draws none. Never cache a failure.

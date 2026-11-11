@@ -317,6 +317,24 @@ await check("sea floor: depth shading reads terrain tiles no deeper than zoom 8 
   assert(r.maxzoom <= 8, `depth tiles go to zoom ${r.maxzoom}`);
 });
 
+await check("clouds: the switch shows the served grid's model time and its age; a stale grid is marked; gone when off", async (page) => {
+  // A grid whose model time is five hours ago: the caption must say so, not the time the page loaded.
+  const stale = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 16) + "Z";
+  await cloudCalls(page, { ...CLOUD_GRID, time: stale });
+  await open(page);
+  await page.waitForFunction(() => window.__map.getLayer("clouds"), null, { timeout: 15000 });
+  const cap = page.locator("#view-panel #clouds-asof");
+  await cap.waitFor({ timeout: 5000 });
+  const txt = await cap.innerText();
+  const want = await page.evaluate((t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZoneName: "short" }), stale);
+  assert(txt.includes(want), `caption "${txt}" does not show the grid's time ${want}`);
+  assert(/about 5 h old/.test(txt), `caption "${txt}" does not give the age`);
+  assert(/text-clay/.test(await cap.getAttribute("class")), "a five-hour-old grid is not marked stale");
+  await page.getByRole("switch", { name: "Clouds" }).click();
+  await page.waitForTimeout(300);
+  assert(!(await cap.count()), "caption still shown with clouds off");
+});
+
 await check("idle is idle: no map renders at rest once nothing animates", async (page) => {
   await cloudCalls(page, CLOUD_GRID);
   await open(page);
