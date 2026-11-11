@@ -29,6 +29,8 @@ const CLOUD_SPREAD = 0.2;
 const CLOUDS_BELOW = "county-line";
 const CLOUD_CREDIT_LAYER = "clouds-credit";
 export const WAVE_IMAGE = "ocean-waves";
+/** Seconds for one swell (a band of brighter wave marks) to pass a point. */
+const SWELL_S = 7;
 export const CLOUD_SOURCE = "clouds";
 export const CLOUD_LAYER = "clouds";
 /** Open-Meteo's CC BY 4.0 credit, shown in the map's attribution only while the clouds are drawn. */
@@ -59,8 +61,9 @@ const mercY = (lat: number) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) /
 type Mark = { x: number; y: number; len: number; phase: number; period: number; bob: number; weight: number };
 
 /**
- * A seamless tile of wave strokes. Each stroke breathes in and out on its own slow cycle while the
- * whole field drifts gently shoreward (east), like the wave marks on an engraved chart.
+ * A seamless tile of wave strokes. A slow swell brightens and lengthens the strokes in bands that
+ * travel shoreward (east) while the whole field drifts the same way, like the wave marks on an
+ * engraved chart set gently moving.
  */
 export class WavePattern implements StyleImageInterface {
   width: number;
@@ -82,7 +85,7 @@ export class WavePattern implements StyleImageInterface {
     this.ctx = c.getContext("2d", { willReadFrequently: true })!;
     // Scattered by rejection sampling (no two marks crowd each other), so the tile never reads as a grid.
     const r = rng(1579);
-    const want = 26;
+    const want = 30;
     for (let tries = 0; this.marks.length < want && tries < 4000; tries++) {
       const x = r() * size;
       const y = r() * size;
@@ -102,13 +105,17 @@ export class WavePattern implements StyleImageInterface {
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, size, size);
     ctx.lineCap = "round";
-    const drift = (t * 1.6) % size; // css px a second, shoreward
+    const drift = (t * 2.2) % size; // css px a second, shoreward
     for (const m of this.marks) {
-      const breath = 0.5 + 0.5 * Math.sin((t * Math.PI * 2) / m.period + m.phase);
-      const a = m.weight * (0.25 + 0.75 * breath);
-      const len = m.len * (0.8 + 0.2 * breath);
       const x0 = (m.x + drift) % size;
-      const y0 = m.y + 0.7 * Math.sin(t * 0.55 + m.bob);
+      // Swell: a slow band of brighter marks crosses the tile shoreward (two crests a tile, so it tiles),
+      // a little faster than the marks drift; each mark also keeps its own slower breath.
+      const swell = 0.5 + 0.5 * Math.sin(Math.PI * 2 * (t / SWELL_S - (2 * x0) / size - (0.6 * m.y) / size));
+      const own = 0.5 + 0.5 * Math.sin((t * Math.PI * 2) / m.period + m.phase);
+      const breath = 0.6 * swell + 0.4 * own;
+      const a = m.weight * (0.25 + 0.75 * breath);
+      const len = m.len * (0.8 + 0.25 * breath);
+      const y0 = m.y + 1.1 * Math.sin(t * 0.55 + m.bob) * (0.4 + 0.6 * swell);
       for (const dx of [-size, 0, size]) {
         for (const dy of [-size, 0, size]) {
           const x = x0 + dx;
@@ -132,11 +139,11 @@ export class WavePattern implements StyleImageInterface {
       ctx.bezierCurveTo(x + h * 0.5, y + oy + 1.1, x + h * 0.8, y + oy + 0.9, x + h, y + oy + 0.1);
       ctx.stroke();
     };
-    ctx.lineWidth = 0.8;
-    ctx.strokeStyle = `rgba(118,148,166,${(0.22 * a).toFixed(3)})`;
-    path(0.9);
-    ctx.lineWidth = 0.95;
-    ctx.strokeStyle = `rgba(244,248,250,${(0.55 * a).toFixed(3)})`;
+    ctx.lineWidth = 0.9;
+    ctx.strokeStyle = `rgba(104,138,158,${(0.3 * a).toFixed(3)})`;
+    path(1);
+    ctx.lineWidth = 1.1;
+    ctx.strokeStyle = `rgba(246,250,252,${(0.72 * a).toFixed(3)})`;
     path(0);
   }
 
@@ -526,7 +533,7 @@ export function addAmbience(
         source: "omt",
         "source-layer": "water",
         filter: ["==", ["get", "class"], "ocean"],
-        paint: { "fill-pattern": WAVE_IMAGE, "fill-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.6, 8, 0.6, 10, 0.3, WAVES_MAX_Z, 0] },
+        paint: { "fill-pattern": WAVE_IMAGE, "fill-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.85, 8.5, 0.85, 10, 0.4, WAVES_MAX_Z, 0] },
         maxzoom: WAVES_MAX_Z,
       },
       before,
