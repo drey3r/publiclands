@@ -3,6 +3,30 @@
 Changes to the California Public Lands Map, newest first. Data snapshots and
 counts are unchanged unless an entry says otherwise.
 
+## 2026-11-11 · Surf line, clouds over land, lessees in titles
+
+**Data:** counts unchanged (4,206 leases; categories, kinds and Worth watching groups as before). New: lessee names for
+1,137 leases (organizations only), from the State Lands Commission's meeting-item index by way of the research export
+(`data/lessees.json`; see DATA_SOURCES.md). 1,137 lease titles changed; nothing else about any lease did.
+
+- **Lease titles are "Lessee · Place"** where the Commission's index names an organization as lessee ("City of
+  Petaluma · Petaluma River"), on cards, popups, search and lease pages; the place alone otherwise. Titles drop the
+  entity description after the name (", a California corporation") and all but the first of several lessees. Each
+  lease page gives the full name as **Source data**, with the dated Commission item it came from and a link to it.
+  Names of private individuals and trusts are not shown and are not in the data file.
+- **Surf line.** A soft white band along the coast, on the water side, that slowly swells and eases, with brighter
+  stretches sliding along the shore. It rides the same 12-a-second ticker as the waves (no extra redraws) and is gone
+  by zoom 10. One still frame on phones and for readers who prefer reduced motion.
+- **Clouds over land now draw where the model has them.** Three rendering faults, not the data: a lone overcast grid
+  point (valley fog is often one point wide) was smoothed to under half and drew nothing; an overcast point could
+  fall in a gap of the cloud texture; and plain white had nothing to stand against on pale valley land. Cover is now
+  exact at grid points, overcast always draws, and cloud tops carry a pale cool modelling on the side away from the
+  light with a slightly stronger ground shadow. The cloud grid is up to three hours old by design.
+- **One deployment calls Open-Meteo.** `/api/clouds` can be read from any origin, and a second deployment can set
+  `NEXT_PUBLIC_CLOUDS_URL` to it. About 3,200 Open-Meteo calls a day in all (was about 6,400).
+- **Checks:** 23 pass (new: the surf line's place, zoom range and redraw rate; lessee titles on card, popup and
+  lease page).
+
 ## 2026-11-11 · Subtly alive: an idle map, real clouds, swell, county lines
 
 **Data:** counts unchanged (4,206 leases; 7,458 public-land units; Worth watching 367: 46 / 113 / 2 / 206). The cloud
