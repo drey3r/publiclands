@@ -14,7 +14,7 @@ import { LeaseSwatch, MapControls, type LayerToggle, type Preset } from "./MapCo
 import { LAND, NONPROFIT_COLOR, landOf, type LandKey } from "@/lib/legend";
 import { PlaceCard, type Place } from "./PlaceCard";
 import { SearchBox, type Suggestion } from "./SearchBox";
-import { DataLabel, FixtureBadge, ScoreRing, StageTracker, WhatDot, eraLabel, whatLabel } from "./ui";
+import { FixtureBadge, QuietLabel, ScoreRing, StageTracker, WhatDot, eraLabel, whatLabel } from "./ui";
 import type { Bounds, ColorBy } from "./MapView";
 import type * as maplibregl from "maplibre-gl";
 import { AUTO_PITCH, AUTO_ZOOM, bearingWithin, type Camera, type CameraOverride } from "@/lib/camera";
@@ -564,7 +564,7 @@ export default function Explorer() {
                         <span className="absolute bottom-1.5 right-2 text-[10px] font-semibold text-paper drop-shadow">Fly in →</span>
                       </div>
                       <div className="p-2.5">
-                        <div className="text-[11px] font-semibold text-ink-faint">Lake Tahoe · PRC {s.prc}<DataLabel kind={s.kicker === "Completed" ? "finding" : "estimate"} title={s.kicker === "Completed" ? undefined : "Estimate: this map assigns \u201ccandidate for review\u201d; the State Lands Commission does not"} /></div>
+                        <div className="flex items-center text-[11px] font-semibold text-ink-faint">Lake Tahoe · PRC {s.prc}<QuietLabel kind={s.kicker === "Completed" ? "finding" : "estimate"} title={s.kicker === "Completed" ? undefined : "Estimate: this map assigns \u201ccandidate for review\u201d; the State Lands Commission does not"} /></div>
                         <div className="text-[14px] font-semibold leading-snug text-ink">{s.title}</div>
                         <p className="mt-0.5 text-[12px] leading-snug text-ink-soft">{s.blurb}</p>
                       </div>
@@ -746,21 +746,19 @@ function SelectedPreview({ l, onClose, onFly }: { l: MiniLease; onClose: () => v
       <div className="flex items-start gap-3">
         <ScoreRing s={l.s} size={40} />
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-semibold text-ink-faint">
-            PRC {l.p}<DataLabel kind="source" />
-            {l.x ? <> · Completed<DataLabel kind="finding" /></> : l.f ? <> · Candidate for review<DataLabel kind="estimate" title="Estimate: this map assigns it; the State Lands Commission does not" /></> : null}
-          </div>
+          <div className="flex items-center text-[11px] font-semibold text-ink-faint">PRC {l.p}<QuietLabel kind="source" /></div>
+          {l.x ? <div className="flex items-center text-[11px] font-semibold text-sage-deep">Completed<QuietLabel kind="finding" /></div> : l.f ? <div className="flex items-center text-[11px] font-semibold text-clay">Candidate for review<QuietLabel kind="estimate" title="Estimate: this map assigns it; the State Lands Commission does not" /></div> : null}
           <h2 className="text-[16px] font-semibold leading-snug text-ink">{l.n}</h2>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[12px] text-ink-soft">
             <span className="inline-flex items-center gap-1"><WhatDot t={l.t} k={l.k} />{whatLabel(l.t, l.k)}</span>
             <span>{eraLabel(l.e)}</span>
             {l.w && <span>{l.w}</span>}
-            <DataLabel kind="estimate" />
+            <QuietLabel kind="estimate" />
           </p>
         </div>
         <button type="button" onClick={onClose} className="rounded-full px-1.5 text-ink-faint hover:text-ink" aria-label="Close selection">✕</button>
       </div>
-      <p className="mt-3 text-[11px] font-semibold text-ink-faint">Review stage<DataLabel kind="finding" /></p>
+      <p className="mt-3 flex items-center text-[11px] font-semibold text-ink-faint">Review stage<QuietLabel kind="finding" /></p>
       <div className="mt-1"><StageTracker stage={l.st} completed={!!l.x} /></div>
       <div className="mt-3 flex gap-2">
         <Link href={`/lease/${encodeURIComponent(l.p)}`} className="flex-1 rounded-full bg-ink py-2 text-center text-[13px] font-semibold text-paper hover:bg-ink-soft">Open lease page</Link>

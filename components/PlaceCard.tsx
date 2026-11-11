@@ -1,5 +1,5 @@
 "use client";
-import { DataLabel } from "./ui";
+import { QuietLabel } from "./ui";
 
 export type Place = {
   id: string;
@@ -33,7 +33,7 @@ export function PlaceCard({ p, selected, onSelect, onFly }: { p: Place; selected
     <li className={`card relative p-3 ${selected ? "border-ink/60 bg-white" : "hover:border-sage"}`}>
       <div className="flex items-center gap-1.5 text-[11px]">
         <span className="font-semibold uppercase tracking-wide text-sage-deep">{p.kind ?? "Public land"}</span>
-        <DataLabel kind="source" title="Source data: name, manager, owner level and access as published in CPAD" />
+        <QuietLabel kind="source" title="Source data: name, manager, owner level and access as published in CPAD" />
         {p.fixture && <span className="rounded-full border border-dashed border-clay/60 px-1.5 text-clay">fixture outline</span>}
       </div>
       <h3 className="text-[15px] font-semibold leading-snug text-ink">

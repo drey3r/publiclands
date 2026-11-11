@@ -3,6 +3,13 @@
 Changes to the California Public Lands Map, newest first. Data snapshots and
 counts are unchanged unless an entry says otherwise.
 
+## 2026-11-10 · Quieter labels on list cards
+
+- **List cards** (lease cards, the selected-lease preview, featured story cards, public-land cards) now put one
+  kind of value per line with one quiet label at the end of the line (source data, estimate, finding),
+  instead of a tag after every value. Lease pages and map popups keep the full Source data / Estimate /
+  Finding labels.
+
 ## 2026-11-10 · Round 4: About, data dates, labels, finishing
 
 **Data:** same snapshots. No counts changed.

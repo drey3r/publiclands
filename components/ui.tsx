@@ -72,6 +72,15 @@ export function FixtureBadge({ label = "Fixture data" }: { label?: string }) {
 }
 
 export type LabelKind = "source" | "estimate" | "finding";
+
+/** List cards: one quiet label at the end of a line, for everything on that line. */
+export function QuietLabel({ kind, title }: { kind: LabelKind; title?: string }) {
+  return (
+    <span title={title ?? LABEL_TITLE[kind]} className="ml-auto shrink-0 whitespace-nowrap pl-2 text-[10px] lowercase tracking-wide text-ink-faint/80">
+      {LABEL_TEXT[kind]}
+    </span>
+  );
+}
 export const LABEL_TEXT: Record<LabelKind, string> = { source: "Source data", estimate: "Estimate", finding: "Finding" };
 export const LABEL_TITLE: Record<LabelKind, string> = {
   source: "Source data: the official record, copied from the State Lands Commission or CPAD",
