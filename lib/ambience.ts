@@ -1,5 +1,6 @@
 import type { CustomLayerInterface, CustomRenderMethodInput, Map as MLMap, StyleImageInterface } from "maplibre-gl";
 import { OCEAN_LAYER, OceanLayer, WAVES_MAX_Z, type OceanFlow } from "./ocean";
+import { addShimmer, type Shimmer } from "./water";
 
 /**
  * Ambience: the ocean's moving wave marks, the surf line along the coast, and the live cloud layer.
@@ -9,7 +10,8 @@ import { OCEAN_LAYER, OceanLayer, WAVES_MAX_Z, type OceanFlow } from "./ocean";
  * (high, mid, low) shaded on the GPU in one draw call a frame, passed one after another as the reader
  * zooms in; phones get one light layer, still. The wave marks are a shader too (lib/ocean.ts): they
  * drift with the live current and brighten with the swell from its real direction. Only the surf
- * line is a small canvas redrawn each tick. The ticker
+ * line is a small canvas redrawn each tick, and, from a little below Home, two more for the glint on
+ * the big lakes and the drift on the major rivers (lib/water.ts), only while those are in view. The ticker
  * stops past the zooms where waves and clouds have faded, while the tab is hidden, on screens
  * 600 px wide or less, and when the reader prefers reduced motion (one still frame instead).
  */
@@ -531,6 +533,8 @@ export type Ambience = {
   setClouds: (on: boolean) => void;
   /** Where the sea's motion comes from: the live grid, the illustrative sketch (load failed), or not asked yet. */
   oceanFlow: () => "live" | "sketch" | "none";
+  /** Lake and river shimmer cells on screen, and how many are faded out under lease marks (for the browser checks). */
+  shimmer: () => { shown: number; hidden: number; loaded: boolean };
   /** Whether the animation ticker is running (for the browser checks). */
   running: () => boolean;
   /** Whether clouds are being drawn at this zoom (for the browser checks). */
@@ -632,7 +636,8 @@ export function addAmbience(
   const wavesVisible = () => opts.waves !== false && m.getZoom() < WAVES_MAX_Z;
 
   function frame() {
-    if (!wavesVisible() && !cloudsVisible()) return stop();
+    if (!wavesVisible() && !cloudsVisible() && !shimmer?.visible()) return stop();
+    if (shimmer?.visible()) shimmer.draw(now());
     if (wavesVisible()) ocean.t = now();
     if (m.getZoom() < SURF_MAX_Z) surf.draw(now());
     // The clouds advance themselves when the map draws them; all they need is the repaint.
@@ -640,13 +645,16 @@ export function addAmbience(
   }
 
   function start() {
-    if (reduce() || timer || document.hidden || (!wavesVisible() && !cloudsVisible())) return;
+    if (reduce() || timer || document.hidden || (!wavesVisible() && !cloudsVisible() && !shimmer?.visible())) return;
     timer = setInterval(frame, 1000 / FPS);
   }
   function stop() {
     if (timer) clearInterval(timer);
     timer = null;
   }
+  // Lakes, the Delta and the major rivers (lib/water.ts): below the ocean layers, so below every land
+  // fill, line, name and mark. Not on phones.
+  const shimmer: Shimmer | null = small.matches ? null : addShimmer(m, { before: () => (m.getLayer("water-ocean") ? "water-ocean" : undefined), onChange: () => start() });
   const onVis = () => (document.hidden ? stop() : start());
   document.addEventListener("visibilitychange", onVis);
   // Zooming back out past the fade zooms restarts the ticker.
@@ -721,6 +729,7 @@ export function addAmbience(
   return {
     running: () => timer !== null,
     oceanFlow: () => flowKind,
+    shimmer: () => shimmer?.cells() ?? { shown: 0, hidden: 0, loaded: false },
     cloudsShown: cloudsVisible,
     cloudLevels() {
       const down = m.getZoom() - cloudBase(m);
@@ -739,6 +748,7 @@ export function addAmbience(
     destroy() {
       dead = true;
       stop();
+      shimmer?.destroy();
       if (refetch) clearInterval(refetch);
       if (oceanRefetch) clearInterval(oceanRefetch);
       document.removeEventListener("visibilitychange", onVis);

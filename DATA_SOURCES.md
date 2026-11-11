@@ -156,6 +156,21 @@ Grant boundaries for Los Angeles, Long Beach, San Francisco and Oakland are not 
   so it reads `data/ref/ocean-mask.png`: the basemap's own ocean polygons (OpenFreeMap / OpenMapTiles, © OpenStreetMap
   contributors) at zoom 7, drawn into a 2048 px picture by `scripts/make-water.mjs`.
 
+
+## Lakes and rivers that move a little (no live data)
+
+- A faint glint on Lake Tahoe, Clear Lake, Mono Lake, Shasta Lake, the Salton Sea and the channels of the
+  Sacramento–San Joaquin Delta, and light dashes sliding downstream on the Sacramento, San Joaquin, Klamath, Colorado,
+  American, Feather, Trinity, Eel, Russian and Pit rivers. **Illustrative, not data:** nothing here measures flow or
+  wind; the dashes follow the direction the river is drawn in (OpenStreetMap draws rivers downstream; checked per
+  river against its mouth when the file is built).
+- Shapes: `data/ref/water-shimmer.geojson`, cut by `scripts/make-water.mjs` from the basemap's own tiles (OpenFreeMap /
+  OpenMapTiles, © OpenStreetMap contributors, ODbL; zoom 11) so they sit on the water the basemap draws, limited to
+  California, in cells of about 2 km. The cells are what let the shimmer fade wherever a cluster, lease mark or icon
+  sits on the water.
+- Loaded the first time the reader zooms in past Home (zoom 6.4), gone by zoom 12, not loaded on phones, and one
+  still frame for readers who prefer reduced motion.
+
 ## County boundaries
 
 - `data/ref/ca-counties.geojson`: California county boundaries derived from US Census Bureau data (public domain), via

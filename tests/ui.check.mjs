@@ -344,6 +344,52 @@ await check("ocean: wave marks drift with the live currents and swell (one reque
   assert(await page.evaluate(() => window.__ambience.running()), "water not moving on the illustrative drift");
 });
 
+await check("lakes and rivers: nothing loaded at Home; shimmer under every land fill, line, name and mark; faded where clusters sit on the water; the ticker stops where no water moves", async (page) => {
+  await cloudCalls(page, CLOUD_GRID);
+  const files = [];
+  page.on("request", (r) => { if (/water-shimmer\.geojson/.test(r.url())) files.push(r.url()); });
+  await open(page);
+  assert(files.length === 0 && !(await page.evaluate(() => !!window.__map.getSource("water-shimmer"))), "shimmer loaded at Home");
+  // Lake Tahoe: clusters ring the shore; the open lake shimmers, the cells under the clusters do not.
+  await jump(page, [-120.05, 39.09], 10.2);
+  await page.waitForFunction(() => window.__ambience.shimmer().loaded && window.__ambience.shimmer().shown > 0, null, { timeout: 15000 });
+  await idle(page);
+  assert(files.length === 1, `expected one shimmer request, got ${files.length}`);
+  const ids = await order(page);
+  const at = (id) => { const i = ids.indexOf(id); assert(i >= 0, `layer ${id} missing`); return i; };
+  for (const id of ["lake-shimmer", "river-drift"]) {
+    assert(at(id) > at("water"), `${id} is under the lakes`);
+    for (const above of ["water-ocean", "access-fill", "clouds", "county-line", "label-water", "cluster", "cluster-count", "lease-pt", "lease-icon"]) assert(at(id) < at(above), `${id} is drawn over ${above}`);
+  }
+  const c = await page.evaluate(() => window.__ambience.shimmer());
+  assert(c.hidden > 0 && c.hidden < c.shown, `Tahoe cells: ${JSON.stringify(c)}`);
+  // Every cluster on screen: no shimmer cell under its disc is left showing.
+  const bare = await page.evaluate(() => {
+    const m = window.__map;
+    let n = 0;
+    for (const f of m.queryRenderedFeatures({ layers: ["cluster"] })) {
+      const p = m.project(f.geometry.coordinates);
+      for (const g of m.queryRenderedFeatures([[p.x - 4, p.y - 4], [p.x + 4, p.y + 4]], { layers: ["lake-shimmer", "river-drift"] })) if ((m.getFeatureState({ source: "water-shimmer", id: g.id }).hide ?? 0) < 1) n++;
+    }
+    return n;
+  });
+  assert(bare === 0, `${bare} shimmer cells still showing under a cluster`);
+  // One ticker: about 12 redraws a second, and it outlives the ocean's (zoom 11) while lake water is in view (to zoom 12).
+  await jump(page, [-120.05, 39.09], 11.5);
+  assert(await page.evaluate(() => window.__ambience.running()), "lake not moving at zoom 11.5");
+  await page.evaluate(() => { window.__renders = 0; window.__map.on("render", () => window.__renders++); });
+  await page.waitForTimeout(3000);
+  const n = await page.evaluate(() => window.__renders);
+  assert(n > 20 && n < 48, `${n} renders in 3 s over Lake Tahoe (expected about 36)`);
+  // No moving water in view: nothing animates. Past the shimmer's last zoom: nothing either.
+  await jump(page, [-119.78, 36.74], 11.5);
+  await page.waitForTimeout(600);
+  assert(!(await page.evaluate(() => window.__ambience.running())), "animation running over Fresno at zoom 11.5 (no lake or river in view)");
+  await jump(page, [-120.05, 39.09], 12.6);
+  await page.waitForTimeout(600);
+  assert(!(await page.evaluate(() => window.__ambience.running())), "animation running at zoom 12.6");
+});
+
 await check("sea floor: depth shading reads terrain tiles no deeper than zoom 8 (deeper tiles have seams and holes in the bathymetry)", async (page) => {
   await cloudCalls(page, CLOUD_GRID);
   await open(page);
@@ -429,6 +475,8 @@ await check("phone: one light, still cloud layer by default (one request); waves
   await page.waitForTimeout(3000);
   const n = await page.evaluate(() => window.__renders);
   assert(n <= 2, `${n} map renders in 3 s at rest on a phone`);
+  await jump(page, [-120.05, 39.09], 10);
+  assert(!(await page.evaluate(() => !!window.__map.getSource("water-shimmer"))), "lake shimmer loaded on a phone");
 }, { width: 390, height: 844 });
 
 await check("county lines: on by default, a Reference-tab toggle, kept in the link (?counties=0); names separate", async (page) => {
