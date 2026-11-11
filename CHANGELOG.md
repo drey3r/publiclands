@@ -3,6 +3,30 @@
 Changes to the California Public Lands Map, newest first. Data snapshots and
 counts are unchanged unless an entry says otherwise.
 
+## 2026-11-10 · Round 4: About, data dates, labels, finishing
+
+**Data:** same snapshots. No counts changed.
+
+- **About and methodology inside the app** (`/about`; no link out to tahoelead.com): what the map is,
+  where the data comes from, how leases are categorized (the state's lease type is Source data;
+  category and kind are Estimates from the text), the screen score, what "candidate for review" means
+  (this map assigns it, the state does not), the 7-stage review, and a dated "Changes to our numbers"
+  (Nov 10, 2026: infrastructure 842 → 758, and why).
+- **Data dates.** For each dataset (CSLC leases, CPAD 2026a, granted lands, school lands, water lines):
+  when it was pulled and the source's own last-updated date where it publishes one (CPAD's release name
+  is its version). On the map ("Data sources and dates" in the view panel) and on the About page, with
+  CSLC's caveats: approximate locations, incomplete layer, "Active" is not evidence of use.
+- **Three labels, everywhere a value is shown:** Source data (the official record), Estimate (this map's
+  classification or score, with its reason), Finding (an editorial determination, such as a case study or
+  a site's review stage). Added where values had none: map popups, list cards, the selected-lease preview,
+  featured story cards, public-land cards, quick filters, the lease key, lease page headers, case studies,
+  records and the review stage.
+- **Commission records** section on lease pages (Source data, newest first), empty for now. It reads
+  per-lease JSON (`data/records/<source>/<PRC>.json`, or folders in `RECORDS_DIRS`) from any number of
+  sources and drops duplicates by URL.
+- **"Send a correction" removed.** A small **Share** on lease pages and featured stories: copy link, and
+  the native share sheet on phones.
+
 ## 2026-11-10 · Classifier fixes: missed utilities, bridge mentions
 
 **Data:** same lease snapshot. Infrastructure 744 → **758**; the 7 candidates for review are unchanged.
