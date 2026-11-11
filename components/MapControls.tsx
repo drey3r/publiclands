@@ -7,6 +7,7 @@ import type { ColorBy } from "./MapView";
 import { KindIcon } from "./KindIcon";
 import { DataDates } from "./DataDates";
 import { DataLabel } from "./ui";
+import { EraFilter, MoreFilters, QuickFilters, StatusFilter, WhatFilter, type FilterProps } from "./FilterPanel";
 import type { Dataset, KindKey } from "@/lib/types";
 import type { ExploreKind } from "@/lib/filters";
 
@@ -68,8 +69,10 @@ type Props = {
   datasets: Dataset[];
   /** Explore by kind: counts per key row, the kind shown alone (if any), and the row click. */
   kinds: { counts: Record<ExploreKind, number>; active: ExploreKind | null; onPick: (k: ExploreKind) => void };
-  /** The filter form (FilterPanel plus its match count). */
-  filters: React.ReactNode;
+  /** The lease filters (shown in the Views, Types, Eras and Status tabs), the match line and Clear filters. */
+  filterProps: FilterProps;
+  matchText: string;
+  onClearFilters: () => void;
   /** "panel": floating over the map (desktop). "sheet": inside the phone bottom sheet. */
   variant?: "panel" | "sheet";
   /** County lines and names (stronger than the faint default lines). */
@@ -97,11 +100,31 @@ function TierSwatch({ tier }: { tier: 1 | 2 | 3 }) {
   );
 }
 
+export type PanelTab = "views" | "types" | "eras" | "status" | "reference" | "sources";
+const TABS: { key: PanelTab; label: string }[] = [
+  { key: "views", label: "Views" },
+  { key: "types", label: "Types" },
+  { key: "eras", label: "Eras" },
+  { key: "status", label: "Status" },
+  { key: "reference", label: "Reference" },
+  { key: "sources", label: "Sources" },
+];
+
+/** A switch, drawn the same everywhere (36×20, with a 40px-tall row as its hit area). */
+export function SwitchMark({ on }: { on: boolean }) {
+  return (
+    <span aria-hidden className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${on ? "bg-ink" : "bg-line"}`}>
+      <span className={`absolute top-[3px] h-[14px] w-[14px] rounded-full bg-paper shadow-sm transition-[left] ${on ? "left-[19px]" : "left-[3px]"}`} />
+    </span>
+  );
+}
+
 /**
- * The view controls: what the map shows and how. Floats on the right of the map (over
- * Nevada and Arizona, never over California at Home); collapses to a bar when the map is
- * small; lives in the bottom sheet on phones. Common controls are always visible; the
- * key, filters and reference layers fold away.
+ * The view controls, in tabs: Views (quick view, layers, 3D) · Types (what it is, kinds, color by) · Eras ·
+ * Status (term, non-operational, Worth watching) · Reference (reference layers, keys for State oil & gas and
+ * sovereign lands) · Sources (data sources and dates). The layers are one click away on every tab (chips above
+ * the other tabs). Floats on the right of the map (over Nevada and Arizona, never over California at Home);
+ * collapses to a bar when the map is small; lives in the bottom sheet on phones.
  */
 export function MapControls(p: Props) {
   const { variant = "panel" } = p;
@@ -109,11 +132,7 @@ export function MapControls(p: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(!sheet);
-  const [keyOpen, setKeyOpen] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [refOpen, setRefOpen] = useState(false);
-  const [datesOpen, setDatesOpen] = useState(false);
-  const [legendOpen, setLegendOpen] = useState<Record<string, boolean>>({});
+  const [tab, setTab] = useState<PanelTab>("views");
   const [more, setMore] = useState(false);
   const [above, setAbove] = useState(false);
   const userSet = useRef(false);
@@ -141,11 +160,12 @@ export function MapControls(p: Props) {
     const el = scroller.current;
     if (!el) return;
     checkMore();
+    el.scrollTop = 0;
     const ro = new ResizeObserver(checkMore);
     ro.observe(el);
     if (el.firstElementChild) ro.observe(el.firstElementChild);
     return () => ro.disconnect();
-  }, [checkMore, open]);
+  }, [checkMore, open, tab]);
 
   const setOpenByUser = (v: boolean) => {
     userSet.current = true;
@@ -158,25 +178,24 @@ export function MapControls(p: Props) {
   const terrainSwitch = (
     <button
       type="button"
+      role="switch"
       onClick={() => p.setTerrain(!p.terrain)}
-      aria-pressed={p.terrain}
-      className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[12px] font-semibold text-ink-soft hover:bg-sand hover:text-ink"
+      aria-checked={p.terrain}
+      className="flex min-h-9 items-center gap-2 rounded-lg px-2 text-[13px] font-semibold text-ink-soft hover:bg-sand hover:text-ink"
       title="Tilt the current view with 3D terrain (or right-drag / two-finger drag to tilt)"
     >
-      3D
-      <span className={`relative h-[16px] w-7 rounded-full transition-colors ${p.terrain ? "bg-ink" : "bg-line"}`} aria-hidden>
-        <span className={`absolute top-[2px] h-[12px] w-[12px] rounded-full bg-paper transition-[left] ${p.terrain ? "left-[13px]" : "left-[2px]"}`} />
-      </span>
+      3D terrain
+      <SwitchMark on={p.terrain} />
     </button>
   );
 
   const presetSelect = (
-    <label className="flex items-center gap-2 text-[12px]">
+    <label className="flex items-center gap-2 text-[13px]">
       <span className="shrink-0 font-semibold text-ink">Quick view</span>
       <select
         value={p.preset}
         onChange={(e) => e.target.value && p.onPreset(e.target.value)}
-        className="min-w-0 flex-1 rounded-md border border-line bg-paper px-1.5 py-1 text-[12px] text-ink hover:border-ink-soft"
+        className="min-h-9 min-w-0 flex-1 rounded-lg border border-line bg-paper px-2 text-[13px] text-ink hover:border-ink-soft"
       >
         {!p.preset && <option value="">Custom</option>}
         {p.presets.map((x) => (
@@ -186,9 +205,9 @@ export function MapControls(p: Props) {
     </label>
   );
 
-  // The layer stack: one compact row per layer (swatch, name, count, switch).
+  // The layer stack: one row per layer (swatch, name, count, switch). Rows are 40px tall.
   const stack = (
-    <ul className={sheet ? "grid grid-cols-2 gap-1.5" : "space-y-1"} role="group" aria-label="Layers on the map">
+    <ul className={sheet ? "grid grid-cols-2 gap-1.5" : "space-y-1.5"} role="group" aria-label="Layers on the map">
       {p.toggles.map((t) => (
         <li key={t.key}>
           <button
@@ -197,18 +216,35 @@ export function MapControls(p: Props) {
             aria-checked={t.on}
             onClick={t.onToggle}
             title={t.title}
-            className={`flex w-full items-center gap-2 rounded-lg border text-left transition-colors ${sheet ? "px-2 py-1" : "px-2 py-[5px]"} ${t.on ? "border-ink/70 bg-white text-ink" : "border-line bg-paper/60 text-ink-faint hover:border-ink-soft"}`}
+            className={`flex min-h-10 w-full items-center gap-2.5 rounded-xl border px-2.5 text-left transition-colors ${t.on ? "border-ink/70 bg-white text-ink" : "border-line bg-paper/60 text-ink-faint hover:border-ink-soft"}`}
           >
-            <span aria-hidden className={`flex h-4 w-4 shrink-0 items-center justify-center ${t.on ? "" : "opacity-40 grayscale"}`}>{t.swatch}</span>
-            <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold leading-tight">{t.label}</span>
-            {!sheet && <span className={`shrink-0 text-[11px] tabular-nums ${t.on ? "text-ink-soft" : "text-ink-faint"}`}>{t.on ? t.status.replace(/ in view$/, "") : "Off"}</span>}
-            <span aria-hidden className={`relative h-[14px] w-6 shrink-0 rounded-full transition-colors ${t.on ? "bg-ink" : "bg-line"}`}>
-              <span className={`absolute top-[2px] h-[10px] w-[10px] rounded-full bg-paper transition-[left] ${t.on ? "left-[12px]" : "left-[2px]"}`} />
-            </span>
+            <span aria-hidden className={`flex h-5 w-5 shrink-0 items-center justify-center ${t.on ? "" : "opacity-40 grayscale"}`}>{t.swatch}</span>
+            <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold leading-tight">{t.label}</span>
+            {!sheet && <span className={`shrink-0 text-[11.5px] tabular-nums ${t.on ? "text-ink-soft" : "text-ink-faint"}`}>{t.on ? t.status.replace(/ in view$/, "") : "Off"}</span>}
+            <SwitchMark on={t.on} />
           </button>
         </li>
       ))}
     </ul>
+  );
+  // The same layers as chips: one click away on every other tab.
+  const chips = (
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Layers on the map">
+      {p.toggles.map((t) => (
+        <button
+          key={t.key}
+          type="button"
+          role="switch"
+          aria-checked={t.on}
+          onClick={t.onToggle}
+          title={t.title}
+          className={`flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 text-[12px] font-semibold ${t.on ? "border-ink bg-ink text-paper" : "border-line bg-paper text-ink-soft hover:border-ink-soft"}`}
+        >
+          <span aria-hidden className={`flex h-3.5 w-3.5 items-center justify-center ${t.on ? "" : "opacity-50 grayscale"}`}>{t.swatch}</span>
+          {t.label}
+        </button>
+      ))}
+    </div>
   );
 
   // Worth watching: a map-wide filter, labeled Estimate everywhere it shows.
@@ -219,39 +255,56 @@ export function MapControls(p: Props) {
       aria-checked={p.watch.on}
       onClick={() => p.watch.set(!p.watch.on)}
       title="Estimate: this map flags it; the state does not. Each item says why."
-      className={`flex w-full items-center gap-2 rounded-lg border border-dashed px-2 py-[5px] text-left ${p.watch.on ? "border-ink/70 bg-white text-ink" : "border-line bg-paper/60 text-ink-faint hover:border-ink-soft"}`}
+      className={`flex min-h-10 w-full items-center gap-2.5 rounded-xl border border-dashed px-2.5 text-left ${p.watch.on ? "border-ink/70 bg-white text-ink" : "border-line bg-paper/60 text-ink-soft hover:border-ink-soft"}`}
     >
-      <span aria-hidden className="flex h-4 w-4 shrink-0 items-center justify-center text-[13px]">◎</span>
-      <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold leading-tight">Worth watching</span>
+      <span aria-hidden className="flex h-5 w-5 shrink-0 items-center justify-center text-[14px]">◎</span>
+      <span className="min-w-0 flex-1 text-[13.5px] font-semibold leading-tight">Worth watching</span>
       <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-ink-faint">Estimate</span>
-      <span aria-hidden className={`relative h-[14px] w-6 shrink-0 rounded-full transition-colors ${p.watch.on ? "bg-ink" : "bg-line"}`}>
-        <span className={`absolute top-[2px] h-[10px] w-[10px] rounded-full bg-paper transition-[left] ${p.watch.on ? "left-[12px]" : "left-[2px]"}`} />
-      </span>
+      <SwitchMark on={p.watch.on} />
     </button>
   );
 
-  const fold = (label: React.ReactNode, isOpen: boolean, toggle: () => void, id: string, children: React.ReactNode) => (
-    <section className="border-t border-line">
-      <button type="button" onClick={toggle} aria-expanded={isOpen} aria-controls={id} className="flex w-full items-center justify-between py-1.5 text-left text-[12.5px] font-semibold text-ink hover:text-ink-soft">
-        <span>{label}</span>
-        <span aria-hidden className="text-ink-faint">{isOpen ? "▾" : "▸"}</span>
-      </button>
-      {isOpen && <div id={id} className="pb-2.5">{children}</div>}
-    </section>
+  const H = ({ children }: { children: React.ReactNode }) => <h3 className="text-[12.5px] font-semibold text-ink">{children}</h3>;
+  const seg = (on: boolean) => `min-h-8 flex-1 rounded-md px-1 text-[12px] font-medium ${on ? "bg-ink text-paper" : "text-ink-soft hover:text-ink"}`;
+  const colorBy = (
+    <div>
+      <p className="mb-1 text-[12px] font-semibold text-ink-soft">Color lease sites by</p>
+      <div className="flex gap-0.5 rounded-lg bg-sand p-0.5" role="group" aria-label="Color lease points by">
+        {(
+          [
+            ["lease", "Gold"],
+            ["cat", "Category"],
+            ["type", "Type"],
+            ["era", "Era"],
+            ["score", "Score"],
+          ] as const
+        ).map(([k, label]) => (
+          <button key={k} type="button" className={seg(p.colorBy === k)} aria-pressed={p.colorBy === k} onClick={() => p.setColorBy(k)}>{label}</button>
+        ))}
+      </div>
+      {p.colorBy !== "lease" && p.colorBy !== "era" && (
+        <ul className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-[12px]">
+          {p.colorBy === "cat"
+            ? CATS.map((c) => <Row key={c.key} color={c.color} label={c.short} />)
+            : p.colorBy === "type"
+              ? TYPES.map((t) => <Row key={t.key} color={t.color} label={t.label} />)
+              : [...SCORE_BANDS.map((b) => <Row key={b.min} color={b.color} label={`Score ${b.label}`} />), <Row key="u" color={SCORE_UNKNOWN} label="No score" />]}
+        </ul>
+      )}
+    </div>
   );
 
-  const seg = (on: boolean) => `flex-1 rounded-md px-1 py-1 text-[11.5px] font-medium ${on ? "bg-ink text-paper" : "text-ink-soft hover:text-ink"}`;
-  const leaseKey = (
-    <div className="space-y-2">
-      <p className="text-[11.5px] font-semibold text-ink-soft">What it is <DataLabel kind="estimate" title="Estimate: category and kind are this map's reading of the state's lease type and text" /></p>
-      <p className="text-[11px] text-ink-faint">Click a row to show only that kind{p.kinds.active ? "; click it again to show all" : ""}.</p>
-      <ul className="-mx-1 text-[12px] text-ink" aria-label="Explore by kind">
+  const kindsKey = (
+    <div className="space-y-1.5">
+      <H>What it is <DataLabel kind="estimate" title="Estimate: category and kind are this map's reading of the state's lease type and text" /></H>
+      <p className="text-[11.5px] text-ink-faint">Click a row to show only that kind{p.kinds.active ? "; click it again to show all" : ""}.</p>
+      <ul className="-mx-1 text-[12.5px] text-ink" aria-label="Explore by kind">
         {[
           ...KIND_ROWS.map((r) => ({ key: r.key as ExploreKind, label: r.label, mark: <KindIcon k={r.key} size={20} /> })),
           ...QUIET_ROWS.flatMap((r) => [
             { key: r.key, label: r.label, mark: <TierSwatch tier={r.tier} /> },
             // Oil and gas: the state's lease types Oil & Gas Lease and Compensatory Agreement, a kind under Commercial and industrial.
-            ...(r.key === "commercial" ? [{ key: "oilgas" as ExploreKind, label: "\u2003Oil and gas", mark: <KindIcon k="oilgas" size={20} /> }] : []),
+            ...(r.key === "commercial" ? [{ key: "oilgas" as ExploreKind, label: " Oil and gas", mark: <KindIcon k="oilgas" size={20} /> }] : []),
           ]),
         ].map((r) => {
           const on = p.kinds.active === r.key;
@@ -262,8 +315,8 @@ export function MapControls(p: Props) {
                 type="button"
                 aria-pressed={on}
                 onClick={() => p.kinds.onPick(r.key)}
-                title={on ? "Show all kinds again" : `Show only ${r.label.toLowerCase()}`}
-                className={`flex w-full items-center gap-2 rounded-md px-1 py-[3px] text-left ${on ? "bg-ink/10 font-semibold" : "hover:bg-sand"} ${dim ? "opacity-55" : ""}`}
+                title={on ? "Show all kinds again" : `Show only ${r.label.trim().toLowerCase()}`}
+                className={`flex min-h-8 w-full items-center gap-2 rounded-md px-1 text-left ${on ? "bg-ink/10 font-semibold" : "hover:bg-sand"} ${dim ? "opacity-55" : ""}`}
               >
                 {r.mark}
                 <span className="min-w-0 flex-1 truncate">{r.label}</span>
@@ -272,62 +325,45 @@ export function MapControls(p: Props) {
             </li>
           );
         })}
-        <li className="flex items-center gap-2 px-1 py-[3px]"><span aria-hidden className="inline-flex w-5 justify-center"><LeaseSwatch size={15} /></span> Group of lease sites (count)</li>
+        <li className="flex min-h-8 items-center gap-2 px-1"><span aria-hidden className="inline-flex w-5 justify-center"><LeaseSwatch size={15} /></span> Group of lease sites (count)</li>
       </ul>
       <p className="text-[11px] text-ink-faint">Icons from zoom 11; dots and counts below that. A lease with two kinds (say, a pipeline and a cable) counts under both. Oil and gas is the state&apos;s own lease type (source data), counted within Commercial and industrial.</p>
-      <div>
-        <p className="mb-1 text-[11.5px] font-semibold text-ink-soft">Color by</p>
-        <div className="flex gap-0.5 rounded-lg bg-sand p-0.5" role="group" aria-label="Color lease points by">
-          {(
-            [
-              ["lease", "Gold"],
-              ["cat", "Category"],
-              ["type", "Type"],
-              ["era", "Era"],
-              ["score", "Score"],
-            ] as const
-          ).map(([k, label]) => (
-            <button key={k} type="button" className={seg(p.colorBy === k)} aria-pressed={p.colorBy === k} onClick={() => p.setColorBy(k)}>{label}</button>
-          ))}
-        </div>
-      </div>
-      {p.colorBy !== "lease" && (
-        <ul className="grid grid-cols-2 gap-x-2 gap-y-1 text-[12px]">
-          {p.colorBy === "cat"
-            ? CATS.map((c) => <Row key={c.key} color={c.color} label={c.short} />)
-            : p.colorBy === "type"
-              ? TYPES.map((t) => <Row key={t.key} color={t.color} label={t.label} />)
-              : p.colorBy === "score"
-                ? [...SCORE_BANDS.map((b) => <Row key={b.min} color={b.color} label={`Score ${b.label}`} />), <Row key="u" color={SCORE_UNKNOWN} label="No score" />]
-                : [...ERAS.map((e) => <Row key={e.key} color={e.color} label={e.label} />), <Row key="u" color={ERA_UNKNOWN} label="Unknown" />]}
-        </ul>
-      )}
-      <ul className="grid grid-cols-1 gap-y-1 text-[12px] text-ink-soft">
+      <ul className="grid grid-cols-1 gap-y-1 pt-1 text-[12px] text-ink-soft">
         <li className="flex items-center gap-2"><span aria-hidden className="h-3.5 w-3.5 shrink-0 rounded-full border-[1.5px] border-clay" /> Candidate for review<DataLabel kind="estimate" title="Estimate: this map assigns it; the State Lands Commission does not" /></li>
         <li className="flex items-center gap-2"><span aria-hidden className="h-3.5 w-3.5 shrink-0 rounded-full border-[1.5px] border-sage-deep" /> Completed<DataLabel kind="finding" /></li>
       </ul>
-      <p className="text-[11px] text-ink-faint">Category, kind, era and score are estimates; the state&apos;s lease type is source data; case studies and review stages are findings.</p>
+    </div>
+  );
+
+  const eraKey = (
+    <div className="space-y-2">
+      <ul className="grid grid-cols-2 gap-x-2 gap-y-1 text-[12px]">
+        {[...ERAS.map((e) => <Row key={e.key} color={e.color} label={e.label} />), <Row key="u" color={ERA_UNKNOWN} label="Unknown" />]}
+      </ul>
+      <button type="button" aria-pressed={p.colorBy === "era"} onClick={() => p.setColorBy(p.colorBy === "era" ? "lease" : "era")} className={`min-h-8 rounded-full border px-3 text-[12.5px] font-medium ${p.colorBy === "era" ? "border-ink bg-ink text-paper" : "border-line bg-paper text-ink-soft hover:border-ink-soft"}`}>
+        {p.colorBy === "era" ? "Coloring lease sites by era" : "Color lease sites by era"}
+      </button>
     </div>
   );
 
   const referenceList = (
-    <div className="space-y-1 text-[12px]">
+    <div className="space-y-0.5 text-[12.5px]">
       {reference.map((k) => (
-        <label key={k} className="flex cursor-pointer items-center gap-2">
-          <input type="checkbox" checked={p.layers[k]} onChange={(e) => p.setLayers({ ...p.layers, [k]: e.target.checked })} className="accent-[#2f6b3a]" />
+        <label key={k} className="flex min-h-9 cursor-pointer items-center gap-2.5 rounded-md px-1 hover:bg-sand">
+          <input type="checkbox" checked={p.layers[k]} onChange={(e) => p.setLayers({ ...p.layers, [k]: e.target.checked })} className="h-4 w-4 accent-[#2f6b3a]" />
           <span aria-hidden className="h-2.5 w-3.5 rounded-sm" style={{ background: LAYER_INFO[k].color, opacity: 0.7 }} />
           <span className="text-ink">{LAYER_INFO[k].label}</span>
           {p.manifest?.[k]?.fixture && <span className="ml-auto rounded border border-dashed border-clay/60 px-1 text-[10px] text-clay" title={p.manifest[k]?.source ?? "Fixture"}>fixture</span>}
         </label>
       ))}
-      <label className="flex cursor-pointer items-center gap-2">
-        <input type="checkbox" checked={p.counties} onChange={(e) => p.setCounties(e.target.checked)} className="accent-[#2f6b3a]" />
+      <label className="flex min-h-9 cursor-pointer items-center gap-2.5 rounded-md px-1 hover:bg-sand">
+        <input type="checkbox" checked={p.counties} onChange={(e) => p.setCounties(e.target.checked)} className="h-4 w-4 accent-[#2f6b3a]" />
         <span aria-hidden className="h-0 w-3.5 border-t-[1.5px] border-dashed border-[#6f6656]" />
-        <span className="text-ink">County lines</span>
+        <span className="text-ink">County lines and names</span>
       </label>
       {p.overlays.map((o) => (
-        <label key={o.id} className="flex cursor-pointer items-center gap-2" title={o.description ?? undefined}>
-          <input type="checkbox" checked={p.overlayVis[o.id] ?? o.visible} onChange={(e) => p.setOverlayVis({ ...p.overlayVis, [o.id]: e.target.checked })} className="accent-[#2f6b3a]" />
+        <label key={o.id} className="flex min-h-9 cursor-pointer items-center gap-2.5 rounded-md px-1 hover:bg-sand" title={o.description ?? undefined}>
+          <input type="checkbox" checked={p.overlayVis[o.id] ?? o.visible} onChange={(e) => p.setOverlayVis({ ...p.overlayVis, [o.id]: e.target.checked })} className="h-4 w-4 accent-[#2f6b3a]" />
           <span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ background: o.color }} />
           <span className="text-ink">{o.title}</span>
           <span className="ml-auto text-ink-faint">{o.count}</span>
@@ -336,45 +372,91 @@ export function MapControls(p: Props) {
     </div>
   );
 
-  const folds = (
-    <div>
-      {p.toggles
-        .filter((t) => t.on && t.legend)
-        .map((t) => (
-          <div key={t.key}>{fold(`${t.label} key`, !!legendOpen[t.key], () => setLegendOpen((v) => ({ ...v, [t.key]: !v[t.key] })), `key-${t.key}`, t.legend)}</div>
+  const matchLine = (
+    <div className="flex items-center justify-between gap-2 text-[12px] text-ink-faint" aria-live="polite">
+      <span>{p.matchText}</span>
+      {p.filterCount > 0 && <button type="button" onClick={p.onClearFilters} className="font-medium text-ink-soft underline underline-offset-2 hover:text-ink">Clear filters</button>}
+    </div>
+  );
+  const fp = p.filterProps;
+  const body: Record<PanelTab, React.ReactNode> = {
+    views: (
+      <div className="space-y-3">
+        {presetSelect}
+        {!sheet && stack}
+        {p.stackNote}
+        <div className="flex justify-end">{terrainSwitch}</div>
+        <QuickFilters f={fp.f} set={fp.set} />
+        {matchLine}
+      </div>
+    ),
+    types: (
+      <div className="space-y-4">
+        {kindsKey}
+        <WhatFilter f={fp.f} set={fp.set} methods={fp.methods} />
+        {colorBy}
+        {matchLine}
+      </div>
+    ),
+    eras: (
+      <div className="space-y-4">
+        <EraFilter f={fp.f} set={fp.set} methods={fp.methods} />
+        {eraKey}
+        {matchLine}
+      </div>
+    ),
+    status: (
+      <div className="space-y-4">
+        <StatusFilter f={fp.f} set={fp.set} methods={fp.methods} />
+        <div className="space-y-1">
+          {watchRow}
+          <p className="text-[11px] text-ink-faint">Map-wide: shows only what this map flags, each with its reason{p.watch.total ? ` (${p.watch.total.toLocaleString()} now)` : ""}.</p>
+        </div>
+        <MoreFilters {...fp} />
+        {matchLine}
+      </div>
+    ),
+    reference: (
+      <div className="space-y-4">
+        <div>
+          <H>Reference layers{refOn > 0 && <span className="ml-1.5 text-[11px] font-medium text-ink-faint">{refOn} on</span>}</H>
+          <div className="mt-1">{referenceList}</div>
+        </div>
+        {p.toggles.filter((t) => t.legend).map((t) => (
+          <div key={t.key}>
+            <H>{t.label}{!t.on && <span className="ml-1.5 text-[11px] font-medium text-ink-faint">off</span>}</H>
+            {t.on ? <div className="mt-1.5">{t.legend}</div> : (
+              <button type="button" onClick={t.onToggle} className="mt-1.5 min-h-8 rounded-full border border-line bg-paper px-3 text-[12.5px] font-medium text-ink-soft hover:border-ink-soft">Turn on {t.label}</button>
+            )}
+          </div>
         ))}
-      {p.leasesOn && fold("Lease colors and key", keyOpen, () => setKeyOpen((v) => !v), "lease-key", leaseKey)}
-      {fold(
-        <>
-          Filter lease sites
-          {p.filterCount > 0 && <span className="ml-1.5 rounded-full bg-ink px-1.5 py-0.5 text-[11px] text-paper">{p.filterCount}</span>}
-        </>,
-        filtersOpen,
-        () => setFiltersOpen((v) => !v),
-        "filters",
-        p.filters,
-      )}
-      {fold(
-        <>
-          Reference layers
-          {refOn > 0 && <span className="ml-1.5 text-[11px] font-medium text-ink-faint">{refOn} on</span>}
-        </>,
-        refOpen,
-        () => setRefOpen((v) => !v),
-        "reference",
-        referenceList,
-      )}
-      {p.datasets.length > 0 &&
-        fold(
-          "Data sources and dates",
-          datesOpen,
-          () => setDatesOpen((v) => !v),
-          "data-dates",
-          <>
-            <DataDates datasets={p.datasets} compact />
-            <a href="/about#data" className="mt-2 inline-block text-[11.5px] font-medium text-ink-soft underline underline-offset-2 hover:text-ink">All sources and caveats</a>
-          </>,
-        )}
+      </div>
+    ),
+    sources: p.datasets.length ? (
+      <div>
+        <DataDates datasets={p.datasets} compact />
+        <a href="/about#data" className="mt-2 inline-block text-[12px] font-medium text-ink-soft underline underline-offset-2 hover:text-ink">All sources and caveats</a>
+      </div>
+    ) : <p className="text-[12px] text-ink-faint">Loading…</p>,
+  };
+
+  const tabBar = (
+    <div role="tablist" aria-label="View panel" className="grid grid-cols-3 gap-1 rounded-xl bg-sand p-1">
+      {TABS.map((x) => (
+        <button
+          key={x.key}
+          id={`vp-tab-${x.key}`}
+          type="button"
+          role="tab"
+          aria-selected={tab === x.key}
+          aria-controls="view-panel-body"
+          onClick={() => setTab(x.key)}
+          className={`min-h-8 rounded-lg px-1 text-[12.5px] font-semibold ${tab === x.key ? "bg-white text-ink shadow-sm" : "text-ink-soft hover:text-ink"}`}
+        >
+          {x.label}
+          {x.key === "status" && p.filterCount > 0 ? <span className="ml-1 rounded-full bg-ink px-1.5 text-[10.5px] text-paper">{p.filterCount}</span> : null}
+        </button>
+      ))}
     </div>
   );
 
@@ -382,16 +464,13 @@ export function MapControls(p: Props) {
     return (
       <div className="border-b border-line px-4 pb-3 pt-1">
         {stack}
-        <div className="mt-1.5">{watchRow}</div>
-        <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="mt-2 w-full rounded-full border border-line bg-paper py-1.5 text-[12.5px] font-medium text-ink-soft">
+        <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="mt-2 min-h-9 w-full rounded-full border border-line bg-paper text-[13px] font-medium text-ink-soft">
           {open ? "Hide views, key and filters" : `Views, key, 3D and filters${p.filterCount ? ` · ${p.filterCount} on` : ""}`}
         </button>
         {open && (
-          <div className="space-y-2 pt-3">
-            {presetSelect}
-            {p.stackNote}
-            <div className="flex justify-end">{terrainSwitch}</div>
-            {folds}
+          <div className="space-y-3 pt-3">
+            {tabBar}
+            <div id="view-panel-body" role="tabpanel" aria-labelledby={`vp-tab-${tab}`}>{body[tab]}</div>
           </div>
         )}
       </div>
@@ -403,32 +482,27 @@ export function MapControls(p: Props) {
       ref={ref}
       id="view-panel"
       data-compact={!open ? "1" : undefined}
-      className="pointer-events-auto absolute right-3 top-3 z-10 flex max-h-[calc(100%-24px)] w-[284px] max-w-[calc(100%-24px)] flex-col rounded-2xl border border-line bg-paper/95 shadow-[0_6px_24px_rgba(43,42,38,0.12)] backdrop-blur"
+      className="pointer-events-auto absolute right-3 top-3 z-10 flex max-h-[calc(100%-24px)] w-[312px] max-w-[calc(100%-24px)] flex-col rounded-2xl border border-line bg-paper/95 shadow-[0_6px_24px_rgba(43,42,38,0.12)] backdrop-blur"
       style={p.maxHeight ? { maxHeight: `min(${p.maxHeight}px, calc(100% - 24px))` } : undefined}
       aria-label="Map view controls"
       role="region"
     >
-      <div className="flex shrink-0 items-center justify-between gap-1 px-3 pb-1 pt-1.5">
-        <h2 className="text-[13px] font-semibold text-ink">Show on map</h2>
-        <div className="flex items-center gap-0.5">
-          {terrainSwitch}
-          <button type="button" onClick={() => setOpenByUser(!open)} aria-expanded={open} aria-controls="view-panel-body" className="rounded-md px-1.5 py-0.5 text-[12px] font-medium text-ink-soft hover:bg-sand hover:text-ink">
-            {open ? "Collapse ▴" : `Layers${p.filterCount ? ` · ${p.filterCount} filters` : ""} ▾`}
-          </button>
-        </div>
+      <div className="flex shrink-0 items-center justify-between gap-1 px-3 pb-1 pt-2">
+        <h2 className="text-[14px] font-semibold text-ink">Show on map</h2>
+        <button type="button" onClick={() => setOpenByUser(!open)} aria-expanded={open} aria-controls="view-panel-body" className="min-h-8 rounded-lg px-2 text-[12.5px] font-medium text-ink-soft hover:bg-sand hover:text-ink">
+          {open ? "Collapse ▴" : `Layers${p.filterCount ? ` · ${p.filterCount} filters` : ""} ▾`}
+        </button>
       </div>
       {open ? (
         <div className="relative flex min-h-0 flex-1 flex-col">
-          <div ref={scroller} id="view-panel-body" onScroll={checkMore} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-1.5">
-            <div className="space-y-2">
-              {presetSelect}
-              {stack}
-              {watchRow}
-              {p.stackNote}
-              {folds}
-            </div>
+          <div className="shrink-0 space-y-2 px-3 pb-2">
+            {tabBar}
+            {tab !== "views" && chips}
           </div>
-          {above && <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-5 bg-gradient-to-b from-paper to-transparent" />}
+          <div ref={scroller} id="view-panel-body" role="tabpanel" aria-labelledby={`vp-tab-${tab}`} onScroll={checkMore} className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-line px-3 pb-2 pt-3">
+            {body[tab]}
+          </div>
+          {above && <div aria-hidden className="pointer-events-none absolute inset-x-0 h-4 bg-gradient-to-b from-paper to-transparent" style={{ top: scroller.current?.offsetTop ?? 0 }} />}
           {more && (
             <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-10 items-end justify-center rounded-b-2xl bg-gradient-to-t from-paper via-paper/85 to-transparent pb-1">
               <button
@@ -443,14 +517,7 @@ export function MapControls(p: Props) {
         </div>
       ) : (
         // Compact bar: the layers as chips.
-        <div className="flex flex-wrap gap-1.5 px-3 pb-2.5" role="group" aria-label="Layers on the map">
-          {p.toggles.map((t) => (
-            <button key={t.key} type="button" aria-pressed={t.on} onClick={t.onToggle} className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[12px] font-semibold ${t.on ? "border-ink bg-ink text-paper" : "border-line bg-paper text-ink-soft"}`}>
-              <span aria-hidden className="flex h-3 w-3 items-center justify-center">{t.swatch}</span>
-              {t.label}
-            </button>
-          ))}
-        </div>
+        <div className="px-3 pb-2.5">{chips}</div>
       )}
     </div>
   );
