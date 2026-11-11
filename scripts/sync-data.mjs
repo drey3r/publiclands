@@ -9,6 +9,8 @@
 //   data/ref/ca-frame.json                California's land border + state-and-coastal-waters area (mask, labels)
 //   data/ref/ca-county-*.geojson          county lines and county name points
 //   data/ref/ca-labels.geojson            curated California place names (ranges, rivers, lakes, bays, passes)
+//   data/state-oil-gas/*                  State oil & gas family (scripts/data/README.md): footprints, terminals,
+//                                         wells on state leases, former leases, SLA line, sovereign waterbodies
 // Optional (off by default):
 //   CAMERAS_EXTRA=path                    more Fly-in camera overrides, same format as data/cameras.json
 //   OVERLAYS_DIR=path                     your own GeoJSON overlay layers (see README "Build your own layer")
@@ -110,6 +112,11 @@ const datasets = [
   }),
 ];
 
+// State oil & gas (data/state-oil-gas/index.json, written by scripts/data/build_state_oil_gas.py)
+const ogDir = path.join(root, "data/state-oil-gas");
+const ogIndex = exists(path.join(ogDir, "index.json")) ? readJson(path.join(ogDir, "index.json")) : null;
+for (const d of ogIndex?.datasets ?? []) datasets.push({ ...d, family: "state-oil-gas" });
+
 const meta = {
   fixture: isFixture,
   datasets,
@@ -155,6 +162,14 @@ for (const name of LAYERS) {
   };
 }
 fs.writeFileSync(path.join(outLayers, "manifest.json"), JSON.stringify(manifest, null, 1));
+
+// ---------- State oil & gas ----------
+const outOg = path.join(root, "public/data/state-oil-gas");
+fs.rmSync(outOg, { recursive: true, force: true });
+if (ogIndex) {
+  mkdirp(outOg);
+  for (const f of fs.readdirSync(ogDir)) if (/\.(geo)?json$/.test(f)) fs.copyFileSync(path.join(ogDir, f), path.join(outOg, f));
+}
 
 // ---------- overlays: your own GeoJSON layers (optional) ----------
 // Every <id>.geojson in OVERLAYS_DIR (default data/overlays/) becomes a toggle in
@@ -220,4 +235,5 @@ fs.copyFileSync(path.join(root, "node_modules/maplibre-gl/dist/maplibre-gl-worke
 
 console.log(`sync: ${isFixture ? "FIXTURE" : "snapshot"} ${rel(snapshot)}: ${min.length} leases, ${L.candidates.length} candidates for review (${L.candidates.map((c) => c.prc).join(", ")})`);
 for (const k of LAYERS) console.log(`  layer ${k}: ${manifest[k] ? `${manifest[k].kind}${manifest[k].fixture ? " (fixture)" : ""}` : "none (hidden)"}`);
+console.log(`  state oil & gas: ${ogIndex ? ogIndex.datasets.map((d) => `${d.key} (${d.count})`).join(", ") : "none"}`);
 console.log(`  overlays: ${overlays.length ? overlays.map((o) => `${o.id} (${o.count})`).join(", ") : `none in ${rel(overlayDir)}`}`);
