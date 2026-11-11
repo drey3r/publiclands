@@ -225,6 +225,27 @@ await check("phone: bottom sheet with tabs; expands; tabs switch", async (page) 
   assert((await selectedTab(page, "Lists")).startsWith("Public lands"), "phone tab did not switch");
 }, { width: 390, height: 844 });
 
+await check("lease titles: 'Lessee · Place' on the card and popup where the lessee is known; the lease page names it as Source data with its Commission item", async (page) => {
+  await open(page, "/?prc=1579");
+  await page.waitForTimeout(1500);
+  const card = await page.locator("#card-1579 h3").innerText();
+  assert(/^Pacific Bell Telephone Company · /.test(card.trim()), `card title is "${card.trim()}"`);
+  assert(!/a California Corporation/i.test(card), "card title keeps the entity description");
+  const pop = (await page.locator(".sel-pop .pop-title").textContent()).trim();
+  assert(pop === card.trim(), `popup "${pop}" and card "${card.trim()}" disagree`);
+  // A lease with no organization on file keeps the place alone.
+  const data = await page.evaluate(() => fetch("/data/leases.min.json").then((r) => r.json()));
+  const withLessee = data.leases.filter((l) => l.n.includes(" · ")).length;
+  assert(withLessee >= 1100 && withLessee < data.leases.length, `${withLessee} titles carry a lessee`);
+  await page.goto(BASE + "/lease/1579", { waitUntil: "load", timeout: 90000 });
+  const le = page.locator("#lessee");
+  const txt = await le.innerText();
+  assert(/Pacific Bell Telephone Company, a California Corporation, dba AT&T California/.test(txt), "full lessee name missing on the lease page");
+  assert(/source data/i.test(txt), "lessee is not labeled Source data");
+  assert(/item 29/.test(txt) && /2023/.test(txt), "lessee does not cite its Commission item");
+  assert(/^https:\/\/.+\.pdf$/.test(await le.locator("a[target=_blank]").getAttribute("href")), "lessee citation has no link to the item");
+});
+
 // ---------------------------------------------------------------- ambience: clouds and moving water
 // /api/clouds is answered here (a fixed grid, or a failure), so the checks never call Open-Meteo.
 const CLOUD_GRID = { time: "2026-11-11T18:00Z", lat0: 32, lon0: -126, step: 1, nx: 13, ny: 11, low: Array(143).fill(60), mid: Array(143).fill(30), high: Array(143).fill(40), wind: [2, 1], source: "test" };

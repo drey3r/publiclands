@@ -91,6 +91,20 @@ export default async function LeasePage({ params }: Params) {
             </div>
             <h1 className="display mt-1 text-[34px] text-ink sm:text-[42px]">{cs?.title ?? l.name}</h1>
             <p className="mt-2 text-[15px] leading-relaxed text-ink-soft">{l.facts.location}<DataLabel kind="source" /></p>
+            {l.lessee && (
+              <p id="lessee" className="mt-2 text-[14px] leading-relaxed text-ink">
+                <span className="text-ink-faint">Lessee: </span>
+                <span className="font-semibold">{l.lessee.value}</span>
+                <DataLabel kind="source" title="Source data: the lessee as named by the State Lands Commission in the item cited" />
+                <span className="block text-[12px] text-ink-faint">
+                  From the{" "}
+                  <a href={l.lessee.source.url} target="_blank" rel="noopener noreferrer" className="underline decoration-line underline-offset-2 hover:text-ink">
+                    Commission meeting of {fmtDate(l.lessee.source.date)}{l.lessee.source.item ? `, item ${l.lessee.source.item}` : ""}
+                  </a>{" "}
+                  ({l.lessee.source.label}): the newest item on file that names this lease. A later assignment may not appear yet.
+                </span>
+              </p>
+            )}
             <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-soft">
               <span className="inline-flex items-center gap-1.5" title={`Why: ${l.category.reason}`}><WhatDot t={l.derived.typeKey} k={l.derived.categoryKey} />{whatLabel(l.derived.typeKey, l.derived.categoryKey)}<DataLabel kind="estimate" /></span>
               {l.facts.typeOfLease && <span className="inline-flex items-center">State lease type: {l.facts.typeOfLease}<DataLabel kind="source" /></span>}

@@ -71,7 +71,12 @@ export type FullLease = {
   prc: string;
   prcKind: "numeric" | "placeholder" | "nonstandard";
   prcFlag: string | null;
+  /** Display title: "Lessee · Place" where the lessee is known, else the place. */
   name: string;
+  /** The place alone, from the location text (lib/lease-title.mjs). */
+  place: string;
+  /** Current or last lessee (organizations only), verbatim, with the Commission item it came from (source data). */
+  lessee: { value: string; source: { label: string; date: string; item: string | null; url: string } } | null;
   lat: number;
   lng: number;
   points?: [number, number][];

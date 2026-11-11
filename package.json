@@ -14,6 +14,7 @@
     "fetch:leases": "node scripts/fetch-cslc.ts",
     "fetch:layers": "node scripts/fetch-layers.ts",
     "fetch": "node scripts/fetch-cslc.ts && node scripts/fetch-layers.ts",
+    "sync:lessees": "node scripts/sync/lessees.mjs",
     "check:ui": "node tests/ui.check.mjs"
   },
   "dependencies": {

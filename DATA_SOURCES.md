@@ -87,6 +87,19 @@ Grant boundaries for Los Angeles, Long Beach, San Francisco and Oakland are not 
 - [Photon](https://photon.komoot.io/) geocoder by komoot, built on OpenStreetMap data (ODbL). Search is limited to
   California's bounding box. The public endpoint is free for fair use. Self-host Photon if you expect heavy traffic.
 
+## Lessee names
+
+- `data/lessees.json` (`npm run sync:lessees`, from this project's research export `leases.public.json`, schema 3):
+  for 1,137 of the 4,206 leases, the current or last lessee as named by the State Lands Commission, with the dated
+  Commission item it came from (date, item number, link to the item's PDF). It is the Name field of the newest dated
+  item in the Commission's [meeting-item index](https://www.slc.ca.gov/meetings/) whose lease number matches.
+  **Source data**, shown on each lease page with that citation.
+- **Organizations only.** Names of private individuals and trusts (1,393 leases) are not in the file at all, name or
+  source item; 1,676 leases have no item naming a lessee.
+- Lease titles read "Lessee · Place". The title shortens the name (drops ", a California corporation" and the like,
+  and all but the first of several lessees); the lease page gives it exactly as indexed.
+- Caveat: the newest indexed item can lag a later assignment or name change.
+
 ## Clouds: Open-Meteo (on by default on desktop)
 
 - [Open-Meteo](https://open-meteo.com/) forecast API, "best match" model (in the US, NOAA HRRR and GFS): current low,

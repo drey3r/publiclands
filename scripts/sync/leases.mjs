@@ -15,7 +15,7 @@ const yearOf = (d) => (d ? Number(d.slice(0, 4)) : null);
 const est = (value, reason) => ({ value, inferred: true, reason });
 
 import { classifyLease, KIND_LABELS, METHODS as CLASSIFIER_METHODS } from "../../lib/lease-classifier.mjs";
-import { leaseTitle } from "../../lib/lease-title.mjs";
+import { leaseTitle, titleWithLessee } from "../../lib/lease-title.mjs";
 
 // Category and infrastructure kinds come from lib/lease-classifier.mjs (standalone, shared).
 export const TYPE_LABELS = KIND_LABELS;
@@ -93,7 +93,7 @@ function waterbodyOf(name, location) {
 const decade = (y) => (y ? `${Math.floor(y / 10) * 10}s` : "Unknown");
 
 /** Read the newest snapshot and return { source, leases (full records), mini (map payload), methods, counts, candidates }. */
-export function buildLeases(root, { snapshot, curated }) {
+export function buildLeases(root, { snapshot, curated, noLessees = false }) {
   const snap = JSON.parse(fs.readFileSync(snapshot, "utf8"));
   const counties = countyIndex(root);
 
@@ -144,6 +144,10 @@ export function buildLeases(root, { snapshot, curated }) {
     bandEst.set(k, { year: ys[Math.floor((ys.length - 1) * 0.1)], n: ys.length });
   }
 
+  // Lessee names (organizations only), from the Commission's meeting-item index by way of the research
+  // export: data/lessees.json (scripts/sync/lessees.mjs). Optional: without it titles are the place alone.
+  const lesseeFile = path.join(root, "data/lessees.json");
+  const lesseeData = !noLessees && fs.existsSync(lesseeFile) ? JSON.parse(fs.readFileSync(lesseeFile, "utf8")) : null;
   const pulled = (snap.source.pulledAt ?? "").slice(0, 10);
   const leases = [];
   for (const b of base) {
@@ -183,12 +187,17 @@ export function buildLeases(root, { snapshot, curated }) {
 
     const cs = curated.caseStudies?.[b.prc] ?? null;
     const waterbody = waterbodyOf(f.location?.split(/[,;]/)[0], f.location);
+    const place = leaseTitle(f.location, { waterbody: waterbody?.value ?? null, county: county?.value ?? null, prc: b.prc });
+    const lessee = lesseeData?.lessees[b.prc] ?? null;
     leases.push({
       prc: b.prc,
       prcKind: b.kind,
       prcFlag: b.flag,
-      // Display title from the location text (lib/lease-title.mjs); the full text stays in facts.location.
-      name: leaseTitle(f.location, { waterbody: waterbody?.value ?? null, county: county?.value ?? null, prc: b.prc }),
+      // Display title: "Lessee · Place" where the lessee is known, else the place. The place comes from the
+      // location text (lib/lease-title.mjs); the full text stays in facts.location.
+      name: titleWithLessee(lessee?.name ?? null, place),
+      place,
+      lessee: lessee ? { value: lessee.name, source: lessee.source } : null,
       lat, lng,
       ...(b.pts.length > 1 ? { points: b.pts } : {}),
       stage: "research",
@@ -248,6 +257,7 @@ export function buildLeases(root, { snapshot, curated }) {
     county: "Point in polygon against California county boundaries (US Census). Offshore points use the nearest county boundary within 25 km.",
     waterbody: "Parsed from the lease's location text (e.g. 'Lake Tahoe', 'Sacramento River').",
     score: "0–100 screen from estimated age, infrastructure keywords, right-of-way leases, the state's own non-operational/abandoned wording, and expiration. It ranks which files to read first. It is not a finding about any lessee.",
+    lessee: "Current or last lessee, where it is an organization: the Name field of the newest dated item in the Commission's meeting-item index that names this lease number. Names of private individuals and trusts are not shown. A lease's title is the lessee (without its entity description, such as \"a California corporation\") and the place; the full name is on the lease page.",
     candidates: "Candidates for review: leases whose Improvements text, written by the State Lands Commission, says non-operational, abandoned, inactive or out of service, on an old lease renewed on a new term, for infrastructure or a wharf/pier.",
   };
 
@@ -261,6 +271,7 @@ export function buildLeases(root, { snapshot, curated }) {
     full,
     methods,
     candidates,
-    counts: { leases: full.length, points: snap.features.length, candidates: candidates.length },
+    counts: { leases: full.length, points: snap.features.length, candidates: candidates.length, lessees: full.filter((l) => l.lessee).length },
+    lessees: lesseeData ? { generatedAt: lesseeData.exportGeneratedAt, named: lesseeData.counts.named } : null,
   };
 }

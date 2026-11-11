@@ -102,6 +102,22 @@ const datasets = [
       "\u201cActive\u201d is the record status in the layer, not evidence that anything is in use.",
     ],
   },
+  ...(L.lessees
+    ? [{
+        key: "lessees",
+        title: "Lessee names (organizations)",
+        source: "California State Lands Commission, meeting-item index (Name field), read by this project's research export",
+        url: "https://www.slc.ca.gov/meetings/",
+        pulledAt: day(L.lessees.generatedAt),
+        sourceUpdated: null,
+        sourceNote: "Each name cites the dated Commission item it came from, on the lease page.",
+        caveats: [
+          "The current or last lessee named in the newest dated Commission item for the lease; a later assignment may not be indexed yet.",
+          "Organizations only: names of private individuals and trusts are not shown.",
+        ],
+        count: L.counts.lessees,
+      }]
+    : []),
   ...LAYERS.filter((n) => index[n]).map((n) => {
     const i = index[n];
     return {

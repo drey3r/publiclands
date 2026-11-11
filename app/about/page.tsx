@@ -157,7 +157,13 @@ export default function AboutPage() {
 
         <h3 id="titles" className="mt-6 scroll-mt-16 text-[18px] font-semibold text-ink">Lease titles</h3>
         <p className="mt-2">
-          The state&apos;s layer has no lessee name, so a lease&apos;s title comes from its location text: the first phrase that
+          A lease&apos;s title is &ldquo;Lessee · Place&rdquo; where the lessee is known, and the place alone otherwise. The
+          lessee is <b className="text-ink">source data</b>: the Name field of the newest dated item in the State Lands
+          Commission&apos;s meeting-item index that names the lease number, shown only when it is an organization (names of
+          private individuals and trusts are not shown). Titles drop the entity description after the name (&ldquo;, a
+          California corporation&rdquo;) and, where several lessees are listed, all but the first (&ldquo;and 2 more&rdquo;); the
+          lease page gives the full name and links the item it came from. The newest indexed item can lag a later assignment.
+          The state&apos;s lease layer itself has no lessee name, so the place comes from its location text: the first phrase that
           names a place, after dropping legal descriptions and measurements (&ldquo;Section 36&rdquo;, &ldquo;approximately 349.72
           acres&rdquo;) and leading words such as &ldquo;State-owned school land within a portion of&rdquo;. If no phrase is left, the
           title is the waterbody, else &ldquo;State land, <i>county</i> County&rdquo;. The full location text is on each lease page.
