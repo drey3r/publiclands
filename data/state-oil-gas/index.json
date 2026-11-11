@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-11T02:20:36Z",
+ "generatedAt": "2026-11-11T04:20:29Z",
  "datasets": [
   {
    "key": "og-footprints",
@@ -77,7 +77,8 @@
    "sourceNote": null,
    "count": 42,
    "caveats": [
-    "Not a complete sovereign-lands map."
+    "Not a complete sovereign-lands map.",
+    "Clipped to California for display (CSLC's Lake Tahoe polygon covers the Nevada side); Lake Tahoe's two county records are drawn once."
    ]
   }
  ],

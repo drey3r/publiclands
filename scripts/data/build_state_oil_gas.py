@@ -17,7 +17,9 @@ Outputs (committed; scripts/sync-data.mjs copies them to public/data/state-oil-g
   state-lease-wells.geojson      CalGEM wells on CSLC state leases (tests A/B/C, FEASIBILITY.md section 3a)
   former-leases.json             47 quitclaimed/terminated leases (CSLC tables) + exact dates from the lease information page
   sla-boundary.geojson           BOEM Submerged Lands Act boundary, clipped to California
-  sovereign-waterbodies.geojson  CSLC Significant Lands inventory: 42 sovereign lake and lagoon beds
+  sovereign-waterbodies.geojson  CSLC Significant Lands inventory: 42 sovereign lake and lagoon beds, clipped to California
+                                 (Lake Tahoe's two county records drawn once)
+  sla-outside.geojson            display mask: ocean seaward of the SLA line (state-waters tint stops at the line)
   index.json                     per dataset: source URL, pulled date, source last-updated date, counts, caveats
 """
 import csv, glob, html, json, os, re, sys
@@ -319,16 +321,51 @@ CA_BOX = box(-124.9, 32.53, -117.0, 42.0)  # Mexico border to the Oregon border,
 g = shape(sla[0]["geometry"]).intersection(CA_BOX).simplify(0.0001)
 sla_out = [{"type": "Feature", "properties": {"type": "S", "name": "Submerged Lands Act boundary"}, "geometry": rnd(g, 5)}]
 
-# ---------------------------------------------------------------- sovereign waterbodies (42)
+# ---------------------------------------------------------------- state waters mask
+# The map tints the basemap's own ocean (OpenStreetMap coastline via OpenFreeMap) as state sovereign lands and
+# repaints everything seaward of the SLA line in the water color. This is that "seaward" area: water outside the zone
+# landward of the mainland SLA line and the 3-mile rings around the islands. Display only; not a legal boundary.
+from shapely.geometry import Polygon
+from shapely.ops import unary_union
+parts = list(getattr(g, "geoms", [g]))
+main = max(parts, key=lambda l: l.length)
+mc = list(main.coords)
+if mc[0][1] < mc[-1][1]: mc = mc[::-1]  # north (Oregon border) to south (Mexico border)
+landward = Polygon(mc + [(-113.5, mc[-1][1]), (-113.5, mc[0][1])]).buffer(0)
+rings = [Polygon(l.coords).buffer(0) for l in parts if l is not main and l.is_ring]
+zone = unary_union([landward] + rings)
+# Outside California the tint must stop at the state lines (Oregon, Baja California, the Gulf of California). There the
+# mask covers everything that is not land in Natural Earth's 1:10m land (data/ref/ne-land-near-ca.geojson, public domain);
+# its coast is within a few hundred meters of the basemap's, invisible at the zooms where it shows.
+ne_land = gpd.read_file(os.path.join(ROOT, "data", "ref", "ne-land-near-ca.geojson")).to_crs(4326).union_all()
+seaward = box(-130.0, 24.0, -106.0, 48.0).difference(zone).difference(ne_land).simplify(0.0005)
+sla_outside = [{"type": "Feature", "properties": {"note": "Seaward of the SLA line (display mask)"}, "geometry": rnd(seaward, 5)}]
+
+# ---------------------------------------------------------------- sovereign waterbodies (42 records)
+# Clipped to California (CSLC's Lake Tahoe polygon covers the Nevada side too; Goose Lake reaches into Oregon). Records with the same shape (Lake Tahoe
+# is listed twice, once per county parcel) are drawn once, keeping both counties and parcels.
+ca = gpd.read_file(os.path.join(ROOT, "data", "ref", "ca-outline.geojson")).to_crs(4326).union_all()
 wb, wbm, wbmeta = features("cslc-sovereign-waterbodies")
-wb_out = []
+wb_out, seen = [], {}
 for f in wb:
     p = f["properties"]
-    wb_out.append({"type": "Feature", "properties": {
-        "name": (p.get("WATERWAY") or "").strip(), "location": (p.get("LOCATION") or "").strip() or None,
-        "county": (p.get("COUNTY") or "").strip() or None, "parcel": (p.get("PARCEL") or "").strip() or None,
-        "url": (p.get("URL") or "").strip() or None,
-    }, "geometry": rnd(shape(f["geometry"]).simplify(0.0001), 5)})
+    geom = shape(f["geometry"])
+    clipped = geom.intersection(ca) if not ca.contains(geom) else geom
+    key = geom.wkb
+    rec = {"name": (p.get("WATERWAY") or "").strip(), "location": (p.get("LOCATION") or "").strip() or None,
+           "county": (p.get("COUNTY") or "").strip() or None, "parcel": (p.get("PARCEL") or "").strip() or None,
+           "url": (p.get("URL") or "").strip() or None, "clippedToCA": clipped.area < geom.area * 0.999}
+    if key in seen:
+        prev = seen[key]["properties"]
+        for k in ("county", "parcel"):
+            if rec[k] and rec[k] not in (prev[k] or ""): prev[k] = f"{prev[k]}; {rec[k]}" if prev[k] else rec[k]
+        prev["records"] += 1
+        continue
+    if clipped.is_empty: continue
+    out = {"type": "Feature", "properties": {**rec, "records": 1}, "geometry": rnd(clipped.simplify(0.0001), 5)}
+    seen[key] = out
+    wb_out.append(out)
+wb_records = len(wb)
 
 # ---------------------------------------------------------------- write
 write_json(os.path.join(OUT, "offshore-leases.geojson"), fc(fp_out))
@@ -336,6 +373,7 @@ write_json(os.path.join(OUT, "marine-oil-terminals.geojson"), fc(t_out))
 write_json(os.path.join(OUT, "state-lease-wells.geojson"), fc(w_out))
 write_json(os.path.join(OUT, "sla-boundary.geojson"), fc(sla_out))
 write_json(os.path.join(OUT, "sovereign-waterbodies.geojson"), fc(wb_out))
+write_json(os.path.join(OUT, "sla-outside.geojson"), fc(sla_outside))
 write_json(os.path.join(OUT, "former-leases.json"), {
     "source": {"leasesPage": LEASES_PAGE, "infoPage": INFO_PAGE, "quitclaimedUpdated": qc_updated,
                "terminatedReviewed": term_reviewed, "infoUpdated": info_updated, "read": leases_read},
@@ -366,7 +404,7 @@ write_json(os.path.join(OUT, "index.json"), {"generatedAt": datetime.now(timezon
     ds("sla", "Submerged Lands Act boundary (BOEM)", "Bureau of Ocean Energy Management, OCS boundary lines", sm["layer_url"], sm, 1,
        ["Seaward limit of state submerged lands. Clipped to California for display."]),
     ds("sovereign-waterbodies", "Sovereign lake and lagoon beds (CSLC Significant Lands)", "California State Lands Commission, Significant_Lands_Waterbodies",
-       wbm["layer_url"], wbm, len(wb_out), ["Not a complete sovereign-lands map."]),
+       wbm["layer_url"], wbm, wb_records, ["Not a complete sovereign-lands map.", "Clipped to California for display (CSLC's Lake Tahoe polygon covers the Nevada side); Lake Tahoe's two county records are drawn once."]),
 ], "terminalsCaveat": t_caveat or None}, indent=1)
 
 print(json.dumps({
@@ -376,6 +414,6 @@ print(json.dumps({
     "wells": len(w_out), "wells_by_status": dict(wc), "wells_offshore": wo[True], "wells_onshore": wo[False], "wells_report": wrep,
     "former": len(former), "former_with_footprint": sum(f["hasFootprint"] for f in former),
     "former_exact_dates": [(f["prc"], f["date"]) for f in former if f["dateSources"][0]["url"] == INFO_PAGE],
-    "record_files": len(rec_by_key), "sla_parts": len(getattr(g, "geoms", [g])), "waterbodies": len(wb_out),
+    "record_files": len(rec_by_key), "sla_parts": len(getattr(g, "geoms", [g])), "waterbodies": len(wb_out), "waterbody_records": wb_records,
     "page_info_leases": len(info),
 }, indent=1))
