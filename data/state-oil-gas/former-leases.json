@@ -1,0 +1,1213 @@
+{
+ "source": {
+  "leasesPage": "https://www.slc.ca.gov/oil-gas/leases/",
+  "infoPage": "https://www.slc.ca.gov/oil-gas/leases/lease-information/",
+  "quitclaimedUpdated": "2026-07-09",
+  "terminatedReviewed": "2026-06-11",
+  "infoUpdated": "2026-07-28",
+  "read": "2026-11-11"
+ },
+ "leases": [
+  {
+   "prc": "145",
+   "action": "quitclaimed",
+   "date": "2017-12-12",
+   "dateSources": [
+    {
+     "label": "CSLC lease information page",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/lease-information/",
+     "date": "2017-12-12",
+     "sourceUpdated": "2026-07-28",
+     "read": "2026-11-11"
+    },
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "December 2017",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": true,
+   "records": [
+    {
+     "date": "2022-04-26",
+     "item": "Staff Report 61 (Informational)",
+     "title": "Purpose: to provide an update on the status of existing offshore oil and gas production and pipeline leases managed by the Commission",
+     "pages": "p. 13",
+     "url": "https://slcprdwordpressstorage.blob.core.windows.net/wordpressdata/2022/04/04-26-22_61.pdf"
+    }
+   ]
+  },
+  {
+   "prc": "410",
+   "action": "quitclaimed",
+   "date": "2017-12-12",
+   "dateSources": [
+    {
+     "label": "CSLC lease information page",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/lease-information/",
+     "date": "2017-12-12",
+     "sourceUpdated": "2026-07-28",
+     "read": "2026-11-11"
+    },
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "December 2017",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": true,
+   "records": [
+    {
+     "date": "2022-04-26",
+     "item": "Staff Report 61 (Informational)",
+     "title": "Purpose: to provide an update on the status of existing offshore oil and gas production and pipeline leases managed by the Commission",
+     "pages": "p. 13",
+     "url": "https://slcprdwordpressstorage.blob.core.windows.net/wordpressdata/2022/04/04-26-22_61.pdf"
+    }
+   ]
+  },
+  {
+   "prc": "421",
+   "action": "quitclaimed",
+   "date": "2017-04-13",
+   "dateSources": [
+    {
+     "label": "CSLC lease information page",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/lease-information/",
+     "date": "2017-04-13",
+     "sourceUpdated": "2026-07-28",
+     "read": "2026-11-11"
+    },
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "March 2017 to October 2017",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": true,
+   "records": [
+    {
+     "date": "2022-04-26",
+     "item": "Staff Report 61 (Informational)",
+     "title": "Purpose: to provide an update on the status of existing offshore oil and gas production and pipeline leases managed by the Commission",
+     "pages": "p. 10",
+     "url": "https://slcprdwordpressstorage.blob.core.windows.net/wordpressdata/2022/04/04-26-22_61.pdf"
+    }
+   ]
+  },
+  {
+   "prc": "1466",
+   "action": "quitclaimed",
+   "date": "2017-12-06",
+   "dateSources": [
+    {
+     "label": "CSLC lease information page",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/lease-information/",
+     "date": "2017-12-06",
+     "sourceUpdated": "2026-07-28",
+     "read": "2026-11-11"
+    },
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "December 2017",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": true,
+   "records": [
+    {
+     "date": "2022-04-26",
+     "item": "Staff Report 61 (Informational)",
+     "title": "Purpose: to provide an update on the status of existing offshore oil and gas production and pipeline leases managed by the Commission",
+     "pages": "p. 13",
+     "url": "https://slcprdwordpressstorage.blob.core.windows.net/wordpressdata/2022/04/04-26-22_61.pdf"
+    }
+   ]
+  },
+  {
+   "prc": "3095",
+   "action": "quitclaimed",
+   "date": "2025-11-07",
+   "dateSources": [
+    {
+     "label": "CSLC lease information page",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/lease-information/",
+     "date": "2025-11-07",
+     "sourceUpdated": "2026-07-28",
+     "read": "2026-11-11"
+    },
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "2018 to November 2025",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": "CSLC footnote: quitclaimed 2025, former Platform Esther; associated right-of-way PRC 3394 also quitclaimed; area now under General Lease 9874 (no production)",
+   "hasFootprint": true,
+   "records": [
+    {
+     "date": "2022-04-26",
+     "item": "Staff Report 61 (Informational)",
+     "title": "Purpose: to provide an update on the status of existing offshore oil and gas production and pipeline leases managed by the Commission",
+     "pages": "pp. 18, 19, 21, 24",
+     "url": "https://slcprdwordpressstorage.blob.core.windows.net/wordpressdata/2022/04/04-26-22_61.pdf"
+    },
+    {
+     "date": "2005-10-20",
+     "item": "Calendar Item C41",
+     "title": "Consider assignment of Plains Exploration & Production Company's interest in, and amendment of, oil and gas lease nos. PRC 3033, PRC 3095 and PRC 3413, and right-of-way lease nos. PRC 3116, PRC 3394 and PRC 6417, to DCOR, LLC, offshore Orange County",
+     "pages": "pp. 1, 4, 8, 10, 11, 12, 13, 14, 15, 16, 17, 19, 21, 22, 23, 24, 26",
+     "url": "https://www.slc.ca.gov/wp-content/uploads/sites/355/Meeting_Summaries/2005_Documents/10-20-05/Items/102005C41.pdf"
+    },
+    {
+     "date": "2004-08-17",
+     "item": "Calendar Item C66 (Minute Item 66)",
+     "title": "Consider approval of amendment of provisions of oil and gas lease nos. PRC 3033.1, PRC 3095.1 and PRC 3413.1, and right-of-way lease nos. PRC 3116.1, PRC 3394.1 and PRC 6417.1, and assignment of right-of-way lease no. PRC 6417.1, offshore Huntington Beach and Seal Beach, Orange County",
+     "pages": "pp. 1, 3, 4, 5, 7",
+     "url": "https://www.slc.ca.gov/wp-content/uploads/sites/355/Meeting_Summaries/2004_Documents/08-17-04/Items/081704C66.pdf"
+    }
+   ]
+  },
+  {
+   "prc": "3120",
+   "action": "quitclaimed",
+   "date": "2017-04-13",
+   "dateSources": [
+    {
+     "label": "CSLC lease information page",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/lease-information/",
+     "date": "2017-04-13",
+     "sourceUpdated": "2026-07-28",
+     "read": "2026-11-11"
+    },
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "March 2017 to October 2017",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": true,
+   "records": [
+    {
+     "date": "2022-04-26",
+     "item": "Staff Report 61 (Informational)",
+     "title": "Purpose: to provide an update on the status of existing offshore oil and gas production and pipeline leases managed by the Commission",
+     "pages": "p. 10",
+     "url": "https://slcprdwordpressstorage.blob.core.windows.net/wordpressdata/2022/04/04-26-22_61.pdf"
+    }
+   ]
+  },
+  {
+   "prc": "3133",
+   "action": "terminated",
+   "date": "2019-06-28",
+   "dateSources": [
+    {
+     "label": "CSLC lease information page",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/lease-information/",
+     "date": "2019-06-28",
+     "sourceUpdated": "2026-07-28",
+     "read": "2026-11-11"
+    },
+    {
+     "label": "CSLC oil & gas leases page, terminated table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "2019-06-28",
+     "sourceUpdated": "2026-06-11",
+     "sourceUpdatedLabel": "last reviewed",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": "ExxonMobil",
+   "acres": "5,535",
+   "location": "Carpinteria Offshore, Parcel 19, Santa Barbara Channel",
+   "note": "Staff report item 98, 2019-06-28",
+   "hasFootprint": true,
+   "records": [
+    {
+     "date": "2022-04-26",
+     "item": "Staff Report 61 (Informational)",
+     "title": "Purpose: to provide an update on the status of existing offshore oil and gas production and pipeline leases managed by the Commission",
+     "pages": "p. 11",
+     "url": "https://slcprdwordpressstorage.blob.core.windows.net/wordpressdata/2022/04/04-26-22_61.pdf"
+    }
+   ]
+  },
+  {
+   "prc": "3150",
+   "action": "quitclaimed",
+   "date": "2017-11-14",
+   "dateSources": [
+    {
+     "label": "CSLC lease information page",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/lease-information/",
+     "date": "2017-11-14",
+     "sourceUpdated": "2026-07-28",
+     "read": "2026-11-11"
+    },
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "November 2017",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": true,
+   "records": [
+    {
+     "date": "2026-02-09",
+     "item": "Commission meeting voting record, item 72",
+     "title": "Consider granting authority to execute Lease Termination Agreements for oil and gas leases 1824.1, 3150.1 and 7911.1 (removed from the agenda 02/07/2026)",
+     "pages": null,
+     "url": "https://www.slc.ca.gov/meeting/02-09-2026-voting-record/"
+    },
+    {
+     "date": "2025-12-16",
+     "item": "Commission meeting voting record, item 106",
+     "title": "Consider granting authority to execute Lease Termination Agreements for oil and gas leases 1824.1, 3150.1 and 7911.1 (removed from the agenda 12/10/2025)",
+     "pages": null,
+     "url": "https://www.slc.ca.gov/meeting/12-16-2025-voting-record/"
+    },
+    {
+     "date": "2025-04-02",
+     "item": "Staff Report 50 (Informational)",
+     "title": "On the report \"Review of Lease Obligations and Assessment of Impacts to Public Trust Resources and Values: State Oil and Gas Leases PRC 1824 and PRC 3150 Terminations and 4H Shell Mounds Disposition\"",
+     "pages": "pp. 1, 2, 11",
+     "url": "https://slcprdwordpressstorage.blob.core.windows.net/wordpressdata/archive/2025/20250402/50-04-02-25_50.pdf"
+    },
+    {
+     "date": "2022-04-26",
+     "item": "Staff Report 61 (Informational)",
+     "title": "Purpose: to provide an update on the status of existing offshore oil and gas production and pipeline leases managed by the Commission",
+     "pages": "pp. 9, 10, 25",
+     "url": "https://slcprdwordpressstorage.blob.core.windows.net/wordpressdata/2022/04/04-26-22_61.pdf"
+    }
+   ]
+  },
+  {
+   "prc": "3242",
+   "action": "quitclaimed",
+   "date": "2017-04-13",
+   "dateSources": [
+    {
+     "label": "CSLC lease information page",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/lease-information/",
+     "date": "2017-04-13",
+     "sourceUpdated": "2026-07-28",
+     "read": "2026-11-11"
+    },
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "March 2017 to October 2017",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": true,
+   "records": [
+    {
+     "date": "2022-04-26",
+     "item": "Staff Report 61 (Informational)",
+     "title": "Purpose: to provide an update on the status of existing offshore oil and gas production and pipeline leases managed by the Commission",
+     "pages": "p. 10",
+     "url": "https://slcprdwordpressstorage.blob.core.windows.net/wordpressdata/2022/04/04-26-22_61.pdf"
+    }
+   ]
+  },
+  {
+   "prc": "4000",
+   "action": "terminated",
+   "date": "2019-06-28",
+   "dateSources": [
+    {
+     "label": "CSLC lease information page",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/lease-information/",
+     "date": "2019-06-28",
+     "sourceUpdated": "2026-07-28",
+     "read": "2026-11-11"
+    },
+    {
+     "label": "CSLC oil & gas leases page, terminated table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "2019-06-28",
+     "sourceUpdated": "2026-06-11",
+     "sourceUpdatedLabel": "last reviewed",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": "Carone",
+   "acres": "204",
+   "location": "Santa Barbara Channel, Offshore Carpinteria",
+   "note": "Staff report item 98, 2019-06-28",
+   "hasFootprint": true,
+   "records": [
+    {
+     "date": "2022-04-26",
+     "item": "Staff Report 61 (Informational)",
+     "title": "Purpose: to provide an update on the status of existing offshore oil and gas production and pipeline leases managed by the Commission",
+     "pages": "p. 11",
+     "url": "https://slcprdwordpressstorage.blob.core.windows.net/wordpressdata/2022/04/04-26-22_61.pdf"
+    }
+   ]
+  },
+  {
+   "prc": "7911",
+   "action": "terminated",
+   "date": "2019-06-28",
+   "dateSources": [
+    {
+     "label": "CSLC lease information page",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/lease-information/",
+     "date": "2019-06-28",
+     "sourceUpdated": "2026-07-28",
+     "read": "2026-11-11"
+    },
+    {
+     "label": "CSLC oil & gas leases page, terminated table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "2019-06-28",
+     "sourceUpdated": "2026-06-11",
+     "sourceUpdatedLabel": "last reviewed",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": "Carone",
+   "acres": "1,541",
+   "location": "Carpinteria Offshore Oilfield, Southern portion of State Oil & Gas Lease 3150",
+   "note": "Staff report item 98, 2019-06-28",
+   "hasFootprint": true,
+   "records": [
+    {
+     "date": "2026-02-09",
+     "item": "Commission meeting voting record, item 72",
+     "title": "Consider granting authority to execute Lease Termination Agreements for oil and gas leases 1824.1, 3150.1 and 7911.1 (removed from the agenda 02/07/2026)",
+     "pages": null,
+     "url": "https://www.slc.ca.gov/meeting/02-09-2026-voting-record/"
+    },
+    {
+     "date": "2025-12-16",
+     "item": "Commission meeting voting record, item 106",
+     "title": "Consider granting authority to execute Lease Termination Agreements for oil and gas leases 1824.1, 3150.1 and 7911.1 (removed from the agenda 12/10/2025)",
+     "pages": null,
+     "url": "https://www.slc.ca.gov/meeting/12-16-2025-voting-record/"
+    },
+    {
+     "date": "2022-04-26",
+     "item": "Staff Report 61 (Informational)",
+     "title": "Purpose: to provide an update on the status of existing offshore oil and gas production and pipeline leases managed by the Commission",
+     "pages": "p. 11",
+     "url": "https://slcprdwordpressstorage.blob.core.windows.net/wordpressdata/2022/04/04-26-22_61.pdf"
+    }
+   ]
+  },
+  {
+   "prc": "129",
+   "action": "quitclaimed",
+   "date": "2000-04",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "2000-04",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "208",
+   "action": "quitclaimed",
+   "date": "2000-04",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "2000-04",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "287",
+   "action": "quitclaimed",
+   "date": "2000-04",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "2000-04",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "308",
+   "action": "quitclaimed",
+   "date": "1990-94",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1990-94",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "309",
+   "action": "quitclaimed",
+   "date": "1990-94",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1990-94",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "424",
+   "action": "quitclaimed",
+   "date": "1970-74",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1970-74",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "428",
+   "action": "quitclaimed",
+   "date": "1980-84",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1980-84",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "429",
+   "action": "quitclaimed",
+   "date": "April 2009 to February 2017",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "April 2009 to February 2017",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "2198",
+   "action": "quitclaimed",
+   "date": "1965-69",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1965-69",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "2199",
+   "action": "quitclaimed",
+   "date": "2000-04",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "2000-04",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "2205",
+   "action": "quitclaimed",
+   "date": "1965-69",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1965-69",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "2206",
+   "action": "quitclaimed",
+   "date": "1995-99",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1995-99",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "2207",
+   "action": "quitclaimed",
+   "date": "1975-79",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1975-79",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "2725",
+   "action": "quitclaimed",
+   "date": "1995-99",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1995-99",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "2726",
+   "action": "quitclaimed",
+   "date": "1995-99",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1995-99",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "2793",
+   "action": "quitclaimed",
+   "date": "2000-04",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "2000-04",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "2894",
+   "action": "quitclaimed",
+   "date": "2000-04",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "2000-04",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "2920",
+   "action": "quitclaimed",
+   "date": "2005-09",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "2005-09",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "2933",
+   "action": "quitclaimed",
+   "date": "2000-04",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "2000-04",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "2955",
+   "action": "quitclaimed",
+   "date": "1990-94",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1990-94",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "2991",
+   "action": "quitclaimed",
+   "date": "2005-09",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "2005-09",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "3004",
+   "action": "quitclaimed",
+   "date": "2005-09",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "2005-09",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "3119",
+   "action": "quitclaimed",
+   "date": "1970-74",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1970-74",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "3177",
+   "action": "quitclaimed",
+   "date": "1985-89",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1985-89",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "3184",
+   "action": "quitclaimed",
+   "date": "1990-94",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1990-94",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "3403",
+   "action": "quitclaimed",
+   "date": "1990-94",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1990-94",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "3489",
+   "action": "quitclaimed",
+   "date": "1990-94",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1990-94",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "3490",
+   "action": "quitclaimed",
+   "date": "1990-94",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1990-94",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "3498",
+   "action": "quitclaimed",
+   "date": "1990-94",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1990-94",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "3499",
+   "action": "quitclaimed",
+   "date": "1995-99",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1995-99",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "3503",
+   "action": "quitclaimed",
+   "date": "2005-09",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "2005-09",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "3945",
+   "action": "quitclaimed",
+   "date": "1990-94",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1990-94",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "3946",
+   "action": "quitclaimed",
+   "date": "1970-74",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1970-74",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "4001",
+   "action": "quitclaimed",
+   "date": "1990-94",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1990-94",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "4002",
+   "action": "quitclaimed",
+   "date": "1990-94",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1990-94",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  },
+  {
+   "prc": "4031",
+   "action": "quitclaimed",
+   "date": "1980-84",
+   "dateSources": [
+    {
+     "label": "CSLC oil & gas leases page, quitclaimed table",
+     "url": "https://www.slc.ca.gov/oil-gas/leases/",
+     "date": "1980-84",
+     "sourceUpdated": "2026-07-09",
+     "sourceUpdatedLabel": "last updated",
+     "read": "2026-11-11"
+    }
+   ],
+   "lessee": null,
+   "acres": null,
+   "location": null,
+   "note": null,
+   "hasFootprint": false,
+   "records": []
+  }
+ ]
+}

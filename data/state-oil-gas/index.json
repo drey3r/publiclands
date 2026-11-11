@@ -1,0 +1,85 @@
+{
+ "generatedAt": "2026-11-11T02:20:36Z",
+ "datasets": [
+  {
+   "key": "og-footprints",
+   "title": "Offshore oil and gas lease footprints (CSLC)",
+   "source": "California State Lands Commission, Offshore_Lease_Polygons",
+   "url": "https://services3.arcgis.com/5aaQCuq3e4GRvkFG/ArcGIS/rest/services/Offshore_Lease_Polygons/FeatureServer/0",
+   "pulledAt": "2026-11-11",
+   "sourceUpdated": "2025-06-04",
+   "sourceNote": null,
+   "count": 34,
+   "caveats": [
+    "Footprints are approximate. Statuses are CSLC's; where its sources disagree, both are shown."
+   ]
+  },
+  {
+   "key": "og-status-pages",
+   "title": "Oil and gas lease status pages (CSLC)",
+   "source": "California State Lands Commission web pages",
+   "url": "https://www.slc.ca.gov/oil-gas/leases/lease-information/",
+   "pulledAt": "2026-11-11",
+   "sourceUpdated": "2026-07-28",
+   "sourceNote": "Web pages: dates are the pages' own “Last Updated” lines.",
+   "count": 25,
+   "caveats": [
+    "Lease information page last updated 2026-07-28; quitclaimed table 2026-07-09; terminated table last reviewed 2026-06-11."
+   ]
+  },
+  {
+   "key": "og-terminals",
+   "title": "Marine oil terminals (CSLC)",
+   "source": "California State Lands Commission, Marine_Oil_Terminals",
+   "url": "https://services3.arcgis.com/5aaQCuq3e4GRvkFG/ArcGIS/rest/services/Marine_Oil_Terminals/FeatureServer/0",
+   "pulledAt": "2026-11-11",
+   "sourceUpdated": "2025-12-09",
+   "sourceNote": null,
+   "count": 59,
+   "caveats": [
+    "Locations are approximate (CSLC). No land-ownership claim."
+   ]
+  },
+  {
+   "key": "og-wells",
+   "title": "Oil and gas wells on state leases (CalGEM)",
+   "source": "California Geologic Energy Management Division (CalGEM), WellSTAR wells",
+   "url": "https://gis.conservation.ca.gov/server/rest/services/WellSTAR/Wells/MapServer/0",
+   "pulledAt": "2026-11-11",
+   "sourceUpdated": null,
+   "sourceNote": "CalGEM publishes no last-updated date for this layer.",
+   "count": 1738,
+   "caveats": [
+    "Selected by this map (Estimate): inside a CSLC production-lease footprint, a CalGEM lease name naming a CSLC lease, or CSLC as operator.",
+    "A well drilled from shore may have its surface location on private land."
+   ]
+  },
+  {
+   "key": "sla",
+   "title": "Submerged Lands Act boundary (BOEM)",
+   "source": "Bureau of Ocean Energy Management, OCS boundary lines",
+   "url": "https://services7.arcgis.com/G5Ma95RzqJRPKsWL/arcgis/rest/services/OCS_BOEM_Offshore_Boundary_Lines/FeatureServer/8",
+   "pulledAt": "2026-11-11",
+   "sourceUpdated": "2026-08-15",
+   "sourceNote": null,
+   "count": 1,
+   "caveats": [
+    "Seaward limit of state submerged lands. Clipped to California for display."
+   ]
+  },
+  {
+   "key": "sovereign-waterbodies",
+   "title": "Sovereign lake and lagoon beds (CSLC Significant Lands)",
+   "source": "California State Lands Commission, Significant_Lands_Waterbodies",
+   "url": "https://services3.arcgis.com/5aaQCuq3e4GRvkFG/ArcGIS/rest/services/Significant_Lands_Waterbodies/FeatureServer/0",
+   "pulledAt": "2026-11-11",
+   "sourceUpdated": "2025-08-12",
+   "sourceNote": null,
+   "count": 42,
+   "caveats": [
+    "Not a complete sovereign-lands map."
+   ]
+  }
+ ],
+ "terminalsCaveat": "This point layer represents approximate locations of Marine Oil Terminals that are regulated by the California State Lands Commission. Most terminal points were collected with Collector for ArcGIS, but some were approximated by other means. The California State Lands Commission makes no warranty as to the accuracy of this data nor assumes any liability for its use. This information is subject to change."
+}
