@@ -3,19 +3,24 @@
 Changes to the California Public Lands Map, newest first. Data snapshots and
 counts are unchanged unless an entry says otherwise.
 
-## 2026-11-11 · A living ocean and live clouds
+## 2026-11-11 · A living ocean, and clouds on request
 
-**Data:** counts unchanged. New: current cloud cover from Open-Meteo (NOAA HRRR and GFS models), via `/api/clouds`.
+**Data:** counts unchanged (4,206 leases; 7,458 public-land units; Worth watching 367: 46 / 113 / 2 / 206). New,
+off by default: current cloud cover from Open-Meteo (NOAA HRRR and GFS models), via `/api/clouds`.
 
-- **The ocean moves.** Faint wave marks drift slowly shoreward and breathe in and out, like the marks on an engraved
-  chart. Past the continental shelf the water deepens, from the terrain tiles' own bathymetry, so Monterey Canyon and
-  the basins off Southern California read faintly. Land below sea level is never tinted.
-- **Live clouds.** Today's low, mid and high cloud cover over California, drawn as soft clouds with faint shadows,
-  drifting gently with the wind. They fade out as you zoom in (gone by zoom 10.5). "Clouds" switch next to 3D terrain,
-  on by default, with the model time. Refreshed every three hours (cached, so the weather API is called about eight
-  times a day). If the weather can't be loaded, the map simply shows none.
-- Animation runs at about 12 frames a second, stops while the tab is hidden, and is a still frame for readers who
-  prefer reduced motion.
+- **Sea floor.** Past the continental shelf the water deepens faintly, from the terrain tiles' own bathymetry, so
+  Monterey Canyon and the basins off Southern California read. The shelf keeps its color, and so does the State
+  sovereign lands tint: the depth sits over it as a light ink, and the lake beds, granted-lands hatch and SLA line stay
+  on top. Land below sea level is never tinted.
+- **Wave marks.** Faint engraved-chart wave strokes drift slowly shoreward on the open ocean. They fade out by zoom 11,
+  before lease icons appear. One still frame for readers who prefer reduced motion, and on phones (the animation cost
+  frame rate there).
+- **Clouds (off by default).** A "Clouds" switch next to 3D terrain draws today's low, mid and high cloud cover over
+  California, fading out by zoom 10.5. Nothing is requested until it is turned on; the answer is cached for three
+  hours. If the weather can't be loaded, the map shows none. Credit: "Weather data by Open-Meteo.com" (CC BY 4.0), in
+  the map's attribution while clouds are on. Terms and limits in DATA_SOURCES.md.
+- Animation runs at about 12 frames a second (clouds 4), stops while the tab is hidden and past the zooms where it has
+  faded. Browser checks cover the clouds switch, a failed cloud load, reduced motion and the phone still frame.
 
 ## 2026-11-11 · Usability: tabs, cards, map clicks
 
