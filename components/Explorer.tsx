@@ -8,6 +8,7 @@ import { ABOUT_URL, BACK_LABEL, BACK_URL, DISCLAIMER, REPO_URL, STORIES, maskFro
 import { EMPTY, activeCount, applyFilters, fromQuery, inBounds, kindCounts, kindOf, sortForList, toQuery, withKind, type Filters } from "@/lib/filters";
 import type { LayerManifest, LayerName, LeasesPayload, MiniLease, OverlayDef } from "@/lib/types";
 import { FilterPanel } from "./FilterPanel";
+import { ShareButton } from "./ShareButton";
 import { LeaseCard } from "./LeaseCard";
 import { LeaseSwatch, MapControls, type LayerToggle, type Preset } from "./MapControls";
 import { LAND, NONPROFIT_COLOR, landOf, type LandKey } from "@/lib/legend";
@@ -739,6 +740,7 @@ export default function Explorer() {
 }
 
 function SelectedPreview({ l, onClose, onFly }: { l: MiniLease; onClose: () => void; onFly: () => void }) {
+  const story = STORIES.find((s) => s.prc === l.p);
   return (
     <section aria-label={`Selected: PRC ${l.p}`} className="mb-4 rounded-2xl border border-ink/50 bg-white p-3.5 shadow-[0_4px_16px_rgba(43,42,38,0.08)]">
       <div className="flex items-start gap-3">
@@ -764,6 +766,11 @@ function SelectedPreview({ l, onClose, onFly }: { l: MiniLease; onClose: () => v
         <Link href={`/lease/${encodeURIComponent(l.p)}`} className="flex-1 rounded-full bg-ink py-2 text-center text-[13px] font-semibold text-paper hover:bg-ink-soft">Open lease page</Link>
         <button type="button" onClick={onFly} className="rounded-full border border-line px-3 py-2 text-[13px] font-medium text-ink-soft hover:border-ink-soft">Fly in</button>
       </div>
+      {story && (
+        <div className="mt-2 flex items-center gap-2 text-[12px] text-ink-faint">
+          Share this story: <ShareButton path={`/?story=${encodeURIComponent(l.p)}`} title={story.title} text={story.blurb} />
+        </div>
+      )}
     </section>
   );
 }

@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MiniMapLazy } from "@/components/MiniMapLazy";
+import { ShareButton } from "@/components/ShareButton";
 import { DataLabel, FixtureBadge, ScoreRing, StageTracker, WhatDot, whatLabel } from "@/components/ui";
-import { ABOUT_URL, BACK_LABEL, BACK_URL, CSLC_URL, DISCLAIMER, REPO_URL } from "@/lib/config";
+import { ABOUT_URL, BACK_LABEL, BACK_URL, CSLC_URL, DISCLAIMER } from "@/lib/config";
 import { STAGES } from "@/lib/legend";
 import { getLease, loadFull, nearby } from "@/lib/server";
 import { loadRecords } from "@/lib/records";
@@ -67,11 +68,14 @@ export default async function LeasePage({ params }: Params) {
 
   return (
     <div className="min-h-screen bg-cream">
-      <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-line bg-cream/95 px-4 py-2.5 backdrop-blur">
-        <Link href={`/?prc=${encodeURIComponent(l.prc)}`} className="rounded-full border border-line bg-paper px-3 py-1.5 text-[13px] font-medium text-ink hover:border-ink-soft">← Back to map</Link>
+      <header className="sticky top-0 z-20 flex items-center gap-2 whitespace-nowrap border-b border-line bg-cream/95 px-3 py-2.5 backdrop-blur sm:gap-3 sm:px-4">
+        <Link href={`/?prc=${encodeURIComponent(l.prc)}`} className="rounded-full border border-line bg-paper px-3 py-1.5 text-[13px] font-medium text-ink hover:border-ink-soft">← <span className="sm:hidden">Map</span><span className="hidden sm:inline">Back to map</span></Link>
         <Link href={`/?prc=${encodeURIComponent(l.prc)}&fly=1`} className="rounded-full bg-ink px-3 py-1.5 text-[13px] font-semibold text-paper hover:bg-ink-soft">Fly in</Link>
         <HeaderLinks />
-        {meta.fixture && <span className="ml-auto"><FixtureBadge /></span>}
+        <span className="ml-auto flex items-center gap-2">
+          {meta.fixture && <FixtureBadge />}
+          <ShareButton path={`/lease/${encodeURIComponent(l.prc)}`} title={`PRC ${l.prc} · ${cs?.title ?? l.name}`} />
+        </span>
       </header>
 
       <main className="mx-auto max-w-5xl px-4 pb-16 pt-6">
@@ -241,14 +245,14 @@ export default async function LeasePage({ params }: Params) {
         </section>
 
         <section className="mt-8 rounded-2xl bg-ink p-6 text-paper" aria-labelledby="help">
-          <h2 id="help" className="display text-[26px]">{l.completed ? "How this one was resolved" : "Know something about this site?"}</h2>
+          <h2 id="help" className="display text-[26px]">{l.completed ? "How this one was resolved" : "The official record"}</h2>
           <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-paper/80">
             {l.completed
               ? "The sources above document how this lease's facilities were removed. Official records are with the State Lands Commission."
-              : "Photos, history, or a record that answers what is still here are all useful. If something on this page is wrong, please tell us so it can be corrected."}
+              : "Official records for this lease are with the State Lands Commission. How this map reads them is on the About page."}
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <HelpLinks prc={l.prc} />
+            <HelpLinks />
           </div>
         </section>
 
@@ -287,18 +291,17 @@ function HeaderLinks() {
   const cls = "text-[13px] font-medium text-ink-soft underline-offset-2 hover:text-ink hover:underline";
   return (
     <>
-      <a href={ABOUT_URL} className={cls}>About</a>
+      <a href={ABOUT_URL} className={`hidden sm:inline ${cls}`}>About</a>
       {BACK_URL && <a href={BACK_URL} className={cls}>{BACK_LABEL}</a>}
     </>
   );
 }
 
-function HelpLinks({ prc }: { prc: string }) {
+function HelpLinks() {
   return (
     <>
-      <a href={`${REPO_URL}/issues/new?title=${encodeURIComponent(`PRC ${prc}: `)}`} className="rounded-full bg-paper px-4 py-2 text-[13px] font-semibold text-ink hover:bg-sand">Send a correction or source</a>
-      <a href={CSLC_URL} className="rounded-full border border-paper/40 px-4 py-2 text-[13px] font-semibold text-paper hover:border-paper">State Lands Commission</a>
-      <a href={ABOUT_URL} className="rounded-full border border-paper/40 px-4 py-2 text-[13px] font-semibold text-paper hover:border-paper">About this project</a>
+      <a href={CSLC_URL} className="rounded-full bg-paper px-4 py-2 text-[13px] font-semibold text-ink hover:bg-sand">State Lands Commission</a>
+      <a href={ABOUT_URL} className="rounded-full border border-paper/40 px-4 py-2 text-[13px] font-semibold text-paper hover:border-paper">About and methodology</a>
     </>
   );
 }
