@@ -3,6 +3,32 @@
 Changes to the California Public Lands Map, newest first. Data snapshots and
 counts are unchanged unless an entry says otherwise.
 
+## 2026-11-11 · Subtly alive: an idle map, real clouds, swell, county lines
+
+**Data:** counts unchanged (4,206 leases; 7,458 public-land units; Worth watching 367: 46 / 113 / 2 / 206). The cloud
+layer now asks Open-Meteo for about 400 points instead of 143 (terms and limits in DATA_SOURCES.md).
+
+- **Idle means idle.** The map was redrawing about 13 times a second at rest (and far faster zoomed in), because the
+  panel handed the map a new layer list on every render, the map repainted, and its "idle" event re-rendered the
+  panel. Fixed: where nothing animates the map now draws nothing (0 redraws, 0% CPU at rest; it was a full core in the
+  test browser). While waves or clouds are in view the map redraws 12 times a second, as designed.
+- **Clouds that look like clouds.** Bright, soft white, drawn on the graphics card: feathered billows where the
+  model has low and mid cloud, thin streaks for high cloud, the faintest shadow, no gray. They sit above every land
+  color, tint and the outside-California mask, and below county and state lines, every name, count, lease mark,
+  popup and the selected outline. The weather grid now reaches from 138°W to 102°W and 23°N to 50°N (every 3°), with
+  every 0.5° over California, so nothing stops at the state line or in the ocean, and valley fog and Sierra cloud
+  land where the model has them. They drift slowly with the real wind at cloud height (850 hPa for low cloud, 300 hPa
+  for high). Zooming in, they thin and spread outward as if you descend through them, and are gone by zoom 7.6. On by
+  default on desktop; off on phones and for readers who prefer reduced motion (the "Clouds" switch stays, and gives a
+  still frame there).
+- **Swell.** The wave marks are a little stronger at statewide and regional zoom, and a slow band of brighter marks
+  now travels shoreward every seven seconds, so the ocean reads as gentle swell. Still gone by zoom 11.
+- **County lines** are a fine dark line, on by default. "County lines" and "County names" are separate switches in
+  the Reference tab; switching the lines off is kept in the link (`?counties=0`; names: `?cnames=1`).
+- **Checks:** `npm run check:ui` now also covers the cloud layer's order against every land layer and mark, its
+  defaults on desktop, phone and reduced motion, the fade by zoom 8, the county switches and their link, and that
+  the map draws nothing at rest.
+
 ## 2026-11-11 · A living ocean, and clouds on request
 
 **Data:** counts unchanged (4,206 leases; 7,458 public-land units; Worth watching 367: 46 / 113 / 2 / 206). New,
