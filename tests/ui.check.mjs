@@ -22,10 +22,10 @@ const browser = await chromium.launch(executablePath ? { executablePath } : {});
 let failed = 0;
 const results = [];
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY, "i") : null;
-async function check(name, fn, view = { width: 1440, height: 900 }) {
+async function check(name, fn, view = { width: 1440, height: 900 }, opts = {}) {
   if (ONLY && !ONLY.test(name)) return;
   const t0 = Date.now();
-  const page = await browser.newPage({ viewport: view, isMobile: view.width < 600, hasTouch: view.width < 600 });
+  const page = await browser.newPage({ viewport: view, isMobile: view.width < 600, hasTouch: view.width < 600, ...opts });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   try {
@@ -223,6 +223,74 @@ await check("phone: bottom sheet with tabs; expands; tabs switch", async (page) 
   await page.getByRole("tab", { name: /^Public lands/ }).click();
   await page.waitForTimeout(400);
   assert((await selectedTab(page, "Lists")).startsWith("Public lands"), "phone tab did not switch");
+}, { width: 390, height: 844 });
+
+// ---------------------------------------------------------------- ambience: clouds and moving water
+// /api/clouds is answered here (a fixed grid, or a failure), so the checks never call Open-Meteo.
+const CLOUD_GRID = { time: "2026-11-11T18:00Z", lat0: 32, lon0: -126, step: 1, nx: 13, ny: 11, low: Array(143).fill(60), mid: Array(143).fill(30), high: Array(143).fill(40), wind: [2, 1], source: "test" };
+const cloudCalls = (page, body, status = 200) => {
+  const calls = [];
+  return page.route("**/api/clouds", (r) => { calls.push(r.request().url()); r.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) }); }).then(() => calls);
+};
+const attribution = (page) => page.evaluate(() => document.querySelector(".maplibregl-ctrl-attrib-inner")?.textContent ?? "");
+
+await check("clouds: off by default, a toggle loads them with Open-Meteo credit, off hides them", async (page) => {
+  const calls = await cloudCalls(page, CLOUD_GRID);
+  await open(page);
+  const sw = page.getByRole("switch", { name: "Clouds" });
+  assert((await sw.getAttribute("aria-checked")) === "false", "clouds switch is on by default");
+  assert(calls.length === 0, `clouds fetched while off (${calls.length})`);
+  assert(!(await page.evaluate(() => !!window.__map.getLayer("clouds"))), "cloud layer exists while off");
+  assert(await page.evaluate(() => window.__ambience.running()), "wave animation not running at Home");
+  await sw.click();
+  await page.waitForFunction(() => window.__map.getLayer("clouds"), null, { timeout: 15000 });
+  await idle(page);
+  assert(calls.length === 1, `expected one clouds request, got ${calls.length}`);
+  assert((await page.evaluate(() => window.__map.getLayoutProperty("clouds", "visibility"))) === "visible", "cloud layer hidden after toggle on");
+  assert(/Open-Meteo/.test(await attribution(page)), "Open-Meteo credit missing while clouds are on");
+  // Clouds sit under the lease marks and labels.
+  const order = await page.evaluate(() => window.__map.getStyle().layers.map((l) => l.id));
+  assert(order.indexOf("clouds") < order.indexOf("lease-pt"), "clouds drawn over lease marks");
+  await sw.click();
+  await page.waitForTimeout(500);
+  assert((await page.evaluate(() => window.__map.getLayoutProperty("clouds", "visibility"))) === "none", "cloud layer still visible after toggle off");
+  assert(!/Open-Meteo/.test(await attribution(page)), "Open-Meteo credit shown while clouds are off");
+  // Waves fade by zoom 11 and the ticker stops there.
+  await jump(page, [-119.75, 34.15], 11.5);
+  assert(!(await page.evaluate(() => window.__ambience.running())), "animation still running at zoom 11.5");
+  await jump(page, [-119.75, 34.15], 8);
+  await page.waitForTimeout(300);
+  assert(await page.evaluate(() => window.__ambience.running()), "animation did not restart after zooming out");
+});
+
+await check("clouds: a failed load shows none and breaks nothing", async (page) => {
+  const calls = await cloudCalls(page, { error: "down" }, 503);
+  await open(page, "/?tab=leases");
+  await page.getByRole("switch", { name: "Clouds" }).click();
+  await page.waitForTimeout(2500);
+  assert(calls.length === 1, `expected one clouds request, got ${calls.length}`);
+  assert(!(await page.evaluate(() => !!window.__map.getLayer("clouds"))), "cloud layer added after a failed load");
+  // The map still works: select a lease from the list.
+  await page.locator("#list-scroll li[id^=card-]").first().locator("h3 button").click();
+  await page.waitForTimeout(2000);
+  assert(await page.locator(".sel-pop").isVisible(), "no popup after card click");
+});
+
+await check("reduced motion: one still frame (waves and clouds drawn, nothing animates)", async (page) => {
+  await cloudCalls(page, CLOUD_GRID);
+  await open(page);
+  assert(await page.evaluate(() => !!window.__map.getLayer("ocean-waves") && !!window.__map.getLayer("ocean-depth")), "wave or depth layer missing");
+  assert(!(await page.evaluate(() => window.__ambience.running())), "animation running with reduced motion");
+  await page.getByRole("switch", { name: "Clouds" }).click();
+  await page.waitForFunction(() => window.__map.getLayer("clouds"), null, { timeout: 15000 });
+  await idle(page);
+  assert(!(await page.evaluate(() => window.__ambience.running())), "animation started by the clouds with reduced motion");
+}, { width: 1440, height: 900 }, { reducedMotion: "reduce" });
+
+await check("phone: waves and clouds are a still frame", async (page) => {
+  await open(page);
+  assert(await page.evaluate(() => !!window.__map.getLayer("ocean-waves")), "wave layer missing on phone");
+  assert(!(await page.evaluate(() => window.__ambience.running())), "animation running on a phone");
 }, { width: 390, height: 844 });
 
 // ---------------------------------------------------------------- nothing clipped
