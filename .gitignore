@@ -11,3 +11,4 @@ data/generated/
 public/maplibre/
 .vercel
 data/cache/
+.venv/
