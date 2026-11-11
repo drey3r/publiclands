@@ -216,10 +216,10 @@ export function MapControls(p: Props) {
             aria-checked={t.on}
             onClick={t.onToggle}
             title={t.title}
-            className={`flex min-h-10 w-full items-center gap-2.5 rounded-xl border px-2.5 text-left transition-colors ${t.on ? "border-ink/70 bg-white text-ink" : "border-line bg-paper/60 text-ink-faint hover:border-ink-soft"}`}
+            className={`flex min-h-10 w-full items-center gap-2.5 rounded-xl border px-2.5 py-1 text-left transition-colors ${t.on ? "border-ink/70 bg-white text-ink" : "border-line bg-paper/60 text-ink-faint hover:border-ink-soft"}`}
           >
             <span aria-hidden className={`flex h-5 w-5 shrink-0 items-center justify-center ${t.on ? "" : "opacity-40 grayscale"}`}>{t.swatch}</span>
-            <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold leading-tight">{t.label}</span>
+            <span className={`min-w-0 flex-1 font-semibold leading-tight ${sheet ? "text-[13px]" : "text-[13.5px]"}`}>{t.label}</span>
             {!sheet && <span className={`shrink-0 text-[11.5px] tabular-nums ${t.on ? "text-ink-soft" : "text-ink-faint"}`}>{t.on ? t.status.replace(/ in view$/, "") : "Off"}</span>}
             <SwitchMark on={t.on} />
           </button>

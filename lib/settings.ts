@@ -35,7 +35,8 @@ export function leaseSetting(l: Pick<MiniLease, "w" | "r" | "k" | "n" | "og">): 
  * 1. Ocean: the name says beach, bay, harbor, coast, island, lagoon, marine or point.
  * 2. Desert: the name says desert, dunes, dry lake, Mojave, Death Valley, Joshua, Anza-Borrego; or it lies south of 36.5°N and east of 117.8°W.
  * 3. Riverlands: the name says river, creek, slough, delta, marsh or wetland (or a wildlife area).
- * 4. Mountains: the name says forest, mountain, peak, wilderness, lake, redwoods, canyon; or it lies in the Sierra (east of 121°W, north of 35.5°N).
+ * 4. Mountains: the name says forest, mountain, peak, wilderness, lake, redwoods, canyon; or it lies in the Sierra
+ *    (north of 35.5°N and east of the Central Valley's east edge, taken as a line from 118.9°W at 35.5°N to 121.6°W at 39.5°N).
  * 5. Farmlands: everything else.
  */
 export function placeSetting(p: { name: string; bbox: [number, number, number, number] }): Setting {
@@ -45,6 +46,7 @@ export function placeSetting(p: { name: string; bbox: [number, number, number, n
   if (/\b(beach|coast|marine|island|lagoon|harbou?r|bay)\b/i.test(n)) return "ocean";
   if (DESERT.test(n) || (y < 36.5 && x > -117.8)) return "desert";
   if (/\b(river|creek|slough|delta|marsh|wetlands?|wildlife area|bypass)\b/i.test(n)) return "riverlands";
-  if (MOUNTAIN.test(n) || (x > -121 && y > 35.5)) return "mountains";
+  const sierraEdge = -118.9 - (y - 35.5) * 0.67;
+  if (MOUNTAIN.test(n) || (y > 35.5 && x > sierraEdge && x < -117.8)) return "mountains";
   return "farmlands";
 }
