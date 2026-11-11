@@ -160,7 +160,7 @@ await check("click a public-land card: outline and fit to the whole unit", async
 });
 
 await check("click a lease card: dot selected and popup on the map", async (page) => {
-  await open(page);
+  await open(page, "/?tab=leases");
   const card = page.locator("#list-scroll li[id^=card-]").first();
   const id = (await card.getAttribute("id")).slice(5);
   await card.locator("h3 button").click();
@@ -204,7 +204,7 @@ await check("search: a PRC selects its lease; a place selects its unit", async (
 });
 
 await check("Fly in from a card, then back", async (page) => {
-  await open(page);
+  await open(page, "/?tab=leases");
   await page.locator("#list-scroll li[id^=card-]").first().getByRole("button", { name: /Fly in/ }).click();
   await page.waitForTimeout(1500);
   const back = page.getByText("Back to previous view");
