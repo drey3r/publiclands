@@ -5,8 +5,11 @@
 export type TypeKey = "cable" | "pipeline" | "outfall" | "power" | "other";
 /** Lease category (Estimate: a grouping of the state's TypeofLease, plus the text). */
 export type CatKey = "infra" | "roads" | "shore" | "rec" | "agency" | "commercial" | "other";
-/** A kind with its own icon: the four infrastructure types plus Roads and bridges and Shoreline protection. */
-export type KindKey = Exclude<TypeKey, "other"> | "roads" | "shore";
+/**
+ * A kind with its own icon: the four infrastructure types, Roads and bridges, Shoreline protection, and
+ * Oil and gas (the state's lease types Oil & Gas Lease and Compensatory Agreement; under Commercial and industrial).
+ */
+export type KindKey = Exclude<TypeKey, "other"> | "roads" | "shore" | "oilgas";
 export type StageKey = "research" | "site-visit" | "assess" | "share" | "engage-gov" | "plan" | "execute";
 
 export type Inferred<T> = { value: T; inferred: true; reason: string };
@@ -23,6 +26,12 @@ export type MiniLease = {
   xs: "c" | "e" | "n";
   /** The lease text uses the state's words for a facility that no longer operates. */
   no: 0 | 1;
+  /** The state's own word for it, when `no` (e.g. "nonoperational"). */
+  nw?: string;
+  /** Expiration date (source data), only when the term has expired. */
+  xd?: string;
+  /** The state's lease type is Oil & Gas Lease or Compensatory Agreement (source data). */
+  og?: 1;
   e: number | null; // estimated decade (see meta.methods.mapEra)
   s: number | null; // score
   r: string; // region (inferred)

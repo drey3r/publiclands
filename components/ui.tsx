@@ -106,8 +106,8 @@ export function DataLabel({ kind, title }: { kind: LabelKind; title?: string }) 
 }
 
 /** What a lease is, in a word: its infrastructure type, else its category (both estimates). */
-export function whatLabel(t: TypeKey, k: CatKey) {
-  return k === "infra" && t !== "other" ? TYPE_LABEL[t] : CAT_LABEL[k];
+export function whatLabel(t: TypeKey, k: CatKey, og?: 0 | 1) {
+  return k === "infra" && t !== "other" ? TYPE_LABEL[t] : og ? "Oil and gas" : CAT_LABEL[k];
 }
 export function WhatDot({ t, k, className = "" }: { t: TypeKey; k: CatKey; className?: string }) {
   const color = k === "infra" && t !== "other" ? TYPE_COLOR[t] : CAT_COLOR[k];

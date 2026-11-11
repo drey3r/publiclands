@@ -9,6 +9,8 @@ import { kindMarker } from "@/lib/icons";
 import { CATS, CAT_LABEL, ERAS, ERA_UNKNOWN, LAND, LAYER_INFO, LEASE_MARK, LEASE_TIER, NONPROFIT_COLOR, SCORE_BANDS, SCORE_UNKNOWN, TYPES, TYPE_LABEL, type LandKey } from "@/lib/legend";
 import type { KindKey, LayerManifest, LayerName, MiniLease, OverlayDef } from "@/lib/types";
 import type { Place as Space } from "./PlaceCard";
+import { OG_FILL_LAYERS, OG_POINT_LAYERS, addOg, addWaters, setOgSelPoint, syncOg, syncWaters, type OgData, type OgView } from "./ogLayers";
+import { LABEL, actionLabel, compLabel } from "@/lib/oilgas";
 
 // Served by scripts/sync-data.mjs (webpack can't bundle the v6 module worker).
 maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
@@ -46,7 +48,15 @@ type Props = {
   mask: MaskMode;
   /** California Home button. */
   onHome: () => void;
+  /** State oil & gas family: on/off, its data (fetched by Explorer), and what is shown. */
+  og: { on: boolean; data: OgData | null; view: OgView };
+  /** State sovereign lands (public trust) tint. */
+  waters: boolean;
+  /** A well, terminal, footprint or former lease was clicked (null: clicked elsewhere). */
+  onSelectOg: (sel: OgSel | null) => void;
 };
+
+export type OgSel = { kind: "well" | "terminal" | "footprint" | "former"; id: string; coords?: [number, number] };
 
 /** Map control: a California silhouette that returns to the whole state. */
 class HomeControl implements maplibregl.IControl {
@@ -108,10 +118,10 @@ const LEASE_RADIUS = [
 /** Hide the dot where the icon draws (the circle stays as the hit area). */
 const dotOpacity = (base: unknown) => ["step", ["zoom"], base, ICON_Z, atIcon(base, 0)] as unknown as ExpressionSpecification;
 const iconImage = (fill: ExpressionSpecification) => ["concat", "m|", ["get", "ic"], "|", fill] as unknown as ExpressionSpecification;
-const ICON_KINDS: KindKey[] = ["cable", "pipeline", "outfall", "power", "roads", "shore"];
+const ICON_KINDS: KindKey[] = ["cable", "pipeline", "outfall", "power", "roads", "shore", "oilgas"];
 /** Every disc color any Color by mode can produce. */
 const ICON_FILLS = [...new Set([LEASE_TIER[1].fill, LEASE_TIER[2].fill, LEASE_TIER[3].fill, ...CATS.map((c) => c.color), ...TYPES.map((t) => t.color), ...ERAS.map((e) => e.color), ERA_UNKNOWN, ...SCORE_BANDS.map((b) => b.color), SCORE_UNKNOWN])];
-const iconOf = (l: MiniLease) => (l.k === "infra" && l.t !== "other" ? l.t : l.k === "roads" || l.k === "shore" ? l.k : "");
+const iconOf = (l: MiniLease) => (l.k === "infra" && l.t !== "other" ? l.t : l.k === "roads" || l.k === "shore" ? l.k : l.og ? "oilgas" : "");
 
 /** The data labels inside map popups (plain HTML). */
 const tipLabel = (text: string, color: string, dashed = false) =>
@@ -278,7 +288,7 @@ export default function MapView(props: Props) {
         if (cb.current.hover !== p) cb.current.onHover(p);
         const l = byPrc.current.get(p);
         if (!l) return;
-        const html = `<div style="font-size:12px;line-height:1.35;max-width:220px"><div style="font-weight:600;color:#2b2a26">${esc(l.n)}</div><div style="color:#57534a">PRC ${esc(l.p)} ${TIP_LABEL.source}</div><div style="color:#57534a">${l.k === "infra" ? (l.ts ?? [l.t]).map((t) => TYPE_LABEL[t]).join(" + ") : CAT_LABEL[l.k]} ${TIP_LABEL.estimate}</div></div>`;
+        const html = `<div style="font-size:12px;line-height:1.35;max-width:220px"><div style="font-weight:600;color:#2b2a26">${esc(l.n)}</div><div style="color:#57534a">PRC ${esc(l.p)} ${TIP_LABEL.source}</div><div style="color:#57534a">${l.k === "infra" ? (l.ts ?? [l.t]).map((t) => TYPE_LABEL[t]).join(" + ") : l.og ? "Oil and gas" : CAT_LABEL[l.k]} ${l.og ? TIP_LABEL.source : TIP_LABEL.estimate}</div></div>`;
         popup.current ??= new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 10, className: "lease-tip" });
         popup.current.setLngLat((f.geometry as GeoJSON.Point).coordinates as [number, number]).setHTML(html).addTo(m);
       });
@@ -294,10 +304,49 @@ export default function MapView(props: Props) {
       m.on("click", (e: maplibregl.MapMouseEvent) => {
         const hits = m.queryRenderedFeatures(e.point, { layers: ["lease-pt", "cluster"].filter((id) => m.getLayer(id)) });
         if (hits.length) return;
+        // State oil & gas: points first (wells, terminals, former leases), then footprints.
+        const ogPt = cb.current.og.on ? m.queryRenderedFeatures(e.point, { layers: OG_POINT_LAYERS.filter((id) => m.getLayer(id)) })[0] : null;
+        const ogFp = cb.current.og.on && !ogPt ? m.queryRenderedFeatures(e.point, { layers: OG_FILL_LAYERS.filter((id) => m.getLayer(id)) })[0] : null;
+        if (ogPt || ogFp) {
+          const f = (ogPt ?? ogFp)!;
+          const p = f.properties ?? {};
+          const coords = ogPt ? ((f.geometry as GeoJSON.Point).coordinates as [number, number]) : undefined;
+          const kind = f.layer.id.startsWith("og-well") ? "well" : f.layer.id.startsWith("og-term") ? "terminal" : f.layer.id.startsWith("og-former") ? "former" : "footprint";
+          cb.current.onSelectOg({ kind, id: String(kind === "well" ? p.api : kind === "terminal" ? p.berth : p.prc), coords });
+          return;
+        }
+        cb.current.onSelectOg(null);
         const place = m.getLayer("access-fill") ? m.queryRenderedFeatures(e.point, { layers: ["access-fill"] })[0] : null;
         cb.current.onSelectPlace((place?.properties?.id as string) ?? null);
         if (!place) cb.current.onSelect(null);
       });
+      // State oil & gas tooltips (plain HTML; full details in the card).
+      const ogTip = (e: MapLayerMouseEvent) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        pointer(true);
+        const p = f.properties ?? {};
+        const id = f.layer.id;
+        const line = (t: string, label = "") => `<div style="color:#57534a">${t}${label}</div>`;
+        let html = "";
+        if (id.startsWith("og-well")) html = `<div style="font-weight:600;color:#2b2a26">Well ${esc(String(p.leaseName ?? ""))} ${esc(String(p.wellNumber ?? ""))}</div>${line(`API ${esc(String(p.api))} · ${esc(String(p.wellStatus ?? ""))}`, TIP_LABEL.source)}${line(LABEL.wells)}`;
+        else if (id.startsWith("og-term")) html = `<div style="font-weight:600;color:#2b2a26">${esc(String(p.terminal ?? "Marine oil terminal"))}</div>${line(`Berth ${esc(String(p.berth))}`, TIP_LABEL.source)}${line(LABEL.terminals)}`;
+        else if (id.startsWith("og-former")) html = `<div style="font-weight:600;color:#2b2a26">Former lease PRC ${esc(String(p.prc))}</div>${line(actionLabel(String(p.former)), TIP_LABEL.source)}`;
+        else if (id === "og-fp-hatch") html = `<div style="font-weight:600;color:#2b2a26">PRC ${esc(String(p.prc))}</div>${line(esc(compLabel(String(p.prc))))}`;
+        else html = `<div style="font-weight:600;color:#2b2a26">Offshore lease PRC ${esc(String(p.prc))}</div>${line(`CSLC: ${esc(String(p.cslc_stated_status ?? ""))}`, TIP_LABEL.source)}`;
+        popup.current ??= new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 10, className: "lease-tip" });
+        popup.current.setLngLat(e.lngLat).setHTML(`<div style="font-size:12px;line-height:1.35;max-width:240px">${html}</div>`).addTo(m);
+      };
+      for (const id of [...OG_POINT_LAYERS, ...OG_FILL_LAYERS]) {
+        m.on("mousemove", id, ogTip);
+        m.on("mouseleave", id, () => { pointer(false); popup.current?.remove(); });
+      }
+      m.on("mousemove", "sov-wb", (e: MapLayerMouseEvent) => {
+        const p = e.features?.[0]?.properties ?? {};
+        popup.current ??= new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 10, className: "lease-tip" });
+        popup.current.setLngLat(e.lngLat).setHTML(`<div style="font-size:12px;line-height:1.35;max-width:240px"><div style="font-weight:600;color:#2b2a26">${esc(titleCase(String(p.name ?? "")))}</div><div style="color:#57534a">${esc(LABEL.waterbodies)}${TIP_LABEL.source}</div></div>`).addTo(m);
+      });
+      m.on("mouseleave", "sov-wb", () => popup.current?.remove());
       m.on("mouseenter", "access-fill", () => pointer(true));
       m.on("mouseleave", "access-fill", () => pointer(false));
 
@@ -559,6 +608,23 @@ export default function MapView(props: Props) {
     m.setLayoutProperty("county-label", "visibility", on ? "visible" : "none");
   }
 
+  // ---- State oil & gas and State sovereign lands (added on first use)
+  function syncOgLayers() {
+    const m = map.current;
+    if (!m || !ready.current) return;
+    const { og } = cb.current;
+    if (og.on && og.data) addOg(m, og.data, "cluster");
+    syncOg(m, og.on, og.view);
+    const s = og.view.selected;
+    setOgSelPoint(m, s && s.kind !== "footprint" ? (s.coords ?? null) : null);
+  }
+  function syncWatersLayer() {
+    const m = map.current;
+    if (!m || !ready.current) return;
+    if (cb.current.waters) addWaters(m, cb.current.manifest?.granted?.kind === "geojson" ? cb.current.manifest.granted.url : null);
+    syncWaters(m, cb.current.waters);
+  }
+
   function syncAll() {
     syncCounties();
     syncData();
@@ -568,6 +634,8 @@ export default function MapView(props: Props) {
     syncLeasesVisible();
     ensureOverlays();
     syncUserOverlays();
+    syncOgLayers();
+    syncWatersLayer();
   }
 
   useEffect(syncData, [props.leases]);
@@ -577,6 +645,8 @@ export default function MapView(props: Props) {
   useEffect(syncUserOverlays, [props.overlays, props.overlayVis]);
   useEffect(syncTerrain, [props.terrain]);
   useEffect(syncCounties, [props.counties]);
+  useEffect(syncOgLayers, [props.og]);
+  useEffect(syncWatersLayer, [props.waters, props.manifest]);
   useEffect(() => {
     ensureOverlays();
     syncLayers();
@@ -590,6 +660,8 @@ export default function MapView(props: Props) {
 function esc(s: string) {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
+
+const titleCase = (s: string) => s.toLowerCase().replace(/\b([a-z])/g, (c) => c.toUpperCase()).replace(/'S\b/g, "'s");
 
 function bboxOf(g: GeoJSON.Geometry): [number, number, number, number] {
   let b: [number, number, number, number] = [180, 90, -180, -90];

@@ -77,6 +77,8 @@ type Props = {
   setCounties: (on: boolean) => void;
   /** Floating panel: tallest it may be (px) so it stays off California at Home; it scrolls inside. */
   maxHeight?: number | null;
+  /** Worth watching (Estimate, map-wide): this map flags it; the state does not. */
+  watch: { on: boolean; set: (on: boolean) => void; total: number };
 };
 
 /** A lease mark as drawn on the map. */
@@ -209,6 +211,25 @@ export function MapControls(p: Props) {
     </ul>
   );
 
+  // Worth watching: a map-wide filter, labeled Estimate everywhere it shows.
+  const watchRow = (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={p.watch.on}
+      onClick={() => p.watch.set(!p.watch.on)}
+      title="Estimate: this map flags it; the state does not. Each item says why."
+      className={`flex w-full items-center gap-2 rounded-lg border border-dashed px-2 py-[5px] text-left ${p.watch.on ? "border-ink/70 bg-white text-ink" : "border-line bg-paper/60 text-ink-faint hover:border-ink-soft"}`}
+    >
+      <span aria-hidden className="flex h-4 w-4 shrink-0 items-center justify-center text-[13px]">◎</span>
+      <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold leading-tight">Worth watching</span>
+      <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-ink-faint">Estimate</span>
+      <span aria-hidden className={`relative h-[14px] w-6 shrink-0 rounded-full transition-colors ${p.watch.on ? "bg-ink" : "bg-line"}`}>
+        <span className={`absolute top-[2px] h-[10px] w-[10px] rounded-full bg-paper transition-[left] ${p.watch.on ? "left-[12px]" : "left-[2px]"}`} />
+      </span>
+    </button>
+  );
+
   const fold = (label: React.ReactNode, isOpen: boolean, toggle: () => void, id: string, children: React.ReactNode) => (
     <section className="border-t border-line">
       <button type="button" onClick={toggle} aria-expanded={isOpen} aria-controls={id} className="flex w-full items-center justify-between py-1.5 text-left text-[12.5px] font-semibold text-ink hover:text-ink-soft">
@@ -227,7 +248,11 @@ export function MapControls(p: Props) {
       <ul className="-mx-1 text-[12px] text-ink" aria-label="Explore by kind">
         {[
           ...KIND_ROWS.map((r) => ({ key: r.key as ExploreKind, label: r.label, mark: <KindIcon k={r.key} size={20} /> })),
-          ...QUIET_ROWS.map((r) => ({ key: r.key, label: r.label, mark: <TierSwatch tier={r.tier} /> })),
+          ...QUIET_ROWS.flatMap((r) => [
+            { key: r.key, label: r.label, mark: <TierSwatch tier={r.tier} /> },
+            // Oil and gas: the state's lease types Oil & Gas Lease and Compensatory Agreement, a kind under Commercial and industrial.
+            ...(r.key === "commercial" ? [{ key: "oilgas" as ExploreKind, label: "\u2003Oil and gas", mark: <KindIcon k="oilgas" size={20} /> }] : []),
+          ]),
         ].map((r) => {
           const on = p.kinds.active === r.key;
           const dim = !!p.kinds.active && !on;
@@ -249,7 +274,7 @@ export function MapControls(p: Props) {
         })}
         <li className="flex items-center gap-2 px-1 py-[3px]"><span aria-hidden className="inline-flex w-5 justify-center"><LeaseSwatch size={15} /></span> Group of lease sites (count)</li>
       </ul>
-      <p className="text-[11px] text-ink-faint">Icons from zoom 11; dots and counts below that. A lease with two kinds (say, a pipeline and a cable) counts under both.</p>
+      <p className="text-[11px] text-ink-faint">Icons from zoom 11; dots and counts below that. A lease with two kinds (say, a pipeline and a cable) counts under both. Oil and gas is the state&apos;s own lease type (source data), counted within Commercial and industrial.</p>
       <div>
         <p className="mb-1 text-[11.5px] font-semibold text-ink-soft">Color by</p>
         <div className="flex gap-0.5 rounded-lg bg-sand p-0.5" role="group" aria-label="Color lease points by">
@@ -357,6 +382,7 @@ export function MapControls(p: Props) {
     return (
       <div className="border-b border-line px-4 pb-3 pt-1">
         {stack}
+        <div className="mt-1.5">{watchRow}</div>
         <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="mt-2 w-full rounded-full border border-line bg-paper py-1.5 text-[12.5px] font-medium text-ink-soft">
           {open ? "Hide views, key and filters" : `Views, key, 3D and filters${p.filterCount ? ` · ${p.filterCount} on` : ""}`}
         </button>
@@ -397,6 +423,7 @@ export function MapControls(p: Props) {
             <div className="space-y-2">
               {presetSelect}
               {stack}
+              {watchRow}
               {p.stackNote}
               {folds}
             </div>

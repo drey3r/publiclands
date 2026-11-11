@@ -1,4 +1,5 @@
 import { ERAS, eraOf } from "./legend";
+import { isWatchedLease } from "./oilgas";
 import type { CatKey, KindKey, MiniLease, TypeKey } from "./types";
 
 export type Status = "current" | "expired" | "none";
@@ -15,7 +16,7 @@ const TYPE_KEYS: TypeKey[] = ["cable", "pipeline", "outfall", "power"];
  * the lease's text; the others are categories. Shareable as ?kind=<key>.
  */
 export type ExploreKind = KindKey | Exclude<CatKey, "infra" | "roads" | "shore">;
-export const EXPLORE_KINDS: ExploreKind[] = ["cable", "pipeline", "outfall", "power", "roads", "shore", "agency", "commercial", "rec", "other"];
+export const EXPLORE_KINDS: ExploreKind[] = ["cable", "pipeline", "outfall", "power", "roads", "shore", "agency", "commercial", "oilgas", "rec", "other"];
 const isType = (k: string): k is Exclude<TypeKey, "other"> => (TYPE_KEYS as string[]).includes(k);
 
 export type Filters = {
@@ -33,21 +34,27 @@ export type Filters = {
   status: Status[];
   /** The lease text says non-operational, abandoned, inactive or out of service. */
   nonop: boolean;
+  /** Oil and gas kind: the state's lease type is Oil & Gas Lease or Compensatory Agreement (a kind under Commercial and industrial). */
+  oilgas: boolean;
+  /** Worth watching (Estimate, map-wide): this map flags it; the state does not. */
+  watch: boolean;
   q: string;
 };
 
-export const EMPTY: Filters = { cats: [], types: [], eras: [], minScore: 0, region: "", county: "", waterbody: "", firstOnly: false, status: [], nonop: false, q: "" };
+export const EMPTY: Filters = { cats: [], types: [], eras: [], minScore: 0, region: "", county: "", waterbody: "", firstOnly: false, status: [], nonop: false, oilgas: false, watch: false, q: "" };
 
 /** The kind a filter shows, when "What is it?" is exactly one kind; otherwise null. */
 export function kindOf(f: Filters): ExploreKind | null {
+  if (f.oilgas) return f.types.length === 0 && (f.cats.length === 0 || (f.cats.length === 1 && f.cats[0] === "commercial")) ? "oilgas" : null;
   if (f.types.length === 1 && (f.cats.length === 0 || (f.cats.length === 1 && f.cats[0] === "infra"))) return f.types[0] as ExploreKind;
   if (f.types.length === 0 && f.cats.length === 1 && f.cats[0] !== "infra") return f.cats[0] as ExploreKind;
   return null;
 }
 /** Show only this kind (or, when it is already the only one shown, show everything again). Other filters stay. */
 export function withKind(f: Filters, k: ExploreKind): Filters {
-  if (kindOf(f) === k) return { ...f, cats: [], types: [] };
-  return isType(k) ? { ...f, cats: [], types: [k] } : { ...f, cats: [k], types: [] };
+  if (kindOf(f) === k) return { ...f, cats: [], types: [], oilgas: false };
+  if (k === "oilgas") return { ...f, cats: [], types: [], oilgas: true };
+  return isType(k) ? { ...f, cats: [], types: [k], oilgas: false } : { ...f, cats: [k], types: [], oilgas: false };
 }
 /** Statewide count per kind (a lease with a cable and a pipeline counts under both). */
 export function kindCounts(all: MiniLease[]): Record<ExploreKind, number> {
@@ -55,13 +62,14 @@ export function kindCounts(all: MiniLease[]): Record<ExploreKind, number> {
   for (const l of all) {
     if (l.k === "infra") for (const t of l.ts ?? [l.t]) { if (isType(t)) n[t]++; }
     else n[l.k as ExploreKind]++;
+    if (l.og) n.oilgas++;
   }
   return n;
 }
 
 export function activeCount(f: Filters) {
   return (
-    (f.cats.length || f.types.length ? 1 : 0) +
+    (f.cats.length || f.types.length || f.oilgas ? 1 : 0) +
     (f.eras.length ? 1 : 0) +
     (f.minScore > 0 ? 1 : 0) +
     (f.region ? 1 : 0) +
@@ -69,7 +77,8 @@ export function activeCount(f: Filters) {
     (f.waterbody ? 1 : 0) +
     (f.firstOnly ? 1 : 0) +
     (f.status.length ? 1 : 0) +
-    (f.nonop ? 1 : 0)
+    (f.nonop ? 1 : 0) +
+    (f.watch ? 1 : 0)
   );
 }
 
@@ -95,6 +104,8 @@ export function applyFilters(all: MiniLease[], f: Filters): MiniLease[] {
     if (what && !(l.k === "infra" ? (types.size ? (l.ts ?? [l.t]).some((t) => types.has(t)) : cats.has("infra")) : cats.has(l.k))) return false;
     if (codes.size && !codes.has(l.xs)) return false;
     if (f.nonop && !l.no) return false;
+    if (f.oilgas && !l.og) return false;
+    if (f.watch && !isWatchedLease(l)) return false;
     if (eras) {
       const e = eraOf(l.e);
       if (!e || !eras.includes(e)) return false;
@@ -126,6 +137,7 @@ export function toQuery(f: Filters): string {
   if (f.firstOnly) p.set("first", "1");
   if (f.status.length) p.set("status", f.status.join(","));
   if (f.nonop) p.set("nonop", "1");
+  if (f.watch) p.set("watch", "1");
   if (f.q) p.set("q", f.q);
   return p.toString();
 }
@@ -139,8 +151,10 @@ export function fromQuery(sp: URLSearchParams): Filters {
   if (oldType.includes("other")) for (const c of CAT_KEYS) if (c !== "infra") cats.add(c);
   const types = new Set(oldType.filter((t): t is TypeKey => (TYPE_KEYS as string[]).includes(t)));
   // ?kind=cable (explore by kind)
+  let oilgas = false;
   for (const k of list("kind")) {
-    if (isType(k)) types.add(k);
+    if (k === "oilgas") oilgas = true;
+    else if (isType(k)) types.add(k);
     else if ((EXPLORE_KINDS as string[]).includes(k)) cats.add(k as CatKey);
   }
   return {
@@ -154,6 +168,8 @@ export function fromQuery(sp: URLSearchParams): Filters {
     firstOnly: sp.get("first") === "1",
     status: list("status").filter((x): x is Status => STATUSES.some((s) => s.key === x)),
     nonop: sp.get("nonop") === "1",
+    oilgas,
+    watch: sp.get("watch") === "1",
     q: sp.get("q") ?? "",
   };
 }

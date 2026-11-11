@@ -57,6 +57,10 @@ const min = L.full.map((l) => ({
   ...(l.derived.typeKeys.length > 1 ? { ts: l.derived.typeKeys } : {}),
   xs: l.derived.expiry === "expired" ? "e" : l.derived.expiry === "current" ? "c" : "n",
   no: l.derived.stateText ? 1 : 0,
+  ...(l.derived.stateText ? { nw: l.derived.stateText } : {}),
+  ...(l.derived.expiry === "expired" ? { xd: l.facts.expiration } : {}),
+  // Oil and gas kind: the state's own lease type (source data).
+  ...(/^(Oil & Gas Lease|Compensatory Agreement)$/.test(l.facts.typeOfLease ?? "") ? { og: 1 } : {}),
   e: l.derived.mapEra.decade,
   s: l.score.value,
   r: l.region.value,
@@ -169,6 +173,27 @@ fs.rmSync(outOg, { recursive: true, force: true });
 if (ogIndex) {
   mkdirp(outOg);
   for (const f of fs.readdirSync(ogDir)) if (/\.(geo)?json$/.test(f)) fs.copyFileSync(path.join(ogDir, f), path.join(outOg, f));
+  // Commission records for the footprint cards and the former-leases table, from every data/records source
+  // (same merge as lib/records.ts: one entry per URL, newest first).
+  const recBase = path.join(root, "data/records");
+  const recDirs = fs.existsSync(recBase) ? fs.readdirSync(recBase, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => path.join(recBase, d.name)) : [];
+  for (const d of (process.env.RECORDS_DIRS ?? "").split(",").map((x) => x.trim()).filter(Boolean)) recDirs.push(path.resolve(root, d));
+  const fp = readJson(path.join(ogDir, "offshore-leases.geojson"));
+  const formerAll = readJson(path.join(ogDir, "former-leases.json")).leases ?? [];
+  const keys = new Set([...fp.features.flatMap((f) => [f.properties.recordsKey, ...(f.properties.leaseNums ?? [])]), ...formerAll.map((l) => l.prc)].filter(Boolean));
+  const urlKey = (u) => String(u).trim().toLowerCase().replace(/^http:/, "https:").replace(/#.*$/, "").replace(/\/+$/, "");
+  const recs = {};
+  for (const k of keys) {
+    const byUrl = new Map();
+    for (const dir of recDirs) {
+      const file = path.join(dir, `${k.replace(/[^\w.-]/g, "_")}.json`);
+      if (!exists(file)) continue;
+      const j = readJson(file);
+      for (const r of Array.isArray(j) ? j : (j.records ?? [])) if (r?.url && r.title && !byUrl.has(urlKey(r.url))) byUrl.set(urlKey(r.url), { date: r.date ?? null, item: r.item ?? null, title: r.title, pages: r.pages ?? null, url: r.url });
+    }
+    if (byUrl.size) recs[k] = [...byUrl.values()].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+  }
+  fs.writeFileSync(path.join(outOg, "records.json"), JSON.stringify(recs));
 }
 
 // ---------- overlays: your own GeoJSON layers (optional) ----------

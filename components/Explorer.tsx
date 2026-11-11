@@ -19,6 +19,12 @@ import type { Bounds, ColorBy } from "./MapView";
 import type * as maplibregl from "maplibre-gl";
 import { AUTO_PITCH, AUTO_ZOOM, bearingWithin, type Camera, type CameraOverride } from "@/lib/camera";
 import { homeCamera, limitToHome, roomBeside } from "@/lib/home";
+import { GLYPH, MARK_GLYPH } from "@/lib/icons";
+import { LABEL, MARK, OG_BASE, OG_DEFAULT, OG_FRAME, WELL_GROUPS, footprintWatch, isWatchedLease, leaseWatch, wellWatch, type FormerLease, type Footprint, type OgPart, type OgRecord, type Terminal, type WatchKey, type Well, type WellGroup } from "@/lib/oilgas";
+import type { OgData } from "./ogLayers";
+import type { OgSel } from "./MapView";
+import { MarkIcon } from "./KindIcon";
+import { FootprintCard, FormerTable, OgKey, TerminalCard, WatchSummary, WatersKey, WatersSwatch, WellCard, WellDot, recordsFor } from "./OgPanel";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => <div className="absolute inset-0 animate-pulse bg-sand" /> });
 
@@ -28,26 +34,31 @@ const PLACE_MAX = 60;
  * The layer stack, in panel order; also the ?layers= deep link (plus "open": only land open
  * to the public). Old links: "spaces" means all three kinds of public land.
  */
-type ShowKey = "state" | "leases" | "federal" | "local";
-const SHOW_KEYS: ShowKey[] = ["state", "leases", "federal", "local"];
-const SHOW_LABEL: Record<ShowKey, string> = { state: "State lands", leases: "Lease sites", federal: "Federal lands", local: "Local and nonprofit" };
+type ShowKey = "state" | "leases" | "federal" | "local" | "oilgas" | "waters";
+const SHOW_KEYS: ShowKey[] = ["state", "leases", "federal", "local", "oilgas", "waters"];
+const SHOW_LABEL: Record<ShowKey, string> = { state: "State lands", leases: "Lease sites", federal: "Federal lands", local: "Local and nonprofit", oilgas: "State oil & gas", waters: "State sovereign lands" };
 const LAND_KEYS: LandKey[] = ["state", "federal", "local"];
 type View = { show: Record<ShowKey, boolean>; openOnly: boolean };
-const ALL_ON: Record<ShowKey, boolean> = { state: true, leases: true, federal: true, local: true };
+/** The default view. State oil & gas and State sovereign lands start off. */
+const ALL_ON: Record<ShowKey, boolean> = { state: true, leases: true, federal: true, local: true, oilgas: false, waters: false };
 function viewFromQuery(sp: URLSearchParams): View {
   const raw = sp.get("layers");
   if (!raw) return { show: { ...ALL_ON }, openOnly: false };
   const on = new Set(raw.split(",").map((x) => x.trim()));
   const land = (k: string) => on.has(k) || on.has("spaces");
-  return { show: { state: land("state"), leases: on.has("leases"), federal: land("federal"), local: land("local") }, openOnly: on.has("open") };
+  return { show: { state: land("state"), leases: on.has("leases"), federal: land("federal"), local: land("local"), oilgas: on.has("oilgas"), waters: on.has("waters") }, openOnly: on.has("open") };
 }
 /** One-click views. */
+const OFF = { oilgas: false, waters: false };
 const PRESETS: (Preset & View)[] = [
-  { key: "everything", label: "Everything", show: { ...ALL_ON }, openOnly: false },
-  { key: "leases", label: "Leases only", show: { state: false, leases: true, federal: false, local: false }, openOnly: false },
-  { key: "public", label: "Public lands only", show: { state: true, leases: false, federal: true, local: true }, openOnly: false },
-  { key: "parks", label: "Parks only", show: { state: true, leases: false, federal: true, local: true }, openOnly: true },
-  { key: "state", label: "State lands only", show: { state: true, leases: false, federal: false, local: false }, openOnly: false },
+  { key: "default", label: "Lands and leases", show: { ...ALL_ON }, openOnly: false },
+  { key: "leases", label: "Leases only", show: { state: false, leases: true, federal: false, local: false, ...OFF }, openOnly: false },
+  { key: "public", label: "Public lands only", show: { state: true, leases: false, federal: true, local: true, ...OFF }, openOnly: false },
+  { key: "parks", label: "Parks only", show: { state: true, leases: false, federal: true, local: true, ...OFF }, openOnly: true },
+  { key: "state", label: "State lands only", show: { state: true, leases: false, federal: false, local: false, ...OFF }, openOnly: false },
+  // Turns the family on and frames the coast (Point Conception to Huntington Beach).
+  { key: "oilgas", label: "Oil & gas", show: { state: false, leases: true, federal: false, local: false, oilgas: true, waters: true }, openOnly: false },
+  { key: "everything", label: "Everything", show: { state: true, leases: true, federal: true, local: true, oilgas: true, waters: true }, openOnly: false },
 ];
 type Sheet = "peek" | "half" | "full";
 
@@ -132,6 +143,11 @@ export default function Explorer() {
   const [mask] = useState<MaskMode>(() => (typeof window === "undefined" ? maskFrom(null) : maskFrom(new URLSearchParams(window.location.search).get("mask"))));
   const map = useRef<MLMap | null>(null);
   const initial = useRef<URLSearchParams | null>(null);
+  // ---- State oil & gas (fetched the first time the family is switched on)
+  const [ogParts, setOgParts] = useState<Record<OgPart, boolean>>({ ...OG_DEFAULT });
+  const [ogSel, setOgSel] = useState<OgSel | null>(null);
+  const [og, setOg] = useState<{ data: OgData; former: FormerLease[]; records: Record<string, OgRecord[]>; terminalsCaveat: string } | null>(null);
+  const ogLoading = useRef(false);
 
   // ---- load data
   useEffect(() => {
@@ -160,6 +176,15 @@ export default function Explorer() {
       .catch((e) => setError(String(e)));
   }, []);
 
+  useEffect(() => {
+    if (!show.oilgas || og || ogLoading.current) return;
+    ogLoading.current = true;
+    const j = (f: string) => fetch(`${OG_BASE}/${f}`).then((r) => r.json());
+    Promise.all([j("offshore-leases.geojson"), j("state-lease-wells.geojson"), j("marine-oil-terminals.geojson"), j("former-leases.json"), j("records.json"), j("index.json")])
+      .then(([footprints, wells, terminals, former, records, index]) => setOg({ data: { footprints, wells, terminals }, former: former.leases, records, terminalsCaveat: index.terminalsCaveat ?? "" }))
+      .catch((e) => { ogLoading.current = false; setError(String(e)); });
+  }, [show.oilgas, og]);
+
   // ---- filters → URL (shareable)
   useEffect(() => {
     if (!initial.current) return;
@@ -179,6 +204,45 @@ export default function Explorer() {
   const byPrc = useMemo(() => new Map(all.map((l) => [l.p, l])), [all]);
   const filtered = useMemo(() => applyFilters(all, filters), [all, filters]);
   const nKinds = useMemo(() => kindCounts(all), [all]);
+
+  // ---- State oil & gas: records per footprint, Worth watching flags, counts
+  const fps = useMemo(() => og?.data.footprints.features ?? [], [og]);
+  const fpRecords = useMemo(() => new Map(fps.map((f) => [f.properties.prc, og ? recordsFor(f.properties, og.records) : []])), [fps, og]);
+  const fpWatch = useMemo(() => new Map(fps.map((f) => [f.properties.prc, footprintWatch(f.properties, fpRecords.get(f.properties.prc) ?? [])])), [fps, fpRecords]);
+  const watchFp = useMemo(() => [...fpWatch].filter(([, r]) => r.length).map(([p]) => p), [fpWatch]);
+  const wells = useMemo(() => (og?.data.wells.features ?? []) as GeoJSON.Feature<GeoJSON.Point, Well>[], [og]);
+  const terminals = useMemo(() => (og?.data.terminals.features ?? []) as GeoJSON.Feature<GeoJSON.Point, Terminal>[], [og]);
+  const wellCounts = useMemo(() => {
+    const c = Object.fromEntries(WELL_GROUPS.map((g) => [g.key, 0])) as Record<WellGroup, number>;
+    for (const w of wells) c[w.properties.statusGroup]++;
+    return c;
+  }, [wells]);
+  const watchCounts = useMemo(() => {
+    const c: Record<WatchKey, number> = { nonop: 0, expired: 0, notprod: 0, idle: wellCounts.idle, disagree: 0, nodecom: 0 };
+    for (const l of all) for (const r of leaseWatch(l)) c[r.key]++;
+    for (const rs of fpWatch.values()) for (const r of rs) c[r.key]++;
+    return c;
+  }, [all, fpWatch, wellCounts]);
+  /** Items Worth watching flags: leases (one in two groups counts once), plus flagged footprints and idle wells when the family is on. */
+  const watchLeases = useMemo(() => all.filter(isWatchedLease).length, [all]);
+  const ogView = useMemo(() => ({ parts: ogParts, watch: filters.watch, watchFp, selected: ogSel }), [ogParts, filters.watch, watchFp, ogSel]);
+  const ogMap = useMemo(() => ({ on: show.oilgas, data: og?.data ?? null, view: ogView }), [show.oilgas, og, ogView]);
+  /** Wells, footprints and terminals shown in view (what the State oil & gas row counts). */
+  const ogInView = useMemo(() => {
+    if (!og || !bounds) return { wells: [] as typeof wells, fps: [] as typeof fps, terminals: 0 };
+    const [w, so, e, n] = bounds;
+    const inB = ([x, y]: number[]) => x >= w && x <= e && y >= so && y <= n;
+    const ws = wells.filter((f) => ogParts[`well-${f.properties.statusGroup}`] && (!filters.watch || f.properties.statusGroup === "idle") && inB(f.geometry.coordinates));
+    const fs = fps.filter((f) => {
+      if (!ogParts.footprints) return false;
+      if (filters.watch && !watchFp.includes(f.properties.prc)) return false;
+      const b = bboxOf(f.geometry);
+      return b[0] <= e && b[2] >= w && b[1] <= n && b[3] >= so;
+    });
+    const ts = ogParts.terminals && !filters.watch ? terminals.filter((f) => inB(f.geometry.coordinates)).length : 0;
+    return { wells: ws, fps: fs, terminals: ts };
+  }, [og, bounds, wells, fps, terminals, ogParts, filters.watch, watchFp]);
+  const ogCount = ogInView.wells.length + new Set(ogInView.fps.map((f) => f.properties.recordsKey)).size + ogInView.terminals;
   const deferredFiltered = useDeferredValue(filtered);
   const inView = useMemo(() => {
     const ls = sortForList(inBounds(deferredFiltered, bounds));
@@ -324,6 +388,7 @@ export default function Explorer() {
   const select = useCallback(
     (p: string | null, fly = false) => {
       setSelected(p);
+      if (p) setOgSel(null);
       setPinned((x) => (x === p ? x : null));
       if (p) {
         setSelectedPlace(null);
@@ -449,14 +514,53 @@ export default function Explorer() {
   };
 
   const sel = selected ? byPrc.get(selected) : null;
+
+  // ---- State oil & gas selection: a footprint (also from a former-lease mark or the table), a well, a terminal
+  const selectOg = (x: OgSel | null) => {
+    setOgSel(x ? (x.kind === "former" ? { kind: "footprint", id: x.id } : x) : null);
+    if (x) {
+      setSelected(null);
+      if (mobile) setSheet((st) => (st === "peek" ? "half" : st));
+      requestAnimationFrame(() => document.getElementById("list-scroll")?.scrollTo({ top: 0, behavior: reduceMotion() ? "auto" : "smooth" }));
+    }
+  };
+  const zoomFootprint = (prc: string) => {
+    const key = fps.find((f) => f.properties.prc === prc)?.properties.recordsKey;
+    const b = fps.filter((f) => f.properties.recordsKey === key).map((f) => bboxOf(f.geometry));
+    if (b.length) fit([Math.min(...b.map((x) => x[0])), Math.min(...b.map((x) => x[1])), Math.max(...b.map((x) => x[2])), Math.max(...b.map((x) => x[3]))], 13);
+  };
+  const showFormer = (prc: string) => {
+    setShow((v) => ({ ...v, oilgas: true }));
+    setOgParts((v) => ({ ...v, footprints: true, former: true }));
+    selectOg({ kind: "footprint", id: prc });
+    zoomFootprint(prc);
+  };
+  const ogCard = (() => {
+    if (!ogSel || !og || !show.oilgas) return null;
+    const close = () => setOgSel(null);
+    const zoomPt = (c?: [number, number]) => c && map.current?.flyTo({ center: c, zoom: Math.max(13, map.current.getZoom()), padding: padding(), duration: reduceMotion() ? 0 : 1200 });
+    if (ogSel.kind === "footprint") {
+      const f = fps.find((x) => x.properties.prc === ogSel.id)?.properties;
+      if (!f) return null;
+      return <FootprintCard f={f} parcels={fps.filter((x) => x.properties.recordsKey === f.recordsKey).map((x) => x.properties)} records={fpRecords.get(f.prc) ?? []} reasons={filters.watch ? fpWatch.get(f.prc) ?? [] : []} onClose={close} onZoom={() => zoomFootprint(f.prc)} />;
+    }
+    if (ogSel.kind === "well") {
+      const w = wells.find((x) => x.properties.api === ogSel.id);
+      if (!w) return null;
+      return <WellCard w={w.properties} reasons={filters.watch ? wellWatch(w.properties) : []} onClose={close} onZoom={() => zoomPt(w.geometry.coordinates as [number, number])} />;
+    }
+    const t = terminals.find((x) => x.properties.berth === ogSel.id);
+    if (!t) return null;
+    return <TerminalCard berths={terminals.filter((x) => x.properties.wo === t.properties.wo).map((x) => x.properties)} caveat={og.terminalsCaveat} onClose={close} onZoom={() => zoomPt(t.geometry.coordinates as [number, number])} />;
+  })();
   const meta = data?.meta;
   const nActive = activeCount(filters);
   const atStatewide = !bounds || bounds[2] - bounds[0] > 6;
 
-  const counts: Record<ShowKey, number> = { state: landCount.state, leases: inView.length, federal: landCount.federal, local: landCount.local };
+  const counts: Record<ShowKey, number> = { state: landCount.state, leases: inView.length, federal: landCount.federal, local: landCount.local, oilgas: ogCount, waters: 0 };
   const landLoaded = spacesReady || !hasPlaces;
-  const loaded: Record<ShowKey, boolean> = { state: landLoaded, leases: !!data && !!bounds, federal: landLoaded, local: landLoaded };
-  const countText = (k: ShowKey) => (loaded[k] ? `${counts[k].toLocaleString()} in view` : "Loading…");
+  const loaded: Record<ShowKey, boolean> = { state: landLoaded, leases: !!data && !!bounds, federal: landLoaded, local: landLoaded, oilgas: !!og && !!bounds, waters: true };
+  const countText = (k: ShowKey) => (k === "waters" ? "Reference" : loaded[k] ? `${counts[k].toLocaleString()} in view` : "Loading…");
   const toggle = (k: ShowKey) => setShow((v) => ({ ...v, [k]: !v[k] }));
   const landSwatch = (k: LandKey) => {
     const c = LAND.find((x) => x.key === k)!.color;
@@ -473,8 +577,27 @@ export default function Explorer() {
     on: show[k],
     status: countText(k),
     onToggle: () => toggle(k),
-    title: k === "leases" ? "State Lands Commission lease sites (source data: one point per lease, approximate)" : `${LAND.find((x) => x.key === k)?.note}. Source data: CPAD's owner level (AGNCY_LEV).`,
-    swatch: k === "leases" ? <LeaseSwatch /> : landSwatch(k),
+    title:
+      k === "leases" ? "State Lands Commission lease sites (source data: one point per lease, approximate)"
+      : k === "oilgas" ? "Offshore oil and gas lease footprints, former leases and marine oil terminals (CSLC); oil and gas wells on state leases (CalGEM)"
+      : k === "waters" ? LABEL.waters
+      : `${LAND.find((x) => x.key === k)?.note}. Source data: CPAD's owner level (AGNCY_LEV).`,
+    swatch: k === "leases" ? <LeaseSwatch /> : k === "oilgas" ? <MarkIcon glyph={GLYPH.oilgas} st={MARK.terminal} size={16} /> : k === "waters" ? <WatersSwatch /> : landSwatch(k as LandKey),
+    legend:
+      k === "oilgas" ? (
+        <OgKey
+          parts={ogParts}
+          setPart={(part, on) => setOgParts((v) => ({ ...v, [part]: on }))}
+          counts={{
+            footprints: fps.filter((f) => f.properties.group === "production").length,
+            comp: fps.filter((f) => f.properties.group === "compensatory").length,
+            former: fps.filter((f) => f.properties.former).length,
+            formerAll: og?.former.length ?? 0,
+            terminals: terminals.length,
+            wells: wellCounts,
+          }}
+        />
+      ) : k === "waters" ? <WatersKey /> : undefined,
   }));
   const preset = PRESETS.find((x) => x.openOnly === openOnly && SHOW_KEYS.every((k) => x.show[k] === show[k]))?.key ?? "";
   const onPreset = (key: string) => {
@@ -482,6 +605,7 @@ export default function Explorer() {
     if (!x) return;
     setShow({ ...x.show });
     setOpenOnly(x.openOnly);
+    if (key === "oilgas") fit(OG_FRAME, 10);
   };
   const stackNote = openOnly ? (
     <p className="text-[11.5px] text-ink-soft">
@@ -521,6 +645,7 @@ export default function Explorer() {
       setCounties={setCountyLines}
       datasets={meta?.datasets ?? []}
       kinds={{ counts: nKinds, active: kindOf(filters), onPick: (k) => setFilters((f) => withKind(f, k)) }}
+      watch={{ on: filters.watch, set: (on) => setFilters((f) => ({ ...f, watch: on })), total: watchLeases + (show.oilgas ? watchFp.length + watchCounts.idle : 0) }}
       filters={
         <>
           <FilterPanel f={filters} set={setFilters} counties={counties} waterbodies={waterbodies} methods={meta?.methods ?? {}} />
@@ -548,7 +673,9 @@ export default function Explorer() {
             </p>
           </div>
         )}
+        {ogCard}
         {sel && <SelectedPreview l={sel} onClose={() => setSelected(null)} onFly={() => flyIn(sel.p)} />}
+        {filters.watch && <WatchSummary counts={watchCounts} ogOn={show.oilgas} />}
             {show.leases && atStatewide && !filters.q && nActive === 0 && (
               <section aria-label="Featured stories" className="mb-4">
                 <h2 className="kicker mb-2">Featured stories</h2>
@@ -628,7 +755,7 @@ export default function Explorer() {
             )}
             <ul className="space-y-2" aria-label="Lease sites in view">
               {inView.slice(0, limit).map((l) => (
-                <LeaseCard key={l.p} l={l} active={hover === l.p} selected={selected === l.p} onHover={setHover} onSelect={(p) => select(p, true)} onFly={flyIn} />
+                <LeaseCard key={l.p} l={l} active={hover === l.p} selected={selected === l.p} onHover={setHover} onSelect={(p) => select(p, true)} onFly={flyIn} watch={filters.watch ? leaseWatch(l).map((r) => r.reason) : undefined} />
               ))}
             </ul>
             {inView.length > limit && (
@@ -636,6 +763,55 @@ export default function Explorer() {
                 Show more ({(inView.length - limit).toLocaleString()} left)
               </button>
             )}
+          </section>
+        )}
+
+        {show.oilgas && (
+          <section id="sec-og" aria-labelledby="h-og" className="mb-6">
+            <SectionHead
+              id="h-og"
+              title={SHOW_LABEL.oilgas}
+              count={ogCount}
+              loading={!loaded.oilgas}
+              note={filters.watch ? "Worth watching: flagged footprints and idle wells in view, each with its reason." : "Offshore lease footprints, former leases and marine oil terminals (CSLC); wells on state leases (CalGEM). Click one on the map for its card."}
+            />
+            {og && (
+              <>
+                <ul className="mb-3 grid grid-cols-2 gap-x-3 gap-y-1 text-[12px] text-ink-soft">
+                  <li className="flex items-center gap-1.5"><FootprintMini /> Lease footprints <b className="ml-auto tabular-nums text-ink">{new Set(ogInView.fps.map((f) => f.properties.recordsKey)).size}</b></li>
+                  <li className="flex items-center gap-1.5"><MarkIcon glyph={MARK_GLYPH.terminal} st={MARK.terminal} size={14} /> Terminals <b className="ml-auto tabular-nums text-ink">{ogInView.terminals}</b></li>
+                  {WELL_GROUPS.filter((g) => ogParts[`well-${g.key}`]).map((g) => (
+                    <li key={g.key} className="flex items-center gap-1.5"><WellDot g={g.key} /> {g.label} wells <b className="ml-auto tabular-nums text-ink">{ogInView.wells.filter((w) => w.properties.statusGroup === g.key).length.toLocaleString()}</b></li>
+                  ))}
+                </ul>
+                {filters.watch && (
+                  <ul className="mb-3 space-y-1.5" aria-label="Worth watching: oil and gas">
+                    {[...new Map(ogInView.fps.map((f) => [f.properties.recordsKey, f])).values()].map((f) => (
+                      <li key={f.properties.prc}>
+                        <button type="button" onClick={() => { selectOg({ kind: "footprint", id: f.properties.prc }); zoomFootprint(f.properties.prc); }} className="card w-full p-2.5 text-left hover:border-sage">
+                          <span className="flex items-center text-[13px] font-semibold text-ink">PRC {f.properties.prc}<QuietLabel kind="estimate" title="Estimate: this map flags it; the state does not" /></span>
+                          {(fpWatch.get(f.properties.prc) ?? []).map((r) => <span key={r.key} className="block text-[12px] text-ink-soft">{r.reason}</span>)}
+                        </button>
+                      </li>
+                    ))}
+                    {ogInView.wells.slice(0, 25).map((w) => (
+                      <li key={w.properties.api}>
+                        <button type="button" onClick={() => selectOg({ kind: "well", id: w.properties.api, coords: w.geometry.coordinates as [number, number] })} className="card w-full p-2.5 text-left hover:border-sage">
+                          <span className="flex items-center text-[13px] font-semibold text-ink">Well {w.properties.leaseName} {w.properties.wellNumber}<QuietLabel kind="estimate" title="Estimate: this map flags it; the state does not" /></span>
+                          <span className="block text-[12px] text-ink-soft">CalGEM lists this well as Idle. API {w.properties.api}.</span>
+                        </button>
+                      </li>
+                    ))}
+                    {ogInView.wells.length > 25 && <li className="text-[12px] text-ink-faint">{ogInView.wells.length - 25} more idle wells in view; zoom in to see them listed.</li>}
+                  </ul>
+                )}
+                <details className="group">
+                  <summary className="cursor-pointer text-[13px] font-semibold text-ink">Former state offshore oil leases ({og.former.length})<span className="ml-1 text-[11.5px] font-normal text-ink-faint">quitclaimed or terminated, from CSLC&apos;s tables</span></summary>
+                  <div className="mt-2"><FormerTable former={og.former} records={og.records} onShow={showFormer} /></div>
+                </details>
+              </>
+            )}
+            {!og && <ListSkeleton />}
           </section>
         )}
 
@@ -713,6 +889,9 @@ export default function Explorer() {
             onReady={onReady}
             mask={mask}
             onHome={goHome}
+            og={ogMap}
+            waters={show.waters}
+            onSelectOg={(x) => (x ? selectOg(x) : setOgSel(null))}
           />
           {flown && (
             <button
@@ -750,7 +929,7 @@ function SelectedPreview({ l, onClose, onFly }: { l: MiniLease; onClose: () => v
           {l.x ? <div className="flex items-center text-[11px] font-semibold text-sage-deep">Completed<QuietLabel kind="finding" /></div> : l.f ? <div className="flex items-center text-[11px] font-semibold text-clay">Candidate for review<QuietLabel kind="estimate" title="Estimate: this map assigns it; the State Lands Commission does not" /></div> : null}
           <h2 className="text-[16px] font-semibold leading-snug text-ink">{l.n}</h2>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[12px] text-ink-soft">
-            <span className="inline-flex items-center gap-1"><WhatDot t={l.t} k={l.k} />{whatLabel(l.t, l.k)}</span>
+            <span className="inline-flex items-center gap-1"><WhatDot t={l.t} k={l.k} />{whatLabel(l.t, l.k, l.og)}</span>
             <span>{eraLabel(l.e)}</span>
             {l.w && <span>{l.w}</span>}
             <QuietLabel kind="estimate" />
@@ -858,6 +1037,10 @@ function BottomSheet({ state, setState, title, children }: { state: Sheet; setSt
       <div className="min-h-0 flex-1">{children}</div>
     </div>
   );
+}
+
+function FootprintMini() {
+  return <span aria-hidden className="inline-block h-2.5 w-3.5 shrink-0 rounded-[2px] border border-[#7a5a1e] bg-[#d2b06a]/40" />;
 }
 
 function ListSkeleton() {

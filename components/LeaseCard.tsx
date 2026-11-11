@@ -12,9 +12,11 @@ type Props = {
   onHover: (p: string | null) => void;
   onSelect: (p: string) => void;
   onFly?: (p: string) => void;
+  /** Worth watching reasons (Estimate), shown while that filter is on. */
+  watch?: string[];
 };
 
-export const LeaseCard = memo(function LeaseCard({ l, active, selected, onHover, onSelect, onFly }: Props) {
+export const LeaseCard = memo(function LeaseCard({ l, active, selected, onHover, onSelect, onFly, watch }: Props) {
   return (
     <li
       id={`card-${l.p}`}
@@ -56,11 +58,17 @@ export const LeaseCard = memo(function LeaseCard({ l, active, selected, onHover,
           <QuietLabel kind="source" title="Source data: PRC number and place name from the State Lands Commission lease layer" />
         </p>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-ink-soft">
-          <span className="inline-flex items-center gap-1"><WhatDot t={l.t} k={l.k} />{whatLabel(l.t, l.k)}</span>
+          <span className="inline-flex items-center gap-1"><WhatDot t={l.t} k={l.k} />{whatLabel(l.t, l.k, l.og)}</span>
           <span className="inline-flex items-center gap-1"><span aria-hidden className="h-2 w-2 rounded-sm" style={{ background: eraColor(l.e) }} />{eraLabel(l.e)}</span>
           <span className="text-ink-faint">{l.c ? `${l.c} Co.` : l.r}</span>
           <QuietLabel kind="estimate" title="Estimate: what it is, era and county are this map's readings of the record" />
         </p>
+        {watch && watch.length > 0 && (
+          <p className="mt-0.5 flex items-start text-[12px] text-ink">
+            <span>{watch.join(" ")}</span>
+            <QuietLabel kind="estimate" title="Estimate (Worth watching): this map flags it; the state does not" />
+          </p>
+        )}
         <div className="mt-2 flex items-center">
           <div className="w-28"><StageTracker stage={l.st} completed={!!l.x} compact /></div>
           <QuietLabel kind="finding" title="Finding: this project's review stage for the site" />
