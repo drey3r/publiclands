@@ -270,6 +270,13 @@ export default function Explorer() {
     return selPlace ? [selPlace, ...ls.filter((p) => p.id !== selPlace.id)] : ls;
   }, [openPlaces, show, selPlace]);
   const spacesOn = LAND_KEYS.some((k) => show[k]);
+  // One object per real change: MapView's layer effect depends on it, and a fresh object on every render
+  // made that effect repaint the map, whose `idle` then set state here again (an endless ~13 redraws a second).
+  const mapLayers = useMemo(() => ({ ...layers, access: spacesOn }), [layers, spacesOn]);
+  const onSpaces = useCallback((sp: Place[]) => {
+    setPlaces(sp);
+    setSpacesReady(true);
+  }, []);
   const land = useMemo(() => ({ groups: LAND_KEYS.filter((k) => show[k]), openOnly }), [show, openOnly]);
   const counties = useMemo(() => [...new Set(all.map((l) => l.c).filter(Boolean) as string[])].sort(), [all]);
   const waterbodies = useMemo(() => {
@@ -923,13 +930,10 @@ export default function Explorer() {
           <MapView
             leases={filtered}
             colorBy={colorBy}
-            layers={{ ...layers, access: spacesOn }}
+            layers={mapLayers}
             land={land}
             showLeases={show.leases}
-            onSpaces={(sp) => {
-              setPlaces(sp);
-              setSpacesReady(true);
-            }}
+            onSpaces={onSpaces}
             manifest={manifest}
             terrain={terrain}
             clouds={clouds}
