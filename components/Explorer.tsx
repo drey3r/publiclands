@@ -7,14 +7,12 @@ import type { Map as MLMap } from "maplibre-gl";
 import { ABOUT_URL, BACK_LABEL, BACK_URL, DISCLAIMER, REPO_URL, STORIES, maskFrom, type MaskMode } from "@/lib/config";
 import { EMPTY, activeCount, applyFilters, fromQuery, inBounds, kindCounts, kindOf, sortForList, toQuery, withKind, type Filters } from "@/lib/filters";
 import type { LayerManifest, LayerName, LeasesPayload, MiniLease, OverlayDef } from "@/lib/types";
-import { FilterPanel } from "./FilterPanel";
-import { ShareButton } from "./ShareButton";
 import { LeaseCard } from "./LeaseCard";
 import { LeaseSwatch, MapControls, type LayerToggle, type Preset } from "./MapControls";
 import { LAND, NONPROFIT_COLOR, landOf, type LandKey } from "@/lib/legend";
 import { PlaceCard, type Place } from "./PlaceCard";
 import { SearchBox, type Suggestion } from "./SearchBox";
-import { FixtureBadge, QuietLabel, ScoreRing, StageTracker, WhatDot, eraLabel, whatLabel } from "./ui";
+import { FixtureBadge } from "./ui";
 import type { Bounds, ColorBy } from "./MapView";
 import type * as maplibregl from "maplibre-gl";
 import { AUTO_PITCH, AUTO_ZOOM, bearingWithin, type Camera, type CameraOverride } from "@/lib/camera";
@@ -29,7 +27,6 @@ import { FootprintCard, FormerTable, OgKey, TerminalCard, WatchSummary, WatersKe
 const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => <div className="absolute inset-0 animate-pulse bg-sand" /> });
 
 const PAGE = 40;
-const PLACE_MAX = 60;
 /**
  * The layer stack, in panel order; also the ?layers= deep link (plus "open": only land open
  * to the public). Old links: "spaces" means all three kinds of public land.
@@ -61,6 +58,9 @@ const PRESETS: (Preset & View)[] = [
   { key: "everything", label: "Everything", show: { state: true, leases: true, federal: true, local: true, oilgas: true, waters: true }, openOnly: false },
 ];
 type Sheet = "peek" | "half" | "full";
+/** Left panel: one list at a time (?tab=). Oil & gas appears while that family is on. */
+type ListTab = "leases" | "lands" | "oilgas";
+const LIST_TABS: ListTab[] = ["leases", "lands", "oilgas"];
 
 function useIsMobile() {
   const [m, setM] = useState(false);
@@ -75,7 +75,7 @@ function useIsMobile() {
 }
 
 /** Width the view panel takes on the right of the map, plus a margin (desktop). */
-const VIEW_W = 284;
+const VIEW_W = 312;
 /** Bottom-sheet height when collapsed on phones (title + layer toggles + controls button). */
 const PEEK = 178;
 function viewPanelRight() {
@@ -114,6 +114,9 @@ export default function Explorer() {
   const [hover, setHover] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<string | null>(null);
+  /** The public-land unit selected on the map or in the list (its card is pinned to the top of Public lands). */
+  const [selPlace, setSelPlace] = useState<Place | null>(null);
+  const [tab, setTab] = useState<ListTab>("leases");
   /** Lease chosen by search or link: its card is pinned to the top of the list. */
   const [pinned, setPinned] = useState<string | null>(null);
   /** ?prc= that isn't in the lease layer. */
@@ -128,7 +131,6 @@ export default function Explorer() {
   const [show, setShow] = useState<Record<ShowKey, boolean>>({ ...ALL_ON });
   /** "Parks only": public land CPAD marks Open Access. */
   const [openOnly, setOpenOnly] = useState(false);
-  const [spacesOpen, setSpacesOpen] = useState(false);
   // ?panelw=520 tries another left-panel width (for choosing one).
   const [panelW] = useState<number | null>(() => {
     if (typeof window === "undefined") return null;
@@ -157,6 +159,8 @@ export default function Explorer() {
     setShow(v0.show);
     setOpenOnly(v0.openOnly);
     setFindParam(initial.current.get("find"));
+    const t0 = initial.current.get("tab") as ListTab | null;
+    if (t0 && LIST_TABS.includes(t0)) setTab(t0);
     fetch("/data/cameras.json")
       .then((r) => (r.ok ? r.json() : {}))
       .then(setCameras)
@@ -195,9 +199,10 @@ export default function Explorer() {
     for (const k of ["mask", "panelw"]) if (keep.get(k)) next.set(k, keep.get(k)!);
     if (selected) next.set("prc", selected);
     else keep.delete("prc");
+    if (tab !== "leases") next.set("tab", tab);
     const q = next.toString().replace(/%2C/gi, ","); // readable deep links: ?layers=state,leases,federal,local
     history.replaceState(null, "", `${location.pathname}${q ? `?${q}` : ""}`);
-  }, [filters, selected, show, openOnly]);
+  }, [filters, selected, show, openOnly, tab]);
 
   const all = data?.leases ?? [];
   const hasPlaces = !!manifest?.access;
@@ -257,10 +262,11 @@ export default function Explorer() {
     for (const p of openPlaces) c[landOf(p.kind)]++;
     return c;
   }, [openPlaces]);
-  const placesInView = useMemo(
-    () => openPlaces.filter((p) => show[landOf(p.kind)]).sort((a, b) => (b.acres ?? 0) - (a.acres ?? 0)),
-    [openPlaces, show],
-  );
+  const placesInView = useMemo(() => {
+    const ls = openPlaces.filter((p) => show[landOf(p.kind)]).sort((a, b) => (b.acres ?? 0) - (a.acres ?? 0));
+    // The selected unit is pinned to the top, even when its outline has moved out of view.
+    return selPlace ? [selPlace, ...ls.filter((p) => p.id !== selPlace.id)] : ls;
+  }, [openPlaces, show, selPlace]);
   const spacesOn = LAND_KEYS.some((k) => show[k]);
   const land = useMemo(() => ({ groups: LAND_KEYS.filter((k) => show[k]), openOnly }), [show, openOnly]);
   const counties = useMemo(() => [...new Set(all.map((l) => l.c).filter(Boolean) as string[])].sort(), [all]);
@@ -270,7 +276,7 @@ export default function Explorer() {
     return [...n].filter(([, c]) => c >= 2 || all.length < 200).map(([w]) => w).sort();
   }, [all]);
 
-  useEffect(() => setLimit(PAGE), [filters, bounds]);
+  useEffect(() => setLimit(PAGE), [filters, bounds, tab]);
 
   // ---- camera helpers
   /**
@@ -388,15 +394,18 @@ export default function Explorer() {
   const select = useCallback(
     (p: string | null, fly = false) => {
       setSelected(p);
-      if (p) setOgSel(null);
-      setPinned((x) => (x === p ? x : null));
+      // The selected lease's card goes to the top of the Leases list (map and list agree).
+      setPinned(p);
       if (p) {
+        setOgSel(null);
         setSelectedPlace(null);
+        setSelPlace(null);
+        setTab("leases");
         setShow((v) => ({ ...v, leases: true }));
         if (mobile) setSheet((s) => (s === "peek" ? "half" : s));
         const l = byPrc.get(p);
         if (l && fly) focusLease(l);
-        requestAnimationFrame(() => document.getElementById(`card-${p}`)?.scrollIntoView({ block: "nearest", behavior: reduceMotion() ? "auto" : "smooth" }));
+        requestAnimationFrame(() => document.getElementById("list-scroll")?.scrollTo({ top: 0, behavior: reduceMotion() ? "auto" : "smooth" }));
       }
     },
     [byPrc, focusLease, mobile],
@@ -424,6 +433,60 @@ export default function Explorer() {
       flyInLease(l);
     },
     [byPrc, flyInLease],
+  );
+
+  /**
+   * The whole outline of a public-land unit, from the map's loaded tiles (a unit is split across tiles; tiles
+   * outside the view aren't loaded, so the extent is re-read after each move until it stops growing).
+   */
+  const placeExtent = useCallback((id: string): [number, number, number, number] | null => {
+    const m = map.current;
+    const def = manifest?.access;
+    if (!m || !def || !m.getSource("ov-access")) return null;
+    const feats = m.querySourceFeatures("ov-access", def.kind === "pmtiles" ? { sourceLayer: def.sourceLayer } : undefined);
+    let b: [number, number, number, number] | null = null;
+    for (const f of feats) {
+      const p = f.properties ?? {};
+      if (String(p.id ?? p.unitId ?? f.id ?? "") !== id) continue;
+      const x = bboxOf(f.geometry);
+      b = b ? [Math.min(b[0], x[0]), Math.min(b[1], x[1]), Math.max(b[2], x[2]), Math.max(b[3], x[3])] : x;
+    }
+    return b;
+  }, [manifest]);
+  const fitPlace = useCallback((pl: Place) => {
+    const m = map.current;
+    if (!m) return;
+    let box = pl.bbox;
+    let tries = 0;
+    const go = (b: [number, number, number, number]) => {
+      fit(b, 14);
+      m.once("idle", () => {
+        const e = placeExtent(pl.id);
+        if (!e || tries++ >= 3) return;
+        const grew = e[0] < box[0] - 1e-4 || e[1] < box[1] - 1e-4 || e[2] > box[2] + 1e-4 || e[3] > box[3] + 1e-4;
+        if (!grew) return;
+        box = [Math.min(box[0], e[0]), Math.min(box[1], e[1]), Math.max(box[2], e[2]), Math.max(box[3], e[3])];
+        setSelPlace((cur) => (cur && cur.id === pl.id ? { ...cur, bbox: box } : cur));
+        go(box);
+      });
+    };
+    go(box);
+  }, [fit, placeExtent]);
+  /** Select a public-land unit (map click or card): outline on the map, its card at the top of Public lands. */
+  const selectPlace = useCallback(
+    (pl: Place | null, opts: { fit?: boolean } = {}) => {
+      setSelPlace(pl);
+      setSelectedPlace(pl?.id ?? null);
+      if (!pl) return;
+      setSelected(null);
+      setPinned(null);
+      setOgSel(null);
+      setTab("lands");
+      if (mobile) setSheet((st) => (st === "peek" ? "half" : st));
+      requestAnimationFrame(() => document.getElementById("list-scroll")?.scrollTo({ top: 0, behavior: reduceMotion() ? "auto" : "smooth" }));
+      if (opts.fit) fitPlace(pl);
+    },
+    [fitPlace, mobile],
   );
 
   /** Map created (before tiles load): frame Home and set the limits right away. */
@@ -505,8 +568,7 @@ export default function Explorer() {
     } else if (s.kind === "place") {
       setShow((v) => ({ ...v, [landOf(s.p.kind)]: true }));
       if (s.p.access !== "Open Access") setOpenOnly(false);
-      setSelectedPlace(s.p.id);
-      fit(s.p.bbox, 13);
+      selectPlace(s.p, { fit: true });
     } else if (s.kind === "geo") {
       if (s.bbox) fit(s.bbox, 13);
       else map.current?.flyTo({ center: s.center, zoom: 11, padding: padding(), duration: reduceMotion() ? 0 : 1400 });
@@ -520,6 +582,9 @@ export default function Explorer() {
     setOgSel(x ? (x.kind === "former" ? { kind: "footprint", id: x.id } : x) : null);
     if (x) {
       setSelected(null);
+      setSelPlace(null);
+      setSelectedPlace(null);
+      setTab("oilgas");
       if (mobile) setSheet((st) => (st === "peek" ? "half" : st));
       requestAnimationFrame(() => document.getElementById("list-scroll")?.scrollTo({ top: 0, behavior: reduceMotion() ? "auto" : "smooth" }));
     }
@@ -646,21 +711,51 @@ export default function Explorer() {
       datasets={meta?.datasets ?? []}
       kinds={{ counts: nKinds, active: kindOf(filters), onPick: (k) => setFilters((f) => withKind(f, k)) }}
       watch={{ on: filters.watch, set: (on) => setFilters((f) => ({ ...f, watch: on })), total: watchLeases + (show.oilgas ? watchFp.length + watchCounts.idle : 0) }}
-      filters={
-        <>
-          <FilterPanel f={filters} set={setFilters} counties={counties} waterbodies={waterbodies} methods={meta?.methods ?? {}} />
-          <p className="mt-3 text-[12px] text-ink-faint" aria-live="polite">{filtered.length.toLocaleString()} of {all.length.toLocaleString()} lease sites match.</p>
-        </>
-      }
+      filterProps={{ f: filters, set: setFilters, counties, waterbodies, methods: meta?.methods ?? {} }}
+      matchText={`${filtered.length.toLocaleString()} of ${all.length.toLocaleString()} lease sites match.`}
+      onClearFilters={() => setFilters((f) => ({ ...EMPTY, q: f.q }))}
     />
   );
 
-  // ---- panel contents (shared by desktop sidebar and mobile sheet)
+  // ---- left panel: one list at a time, in tabs (shared by desktop sidebar and mobile sheet)
+  const tabs: { key: ListTab; label: string; count: number | null; on: boolean }[] = [
+    { key: "leases", label: "Leases", count: loaded.leases ? inView.length : null, on: show.leases },
+    { key: "lands", label: "Public lands", count: landLoaded ? placesInView.length : null, on: spacesOn },
+    ...(show.oilgas ? [{ key: "oilgas" as ListTab, label: "Oil & gas", count: loaded.oilgas ? ogCount : null, on: true }] : []),
+  ];
+  const curTab: ListTab = tab === "oilgas" && !show.oilgas ? "leases" : tab;
+  const tabBar = (
+    <div role="tablist" aria-label="Lists" className="flex shrink-0 gap-1 border-b border-line bg-cream px-3 pt-2 md:px-4">
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          id={`list-tab-${t.key}`}
+          type="button"
+          role="tab"
+          aria-selected={curTab === t.key}
+          aria-controls="list-scroll"
+          onClick={() => { setTab(t.key); scrollListTop(); }}
+          className={`-mb-px flex min-h-11 items-center gap-2 rounded-t-xl border px-3.5 text-[14.5px] font-semibold transition-colors ${curTab === t.key ? "border-line border-b-cream bg-cream text-ink" : "border-transparent text-ink-soft hover:text-ink"} ${t.on ? "" : "opacity-60"}`}
+        >
+          {t.label}
+          <span className={`rounded-full px-2 py-0.5 text-[12px] tabular-nums ${curTab === t.key ? "bg-ink text-paper" : "bg-sand text-ink-soft"}`} aria-live="polite">{t.count == null ? "…" : t.count.toLocaleString()}</span>
+        </button>
+      ))}
+    </div>
+  );
+  const offCard = (what: string, turnOn: () => void) => (
+    <div className="card p-4 text-[13.5px] text-ink-soft">
+      {what} {what.endsWith("s") ? "are" : "is"} switched off on the map.{" "}
+      <button type="button" onClick={turnOn} className="font-semibold text-ink underline underline-offset-2">Turn on</button>
+    </div>
+  );
+  const listNote = (t: string) => <p className="mb-2.5 text-[12px] text-ink-faint">{t}</p>;
   const panel = (
     <div className="flex h-full flex-col">
       {/* Phones: the view controls sit at the top of the bottom sheet. */}
       {mobile && controls("sheet")}
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-3" id="list-scroll">
+      {tabBar}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-3" id="list-scroll" role="tabpanel" aria-labelledby={`list-tab-${curTab}`}>
         {error && <p className="rounded-lg bg-clay/10 p-3 text-sm text-clay">Could not load map data: {error}</p>}
         {missingPrc && (
           <div role="alert" className="mb-4 rounded-2xl border border-clay/40 bg-clay/5 p-3.5 text-[13px]">
@@ -673,108 +768,71 @@ export default function Explorer() {
             </p>
           </div>
         )}
-        {ogCard}
-        {sel && <SelectedPreview l={sel} onClose={() => setSelected(null)} onFly={() => flyIn(sel.p)} />}
-        {filters.watch && <WatchSummary counts={watchCounts} ogOn={show.oilgas} />}
-            {show.leases && atStatewide && !filters.q && nActive === 0 && (
-              <section aria-label="Featured stories" className="mb-4">
-                <h2 className="kicker mb-2">Featured stories</h2>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-1 xl:grid-cols-2">
-                  {STORIES.map((s) => (
-                    <button key={s.prc} type="button" onClick={() => playStory(s.prc)} className="card group overflow-hidden text-left hover:border-sage">
-                      <div className="relative h-16 bg-[linear-gradient(160deg,#b4c7d2_0%,#dfe3cf_55%,#c9bfa6_100%)]">
-                        <svg viewBox="0 0 200 64" className="absolute inset-0 h-full w-full" aria-hidden preserveAspectRatio="none">
-                          <path d="M0 50 L30 30 L52 42 L80 14 L104 36 L130 20 L160 40 L200 26 L200 64 L0 64Z" fill="#8a9a7b" opacity=".55" />
-                          <path d="M0 58 L40 46 L70 52 L110 40 L150 50 L200 44 L200 64 L0 64Z" fill="#56664f" opacity=".5" />
-                        </svg>
-                        <span className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${s.kicker === "Completed" ? "bg-sage-deep text-paper" : "bg-paper text-clay"}`}>{s.kicker}</span>
-                        <span className="absolute bottom-1.5 right-2 text-[10px] font-semibold text-paper drop-shadow">Fly in →</span>
-                      </div>
-                      <div className="p-2.5">
-                        <div className="flex items-center text-[11px] font-semibold text-ink-faint">Lake Tahoe · PRC {s.prc}<QuietLabel kind={s.kicker === "Completed" ? "finding" : "estimate"} title={s.kicker === "Completed" ? undefined : "Estimate: this map assigns \u201ccandidate for review\u201d; the State Lands Commission does not"} /></div>
-                        <div className="text-[14px] font-semibold leading-snug text-ink">{s.title}</div>
-                        <p className="mt-0.5 text-[12px] leading-snug text-ink-soft">{s.blurb}</p>
-                      </div>
-                    </button>
+        {filters.watch && curTab !== "lands" && <WatchSummary counts={watchCounts} ogOn={show.oilgas} />}
+
+        {curTab === "leases" && (
+          <section aria-label="Lease sites in view">
+            {!show.leases ? offCard("Lease sites", () => setShow((v) => ({ ...v, leases: true }))) : (
+              <>
+                {listNote(`State Lands Commission lease sites in view${filtered.length !== all.length ? ` · ${filtered.length.toLocaleString()} of ${all.length.toLocaleString()} match filters` : ""}. Highest screen score first.`)}
+                {!loaded.leases && !error && <ListSkeleton />}
+                {inView.length === 0 && loaded.leases && (
+                  <div className="card p-4 text-sm text-ink-soft">
+                    No lease sites here with these filters. Zoom out or{" "}
+                    <button className="underline" onClick={() => setFilters(EMPTY)}>clear filters</button>.
+                  </div>
+                )}
+                <ul className="space-y-2" aria-label="Lease sites in view">
+                  {inView.slice(0, limit).map((l) => (
+                    <LeaseCard key={l.p} l={l} active={hover === l.p} selected={selected === l.p} onHover={setHover} onSelect={(p) => select(p, true)} onFly={flyIn} watch={filters.watch ? leaseWatch(l).map((r) => r.reason) : undefined} />
                   ))}
-                </div>
-              </section>
-            )}
-
-        {!SHOW_KEYS.some((k) => show[k]) && <div className="card p-4 text-sm text-ink-soft">Everything is switched off. Turn on a layer in {mobile ? "the controls above" : "the panel on the right of the map"}.</div>}
-
-        {spacesOn && (
-          <section id="sec-spaces" aria-labelledby="h-spaces" className="mb-6">
-            <SectionHead
-              id="h-spaces"
-              title="Public lands"
-              count={placesInView.length}
-              loading={!landLoaded}
-              note={`${LAND_KEYS.filter((k) => show[k]).map((k) => SHOW_LABEL[k].replace(" lands", "")).join(", ")} land in view${openOnly ? ", open to the public" : ""} (CPAD), largest first.`}
-            />
-            {!landLoaded && <ListSkeleton />}
-            {landLoaded && placesInView.length === 0 && <div className="card p-3 text-[13px] text-ink-soft">None in this view yet. Pan or zoom the map.</div>}
-            <ul className="space-y-2">
-              {placesInView.slice(0, spacesOpen ? PLACE_MAX : 4).map((p) => (
-                <PlaceCard
-                  key={p.id}
-                  p={p}
-                  selected={selectedPlace === p.id}
-                  onSelect={(pl) => { setSelectedPlace(pl.id); fit(pl.bbox, 13); }}
-                  onFly={(pl) => {
-                    setSelectedPlace(pl.id);
-                    const [w, so, e, n] = pl.bbox;
-                    flyTo3D(`place:${pl.id}`, [[w, so], [e, n]], { label: pl.name });
-                  }}
-                />
-              ))}
-            </ul>
-            {placesInView.length > 4 && (
-              <button type="button" onClick={() => setSpacesOpen((v) => !v)} className="mt-2 w-full rounded-full border border-line bg-paper py-1.5 text-[12.5px] font-medium text-ink-soft hover:border-ink-soft">
-                {spacesOpen ? "Show fewer" : `Show ${Math.min(PLACE_MAX, placesInView.length) - 4} more`}
-              </button>
+                </ul>
+                {inView.length > limit && (
+                  <button type="button" onClick={() => setLimit((n) => n + PAGE * 2)} className="mt-3 min-h-10 w-full rounded-full border border-line bg-paper text-[13px] font-medium text-ink-soft hover:border-ink-soft">
+                    Show more ({(inView.length - limit).toLocaleString()} left)
+                  </button>
+                )}
+              </>
             )}
           </section>
         )}
 
-        {show.leases && (
-          <section id="sec-leases" aria-labelledby="h-leases" className="mb-6">
-            <SectionHead
-              id="h-leases"
-              title="Leases"
-              count={inView.length}
-              loading={!loaded.leases}
-              note={`State Lands Commission lease sites in view${filtered.length !== all.length ? ` · ${filtered.length.toLocaleString()} match filters` : ""}. Sorted: case studies, candidates, score.`}
-            />
-            {!loaded.leases && !error && <ListSkeleton />}
-            {inView.length === 0 && loaded.leases && (
-              <div className="card p-4 text-sm text-ink-soft">
-                No lease sites here with these filters. Zoom out or{" "}
-                <button className="underline" onClick={() => setFilters(EMPTY)}>clear filters</button>.
-              </div>
-            )}
-            <ul className="space-y-2" aria-label="Lease sites in view">
-              {inView.slice(0, limit).map((l) => (
-                <LeaseCard key={l.p} l={l} active={hover === l.p} selected={selected === l.p} onHover={setHover} onSelect={(p) => select(p, true)} onFly={flyIn} watch={filters.watch ? leaseWatch(l).map((r) => r.reason) : undefined} />
-              ))}
-            </ul>
-            {inView.length > limit && (
-              <button type="button" onClick={() => setLimit((n) => n + PAGE * 2)} className="mt-3 w-full rounded-full border border-line bg-paper py-2 text-[13px] font-medium text-ink-soft hover:border-ink-soft">
-                Show more ({(inView.length - limit).toLocaleString()} left)
-              </button>
+        {curTab === "lands" && (
+          <section aria-label="Public lands in view">
+            {!spacesOn ? offCard("Public lands", () => setShow((v) => ({ ...v, state: true, federal: true, local: true }))) : (
+              <>
+                {listNote(`${LAND_KEYS.filter((k) => show[k]).map((k) => SHOW_LABEL[k].replace(" lands", "")).join(", ")} land in view${openOnly ? ", open to the public" : ""} (CPAD), largest first. Click any green area on the map to select it.`)}
+                {!landLoaded && <ListSkeleton />}
+                {landLoaded && placesInView.length === 0 && <div className="card p-3 text-[13px] text-ink-soft">None in this view yet. Pan or zoom the map.</div>}
+                <ul className="space-y-2">
+                  {placesInView.slice(0, limit).map((p) => (
+                    <PlaceCard
+                      key={p.id}
+                      p={p}
+                      selected={selectedPlace === p.id}
+                      onSelect={(pl) => selectPlace(pl, { fit: true })}
+                      onFly={(pl) => {
+                        selectPlace(pl);
+                        const [w, so, e, n] = pl.bbox;
+                        flyTo3D(`place:${pl.id}`, [[w, so], [e, n]], { label: pl.name });
+                      }}
+                    />
+                  ))}
+                </ul>
+                {placesInView.length > limit && (
+                  <button type="button" onClick={() => setLimit((n) => n + PAGE * 2)} className="mt-3 min-h-10 w-full rounded-full border border-line bg-paper text-[13px] font-medium text-ink-soft hover:border-ink-soft">
+                    Show more ({(placesInView.length - limit).toLocaleString()} left)
+                  </button>
+                )}
+              </>
             )}
           </section>
         )}
 
-        {show.oilgas && (
-          <section id="sec-og" aria-labelledby="h-og" className="mb-6">
-            <SectionHead
-              id="h-og"
-              title={SHOW_LABEL.oilgas}
-              count={ogCount}
-              loading={!loaded.oilgas}
-              note={filters.watch ? "Worth watching: flagged footprints and idle wells in view, each with its reason." : "Offshore lease footprints, former leases and marine oil terminals (CSLC); wells on state leases (CalGEM). Click one on the map for its card."}
-            />
+        {curTab === "oilgas" && ogCard}
+        {curTab === "oilgas" && show.oilgas && (
+          <section id="sec-og" aria-label="State oil and gas in view" className="mb-6">
+            {listNote(filters.watch ? "Worth watching: flagged footprints and idle wells in view, each with its reason." : "Offshore lease footprints, former leases and marine oil terminals (CSLC); wells on state leases (CalGEM). Click one on the map for its card.")}
             {og && (
               <>
                 <ul className="mb-3 grid grid-cols-2 gap-x-3 gap-y-1 text-[12px] text-ink-soft">
@@ -789,7 +847,7 @@ export default function Explorer() {
                     {[...new Map(ogInView.fps.map((f) => [f.properties.recordsKey, f])).values()].map((f) => (
                       <li key={f.properties.prc}>
                         <button type="button" onClick={() => { selectOg({ kind: "footprint", id: f.properties.prc }); zoomFootprint(f.properties.prc); }} className="card w-full p-2.5 text-left hover:border-sage">
-                          <span className="flex items-center text-[13px] font-semibold text-ink">PRC {f.properties.prc}<QuietLabel kind="estimate" title="Estimate: this map flags it; the state does not" /></span>
+                          <span className="flex items-center text-[13px] font-semibold text-ink">PRC {f.properties.prc}</span>
                           {(fpWatch.get(f.properties.prc) ?? []).map((r) => <span key={r.key} className="block text-[12px] text-ink-soft">{r.reason}</span>)}
                         </button>
                       </li>
@@ -797,7 +855,7 @@ export default function Explorer() {
                     {ogInView.wells.slice(0, 25).map((w) => (
                       <li key={w.properties.api}>
                         <button type="button" onClick={() => selectOg({ kind: "well", id: w.properties.api, coords: w.geometry.coordinates as [number, number] })} className="card w-full p-2.5 text-left hover:border-sage">
-                          <span className="flex items-center text-[13px] font-semibold text-ink">Well {w.properties.leaseName} {w.properties.wellNumber}<QuietLabel kind="estimate" title="Estimate: this map flags it; the state does not" /></span>
+                          <span className="flex items-center text-[13px] font-semibold text-ink">Well {w.properties.leaseName} {w.properties.wellNumber}</span>
                           <span className="block text-[12px] text-ink-soft">CalGEM lists this well as Idle. API {w.properties.api}.</span>
                         </button>
                       </li>
@@ -876,14 +934,14 @@ export default function Explorer() {
             attribution={`${meta?.fixture ? "FIXTURE · " : ""}Leases: <a href="https://www.slc.ca.gov/">California State Lands Commission</a> · Not legal or survey data`}
             onHover={setHover}
             onSelect={(p) => select(p)}
-            onSelectPlace={(id) => {
-              setSelectedPlace(id);
-              if (id) {
-                setSpacesOpen(true);
-                if (mobile) setSheet("half");
-                requestAnimationFrame(() => document.getElementById("sec-spaces")?.scrollIntoView({ block: "start", behavior: reduceMotion() ? "auto" : "smooth" }));
-              }
+            selectedPlace={selPlace}
+            onSelectPlace={(pl) => selectPlace(pl)}
+            onFlyPlace={(pl) => {
+              selectPlace(pl);
+              const [w, so, e, n] = pl.bbox;
+              flyTo3D(`place:${pl.id}`, [[w, so], [e, n]], { label: pl.name });
             }}
+            onFlyLease={flyIn}
             onViewport={setBounds}
             onCreate={onCreate}
             onReady={onReady}
@@ -909,46 +967,12 @@ export default function Explorer() {
         {/* Mobile bottom sheet */}
         {mobile && <BottomSheet state={sheet} setState={setSheet} title={
               [
-                spacesOn ? `Public lands ${landLoaded ? placesInView.length.toLocaleString() : "…"}` : "",
                 show.leases ? `Leases ${loaded.leases ? counts.leases.toLocaleString() : "…"}` : "",
+                spacesOn ? `Public lands ${landLoaded ? placesInView.length.toLocaleString() : "…"}` : "",
               ].filter(Boolean).join(" · ") || "Nothing switched on"
             }>{panel}</BottomSheet>}
       </div>
     </div>
-  );
-}
-
-function SelectedPreview({ l, onClose, onFly }: { l: MiniLease; onClose: () => void; onFly: () => void }) {
-  const story = STORIES.find((s) => s.prc === l.p);
-  return (
-    <section aria-label={`Selected: PRC ${l.p}`} className="mb-4 rounded-2xl border border-ink/50 bg-white p-3.5 shadow-[0_4px_16px_rgba(43,42,38,0.08)]">
-      <div className="flex items-start gap-3">
-        <ScoreRing s={l.s} size={40} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center text-[11px] font-semibold text-ink-faint">PRC {l.p}<QuietLabel kind="source" /></div>
-          {l.x ? <div className="flex items-center text-[11px] font-semibold text-sage-deep">Completed<QuietLabel kind="finding" /></div> : l.f ? <div className="flex items-center text-[11px] font-semibold text-clay">Candidate for review<QuietLabel kind="estimate" title="Estimate: this map assigns it; the State Lands Commission does not" /></div> : null}
-          <h2 className="text-[16px] font-semibold leading-snug text-ink">{l.n}</h2>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[12px] text-ink-soft">
-            <span className="inline-flex items-center gap-1"><WhatDot t={l.t} k={l.k} />{whatLabel(l.t, l.k, l.og)}</span>
-            <span>{eraLabel(l.e)}</span>
-            {l.w && <span>{l.w}</span>}
-            <QuietLabel kind="estimate" />
-          </p>
-        </div>
-        <button type="button" onClick={onClose} className="rounded-full px-1.5 text-ink-faint hover:text-ink" aria-label="Close selection">✕</button>
-      </div>
-      <p className="mt-3 flex items-center text-[11px] font-semibold text-ink-faint">Review stage<QuietLabel kind="finding" /></p>
-      <div className="mt-1"><StageTracker stage={l.st} completed={!!l.x} /></div>
-      <div className="mt-3 flex gap-2">
-        <Link href={`/lease/${encodeURIComponent(l.p)}`} className="flex-1 rounded-full bg-ink py-2 text-center text-[13px] font-semibold text-paper hover:bg-ink-soft">Open lease page</Link>
-        <button type="button" onClick={onFly} className="rounded-full border border-line px-3 py-2 text-[13px] font-medium text-ink-soft hover:border-ink-soft">Fly in</button>
-      </div>
-      {story && (
-        <div className="mt-2 flex items-center gap-2 text-[12px] text-ink-faint">
-          Share this story: <ShareButton path={`/?story=${encodeURIComponent(l.p)}`} title={story.title} text={story.blurb} />
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -1048,17 +1072,6 @@ function ListSkeleton() {
     <ul className="space-y-2" aria-hidden>
       {[0, 1, 2].map((i) => <li key={i} className="card h-[84px] animate-pulse bg-sand/60" />)}
     </ul>
-  );
-}
-
-function SectionHead({ id, title, count, note, loading = false }: { id: string; title: string; count: number; note: string; loading?: boolean }) {
-  return (
-    <div className="sticky top-[-12px] z-20 -mx-4 mb-2 border-b border-line bg-cream px-4 pb-1.5 pt-2">
-      <h2 id={id} className="flex items-baseline justify-between text-[15px] font-semibold text-ink">
-        {title} <span className="text-[12px] font-medium text-ink-faint" aria-live="polite">{loading ? "Loading…" : `${count.toLocaleString()} in view`}</span>
-      </h2>
-      <p className="text-[11.5px] text-ink-faint">{note}</p>
-    </div>
   );
 }
 

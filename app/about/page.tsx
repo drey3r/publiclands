@@ -155,6 +155,24 @@ export default function AboutPage() {
           ))}
         </ol>
 
+        <h3 id="titles" className="mt-6 scroll-mt-16 text-[18px] font-semibold text-ink">Lease titles</h3>
+        <p className="mt-2">
+          The state&apos;s layer has no lessee name, so a lease&apos;s title comes from its location text: the first phrase that
+          names a place, after dropping legal descriptions and measurements (&ldquo;Section 36&rdquo;, &ldquo;approximately 349.72
+          acres&rdquo;) and leading words such as &ldquo;State-owned school land within a portion of&rdquo;. If no phrase is left, the
+          title is the waterbody, else &ldquo;State land, <i>county</i> County&rdquo;. The full location text is on each lease page.
+        </p>
+
+        <h3 id="backgrounds" className="mt-6 scroll-mt-16 text-[18px] font-semibold text-ink">Card backgrounds</h3>
+        <p className="mt-2">
+          Each card in the list has a quiet band in one of five settings. It is decoration only and says nothing about the
+          lease or the land. The first rule that fits picks it.
+        </p>
+        <ul className="mt-2 space-y-1.5">
+          <li><b className="text-ink">Leases</b>: <b className="text-ink">ocean</b> when the waterbody is ocean, a bay, harbor, lagoon, strait or estuary, or the lease is shoreline protection or oil and gas; <b className="text-ink">desert</b> in the Desert &amp; Colorado River region or where the place names a desert or dry lake; <b className="text-ink">riverlands</b> when the waterbody is a river, slough, creek, canal or marsh; <b className="text-ink">mountains</b> in Sierra &amp; Tahoe and the North Coast, or on a lake; <b className="text-ink">farmlands</b> otherwise.</li>
+          <li><b className="text-ink">Public land</b> (from its name and where it lies): <b className="text-ink">ocean</b> for beaches, bays, harbors, coasts, islands and lagoons; <b className="text-ink">desert</b> for deserts, dunes and dry lakes, or south of 36.5°N and east of 117.8°W; <b className="text-ink">riverlands</b> for rivers, creeks, sloughs, marshes and wildlife areas; <b className="text-ink">mountains</b> for forests, mountains, wilderness, lakes and canyons, or in the Sierra; <b className="text-ink">farmlands</b> otherwise.</li>
+        </ul>
+
         <h2 id="changes" className="display mt-10 scroll-mt-16 text-[26px] text-ink">Changes to our numbers</h2>
         <ul className="mt-3 space-y-3">
           <li>

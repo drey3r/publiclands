@@ -15,6 +15,7 @@ const yearOf = (d) => (d ? Number(d.slice(0, 4)) : null);
 const est = (value, reason) => ({ value, inferred: true, reason });
 
 import { classifyLease, KIND_LABELS, METHODS as CLASSIFIER_METHODS } from "../../lib/lease-classifier.mjs";
+import { leaseTitle } from "../../lib/lease-title.mjs";
 
 // Category and infrastructure kinds come from lib/lease-classifier.mjs (standalone, shared).
 export const TYPE_LABELS = KIND_LABELS;
@@ -186,7 +187,8 @@ export function buildLeases(root, { snapshot, curated }) {
       prc: b.prc,
       prcKind: b.kind,
       prcFlag: b.flag,
-      name: (f.location ?? `PRC ${b.prc}`).split(/[,;]/)[0].trim(),
+      // Display title from the location text (lib/lease-title.mjs); the full text stays in facts.location.
+      name: leaseTitle(f.location, { waterbody: waterbody?.value ?? null, county: county?.value ?? null, prc: b.prc }),
       lat, lng,
       ...(b.pts.length > 1 ? { points: b.pts } : {}),
       stage: "research",

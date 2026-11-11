@@ -182,5 +182,6 @@ export function inBounds(ls: MiniLease[], b: [number, number, number, number] | 
 }
 
 export function sortForList(ls: MiniLease[]) {
-  return [...ls].sort((a, b) => b.cs - a.cs || b.f - a.f || (b.s ?? -1) - (a.s ?? -1) || a.p.localeCompare(b.p, undefined, { numeric: true }));
+  // By screen score, highest first (no score last); ties: case studies, candidates, then PRC.
+  return [...ls].sort((a, b) => (b.s ?? -1) - (a.s ?? -1) || b.cs - a.cs || b.f - a.f || a.p.localeCompare(b.p, undefined, { numeric: true }));
 }
