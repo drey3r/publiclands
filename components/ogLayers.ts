@@ -158,10 +158,13 @@ export function addWaters(m: MLMap, grantedUrl: string | null) {
   m.addSource("sov-sla", { type: "geojson", data: `${OG_BASE}/sla-boundary.geojson` });
   if (grantedUrl) m.addSource("sov-granted", { type: "geojson", data: grantedUrl });
   const before = m.getLayer("county-line") ? "county-line" : undefined;
-  const add = (l: Parameters<MLMap["addLayer"]>[0]) => m.addLayer({ ...l, layout: { ...(l as { layout?: object }).layout, visibility: "none" } } as Parameters<MLMap["addLayer"]>[0], before);
+  // The tint and its seaward water sit under the sea-floor depth and wave marks (lib/ambience.ts), so the
+  // ocean reads the same with the tint on or off; the lake beds, granted hatch and SLA line stay above them.
+  const under = m.getLayer("ocean-depth") ? "ocean-depth" : before;
+  const add = (l: Parameters<MLMap["addLayer"]>[0], at = before) => m.addLayer({ ...l, layout: { ...(l as { layout?: object }).layout, visibility: "none" } } as Parameters<MLMap["addLayer"]>[0], at);
   const tint = X(["interpolate", ["linear"], ["zoom"], 5, SOV.tintLow, 8, "#8db7a0", 10, SOV.tint]);
-  add({ id: "sov-ocean", type: "fill", source: "omt", "source-layer": "water", filter: ["==", ["get", "class"], "ocean"], paint: { "fill-color": tint } });
-  add({ id: "sov-outside", type: "fill", source: "sov-outside", paint: { "fill-color": WATER, "fill-antialias": false } });
+  add({ id: "sov-ocean", type: "fill", source: "omt", "source-layer": "water", filter: ["==", ["get", "class"], "ocean"], paint: { "fill-color": tint } }, under);
+  add({ id: "sov-outside", type: "fill", source: "sov-outside", paint: { "fill-color": WATER, "fill-antialias": false } }, under);
   add({ id: "sov-wb", type: "fill", source: "sov-wb", paint: { "fill-color": tint } });
   add({ id: "sov-wb-line", type: "line", source: "sov-wb", minzoom: 7, paint: { "line-color": SOV.line, "line-width": 0.7, "line-opacity": 0.6 } });
   if (grantedUrl) {

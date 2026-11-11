@@ -321,8 +321,9 @@ const countyLabel: LayerSpecification = {
 
 /**
  * The sea floor, from the same terrain tiles (their bathymetry: ETOPO1 and GMTED): the shelf keeps
- * the plain water color, and the water deepens past the shelf edge, so the canyons and basins
- * offshore (Monterey Canyon, the Channel Islands basins) read faintly. Transparent above -110 m,
+ * the plain water color, and past the shelf edge a faint translucent ink deepens whatever is beneath
+ * (plain water, or the State sovereign lands tint), so Monterey Canyon and the basins off Southern
+ * California read faintly without changing the tint's color on the shelf. Transparent above -150 m,
  * so land below sea level (Death Valley, -86 m; the Salton Sea floor) is never tinted.
  */
 function oceanDepth(): LayerSpecification {
@@ -333,14 +334,14 @@ function oceanDepth(): LayerSpecification {
     paint: {
       "color-relief-color": [
         "interpolate", ["linear"], ["elevation"],
-        -5000, "#8aa6b8",
-        -3000, "#93adbf",
-        -1500, "#9db5c5",
-        -500, "#a6bdcb",
-        -180, "#adc2cf",
-        -110, "rgba(180,199,210,0)",
+        -5000, "rgba(38,70,96,0.26)",
+        -3000, "rgba(38,70,96,0.22)",
+        -1500, "rgba(38,70,96,0.17)",
+        -600, "rgba(38,70,96,0.11)",
+        -250, "rgba(38,70,96,0.05)",
+        -150, "rgba(38,70,96,0)",
       ],
-      "color-relief-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.9, 12, 0.75],
+      "color-relief-opacity": ["interpolate", ["linear"], ["zoom"], 4, 1, 12, 0.8],
     },
   } as unknown as LayerSpecification;
 }
