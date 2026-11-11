@@ -5,6 +5,12 @@ export const ABOUT_URL = "/about";
 /** Source code, issues and corrections. */
 export const REPO_URL = "https://github.com/drey3r/publiclands";
 /** Optional "back" link for a private deployment. Unset in the public build. */
+/**
+ * Where the map reads cloud cover. Unset: this deployment's own /api/clouds. A second deployment (the
+ * private map) sets NEXT_PUBLIC_CLOUDS_URL to the public map's /api/clouds, which is CDN-cached and
+ * allows any origin, so only one deployment ever calls Open-Meteo.
+ */
+export const CLOUDS_URL = process.env.NEXT_PUBLIC_CLOUDS_URL || "/api/clouds";
 export const BACK_URL = process.env.NEXT_PUBLIC_BACK_URL || null;
 export const BACK_LABEL = process.env.NEXT_PUBLIC_BACK_LABEL || "Back";
 export const DISCLAIMER = "Not legal or survey data. See the California State Lands Commission for official records.";

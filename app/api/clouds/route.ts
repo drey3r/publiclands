@@ -15,9 +15,10 @@ import { NextResponse } from "next/server";
  * About 400 points in all (a few are in both sets and asked once), in batches of 100 a request.
  *
  * Limits: the answer is cached for three hours (server data cache and CDN), so Open-Meteo is asked
- * about eight times a day per deployment however many people open the map. Open-Meteo counts each
- * location in a request as one call: ~400 × 8 = ~3,200 calls a day per deployment (two deployments:
- * ~6,400), under the free tier's 10,000 a day, 5,000 an hour and 600 a minute. Free tier:
+ * about eight times a day however many people open the map. Open-Meteo counts each location in a
+ * request as one call: ~400 × 8 = ~3,200 calls a day, under the free tier's 10,000 a day, 5,000 an
+ * hour and 600 a minute. Only the public deployment asks: the private one sets NEXT_PUBLIC_CLOUDS_URL
+ * to this route on the public site (hence the Access-Control-Allow-Origin header). Free tier:
  * non-commercial use only. Phones and reduced-motion readers don't ask unless they switch clouds on.
  */
 
@@ -137,7 +138,8 @@ export async function GET() {
     );
     return NextResponse.json(
       { time, lat0: LAT0, lon0: LON0, step: STEP, nx: NX, ny: NY, low, mid, high, wind, windHigh, source: "Open-Meteo (NOAA HRRR/GFS)" },
-      { headers: { "Cache-Control": `public, s-maxage=${CACHE_S}, stale-while-revalidate=86400` } },
+      // Any origin may read it: the private deployment's pages fetch this route instead of their own.
+      { headers: { "Cache-Control": `public, s-maxage=${CACHE_S}, stale-while-revalidate=86400`, "Access-Control-Allow-Origin": "*" } },
     );
   } catch (e) {
     // No clouds is a fine fallback: the map simply draws none. Never cache a failure.

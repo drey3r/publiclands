@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as MLMap, ExpressionSpecification, MapLayerMouseEvent } from "maplibre-gl";
 import { baseStyle } from "@/lib/mapStyle";
-import { CA_BOUNDS, CA_PATH, type MaskMode } from "@/lib/config";
+import { CA_BOUNDS, CA_PATH, CLOUDS_URL, type MaskMode } from "@/lib/config";
 import { kindMarker } from "@/lib/icons";
 import { CAT_COLOR, TYPE_COLOR } from "@/lib/legend";
 import { CATS, CAT_LABEL, ERAS, ERA_UNKNOWN, LAND, LAYER_INFO, LEASE_MARK, LEASE_TIER, NONPROFIT_COLOR, SCORE_BANDS, SCORE_UNKNOWN, TYPES, TYPE_LABEL, type LandKey } from "@/lib/legend";
@@ -471,7 +471,7 @@ export default function MapView(props: Props) {
       m.on("sourcedata", (e) => { if (e.sourceId === "ov-access" && e.isSourceLoaded) spacesDirty.current = true; });
       ready.current = true;
       // Moving water and live clouds (after the lease layers exist, so clouds sit under them).
-      ambience.current = addAmbience(m, { clouds: cb.current.clouds, onClouds: (t) => cb.current.onCloudsTime?.(t) });
+      ambience.current = addAmbience(m, { clouds: cb.current.clouds, cloudsUrl: CLOUDS_URL, onClouds: (t) => cb.current.onCloudsTime?.(t) });
       if (process.env.NODE_ENV !== "production") (window as unknown as { __ambience: Ambience }).__ambience = ambience.current; // dev: browser checks
       emit();
       syncAll();

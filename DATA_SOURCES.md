@@ -103,8 +103,10 @@ Grant boundaries for Los Angeles, Long Beach, San Francisco and Oakland are not 
   "non-profit websites or apps that do not have subscriptions or advertising" as non-commercial, which fits this site.
   If the site ever carries ads or subscriptions, it needs a paid API key. Limits: under 10,000 calls a day, 5,000 an
   hour, 600 a minute, per IP; Open-Meteo warns that apps on hosts like Vercel may be limited earlier. Each location in
-  a request counts as a call: about 400 × 8 = 3,200 calls a day per deployment, 6,400 for both deployments (public
-  and private), under the daily limit; one refresh is 400 calls in a minute, under the minute limit.
+  a request counts as a call: about 400 × 8 = 3,200 calls a day, under the daily limit; one refresh is 400 calls in a
+  minute, under the minute limit. Only one deployment calls Open-Meteo: a second deployment sets
+  `NEXT_PUBLIC_CLOUDS_URL` to the public map's `/api/clouds` (CDN-cached, readable from any origin) and its pages
+  read the clouds from there.
 - **License:** data CC BY 4.0. Required credit with a link wherever the data is shown: the map's attribution reads
   "Clouds: Weather data by Open-Meteo.com (CC BY 4.0, smoothed and drawn as clouds)" while the clouds are on. The
   smoothing, noise texture and drift are ours, so the clouds show where cover is reported, not the shape of real
