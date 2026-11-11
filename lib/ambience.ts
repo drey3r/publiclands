@@ -255,25 +255,18 @@ uniform float u_k;      // mercator -> noise units
 out vec4 o;
 const float PI = 3.141592653589793;
 
-// Cover at a mercator point: x low, y mid, z high (0..1). Cubic B-spline over the grid (four
-// bilinear taps), so neither the half-degree cells nor single odd points show.
+// Cover at a mercator point: x low, y mid, z high (0..1). Smooth between grid points but exact at
+// them: the model's fog and cloud patches are often one grid point wide, and a wider smoothing
+// (tried: a cubic B-spline) flattened a lone 100% point to under half and drew nothing there.
 vec3 cover(vec2 m) {
   float lon = m.x * 360.0 - 180.0;
   float lat = degrees(atan(sinh(PI * (1.0 - 2.0 * m.y))));
   vec2 uv = vec2((lon - u_ext.x) / u_ext.z, (lat - u_ext.y) / u_ext.w);
-  vec2 p = uv * (u_res - 1.0) + 0.5;
-  vec2 i = floor(p - 0.5) + 0.5;
+  vec2 p = uv * (u_res - 1.0);
+  vec2 i = floor(p);
   vec2 f = p - i;
-  vec2 w0 = (1.0 - f) * (1.0 - f) * (1.0 - f) / 6.0;
-  vec2 w1 = (4.0 - 6.0 * f * f + 3.0 * f * f * f) / 6.0;
-  vec2 w3 = f * f * f / 6.0;
-  vec2 w2 = 1.0 - w0 - w1 - w3;
-  vec2 s0 = w0 + w1;
-  vec2 s1 = w2 + w3;
-  vec2 t0 = (i - 1.0 + w1 / s0) / u_res;
-  vec2 t1 = (i + 1.0 + w3 / s1) / u_res;
-  vec3 c = (texture(u_cover, vec2(t0.x, t0.y)).rgb * s0.x + texture(u_cover, vec2(t1.x, t0.y)).rgb * s1.x) * s0.y
-         + (texture(u_cover, vec2(t0.x, t1.y)).rgb * s0.x + texture(u_cover, vec2(t1.x, t1.y)).rgb * s1.x) * s1.y;
+  f = f * f * (3.0 - 2.0 * f);
+  vec3 c = texture(u_cover, (i + 0.5 + f) / u_res).rgb;
   // The grid ends far outside any view of California; feather it anyway.
   vec2 e = min(uv, 1.0 - uv);
   return c * smoothstep(0.0, 0.07, e.x) * smoothstep(0.0, 0.07, e.y);
@@ -290,7 +283,9 @@ float lowCloud(vec2 m, vec3 c) {
   float n = 0.55 * texture(u_noise, rot(q, 0.94, 0.34) + u_d1).r
           + 0.3 * texture(u_noise, rot(q, 0.8, -0.6) * 2.3 + u_d1 * 1.6).g
           + 0.15 * texture(u_noise, rot(q, 0.5, 0.87) * 5.3 + u_d1 * 2.6).r;
-  float th = 0.5 + 0.42 * (1.0 - 2.0 * d) + 0.3 * u_thin;
+  // Cover to threshold, leaning toward drawing: a point the model calls overcast always shows some cloud,
+  // whatever the noise is doing there (a lone 100% point over Sacramento drew nothing with a linear map).
+  float th = 0.5 + 0.42 * (1.0 - 2.0 * pow(d, 0.62)) + 0.3 * u_thin;
   float a = smoothstep(th - 0.13, th + 0.22, n) * smoothstep(0.02, 0.12, d);
   // Inside a deck: broad soft swells of thicker and thinner cloud, never a flat sheet.
   float swell = 0.6 * texture(u_noise, rot(q, 0.77, 0.64) * 1.7 + u_d1 * 1.3).g + 0.4 * texture(u_noise, rot(q, 0.26, -0.97) * 3.9 + u_d1 * 2.2).a;
@@ -302,7 +297,8 @@ void main() {
   // than the ground does.
   vec2 m = u_center + (v_m - u_center) / u_spread;
   vec3 c = cover(m);
-  float low = 0.68 * lowCloud(m, c);
+  float lowRaw = lowCloud(m, c);
+  float low = 0.8 * lowRaw;
   // High cloud: thin streaks.
   float hi = 0.0;
   if (c.z > 0.02) {
@@ -312,10 +308,16 @@ void main() {
     hi = 0.3 * smoothstep(th - 0.16, th + 0.34, s) * smoothstep(0.02, 0.15, c.z);
   }
   float a = 1.0 - (1.0 - low) * (1.0 - hi);
-  // A very faint shadow, cast to the southeast like the hillshade's light, only where no cloud is.
-  vec2 ms = m - vec2(0.9, 0.9) / (u_k * float(${NOISE}));
-  float sh = 0.075 * lowCloud(ms, cover(ms)) * (1.0 - a);
-  o = vec4(vec3(a) + vec3(0.2, 0.26, 0.34) * sh, a + sh) * u_fade;
+  // The same cloud a little toward the light (northwest, like the hillshade). Where it is thicker
+  // there, this point is on a billow's far side: tint it a pale cool white, so the tops have form.
+  // Where this point has no cloud, that neighbour casts a faint shadow on the ground. Over pale
+  // land plain white has nothing to stand against; this modelling is what makes valley fog read.
+  vec2 ms = m - vec2(1.4, 1.4) / (u_k * float(${NOISE}));
+  float toward = lowCloud(ms, cover(ms));
+  float shade = clamp((toward - lowRaw) * 2.2, 0.0, 1.0);
+  vec3 body = mix(vec3(1.0), vec3(0.74, 0.8, 0.88), 0.75 * shade);
+  float sh = 0.16 * toward * (1.0 - a);
+  o = vec4(body * a + vec3(0.2, 0.26, 0.34) * sh, a + sh) * u_fade;
 }`;
 
 /**
