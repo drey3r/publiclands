@@ -56,11 +56,11 @@ export default function AboutPage() {
           It is not an official record. For official records, contact the <a href={CSLC_URL} className="text-water underline underline-offset-2">State Lands Commission</a>.
         </p>
 
-        <h2 className="display mt-10 text-[26px] text-ink">How to read the labels</h2>
+        <h2 id="labels" className="display mt-10 scroll-mt-16 text-[26px] text-ink">How to read the labels</h2>
         <ul className="mt-3 space-y-2">
-          <li><DataLabel kind="source" /> <b className="text-ink">Source data</b>: copied from the official record, here the Commission&apos;s public layers.</li>
-          <li><DataLabel kind="estimate" /> <b className="text-ink">Estimate</b>: this map&apos;s classification or score. Every estimate shows its reason.</li>
-          <li><DataLabel kind="finding" /> <b className="text-ink">Finding</b>: an editorial determination by this project, such as a case study or a site&apos;s review stage, with its sources.</li>
+          <li id="label-source" className="scroll-mt-16"><DataLabel kind="source" /> <b className="text-ink">Source data</b>: copied from the official record, here the Commission&apos;s public layers.</li>
+          <li id="label-estimate" className="scroll-mt-16"><DataLabel kind="estimate" /> <b className="text-ink">Estimate</b>: this map&apos;s classification or score. Every estimate shows its reason.</li>
+          <li id="label-finding" className="scroll-mt-16"><DataLabel kind="finding" /> <b className="text-ink">Finding</b>: an editorial determination by this project, such as a case study or a site&apos;s review stage, with its sources. &ldquo;What the records show&rdquo; on a lease page is a finding too: what this project read in the Commission&apos;s staff reports and minute items, with each quote and its page.</li>
         </ul>
 
         <h2 id="data" className="display mt-10 scroll-mt-16 text-[26px] text-ink">Where the data comes from</h2>

@@ -3,11 +3,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MiniMapLazy } from "@/components/MiniMapLazy";
 import { ShareButton } from "@/components/ShareButton";
-import { DataLabel, FixtureBadge, ScoreRing, StageTracker, WhatDot, whatLabel } from "@/components/ui";
+import { LinkedLabel as DataLabel, DataLabel as PlainLabel, FixtureBadge, ScoreRing, StageTracker, WhatDot, whatLabel } from "@/components/ui";
 import { ABOUT_URL, BACK_LABEL, BACK_URL, CSLC_URL, DISCLAIMER } from "@/lib/config";
 import { STAGES } from "@/lib/legend";
 import { getLease, loadFull, nearby } from "@/lib/server";
 import { loadRecords } from "@/lib/records";
+import { loadReview, pageUrl } from "@/lib/review";
 import type { Inferred } from "@/lib/types";
 
 type Params = { params: Promise<{ prc: string }> };
@@ -40,6 +41,7 @@ export default async function LeasePage({ params }: Params) {
   const near = nearby(l);
   const cs = l.caseStudy;
   const records = loadRecords(l.prc);
+  const review = loadReview(l.prc);
 
   const facts: [string, string | null][] = [
     ["Lease or permit", l.facts.leaseOrPermit],
@@ -140,6 +142,42 @@ export default async function LeasePage({ params }: Params) {
         )}
 
 
+
+        {review && (
+          <section className="mt-6 rounded-2xl border border-clay/30 bg-paper p-5" aria-labelledby="records-show">
+            <h2 id="records-show" className="kicker">{review.heading} <DataLabel kind="finding" title="Finding: what this project read in the Commission's records, with each quote and its page" /></h2>
+            <p className="mt-2 text-[13px] text-ink-faint">{review.finding.kind}</p>
+            <p className="text-[19px] font-semibold leading-snug text-ink">{review.finding.value}</p>
+            <p className="mt-2 text-[15px] leading-relaxed text-ink">{review.finding.summary}</p>
+            {review.whatWasThere && <p className="mt-2 text-[13.5px] text-ink-soft"><b className="text-ink">What was there:</b> {review.whatWasThere}</p>}
+            {review.evidence.length > 0 && (
+              <ul className="mt-4 space-y-3">
+                {review.evidence.map((e, i) => (
+                  <li key={i} className="text-[13.5px]">
+                    <blockquote className="border-l-2 border-clay/40 pl-3 italic text-ink-soft">&ldquo;{e.quote}&rdquo;</blockquote>
+                    <p className="mt-1 pl-3 text-[12px] text-ink-faint">
+                      {e.url ? <a href={pageUrl(e.url, e.page)} target="_blank" rel="noopener" className="font-medium text-water underline underline-offset-2">{e.label}{e.page ? `, page ${e.page}` : ""} ↗</a> : <>{e.label}{e.page ? `, page ${e.page}` : ""}</>}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {review.documents.length > 0 && (
+              <details className="mt-4 text-[13px]">
+                <summary className="cursor-pointer font-medium text-ink-soft">Staff reports read ({review.documents.length})</summary>
+                <ul className="mt-2 space-y-1">
+                  {review.documents.map((d) => (
+                    <li key={d.url}>
+                      <span className="tabular-nums text-ink-faint">{fmtDate(d.date) ?? "Undated"}{d.item ? ` · Item ${d.item}` : ""}</span>{" "}
+                      <a href={d.url} target="_blank" rel="noopener" className="text-water underline underline-offset-2">{d.title} ↗</a>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+            {(review.method || review.readOn) && <p className="mt-3 text-[11.5px] text-ink-faint">{review.method}{review.readOn ? ` Read ${fmtDate(review.readOn)}.` : ""}</p>}
+          </section>
+        )}
 
         <div className="mt-6 grid gap-6 md:grid-cols-2">
           <section aria-labelledby="facts">
@@ -266,7 +304,7 @@ export default async function LeasePage({ params }: Params) {
                     <ScoreRing s={o.score.value} size={30} />
                     <span className="min-w-0">
                       <span className="block truncate text-[14px] font-semibold text-ink">{o.name}</span>
-                      <span className="text-[12px] text-ink-faint">PRC {o.prc} · {whatLabel(o.derived.typeKey, o.derived.categoryKey)}<DataLabel kind="estimate" /> · {d < 1 ? "<1" : Math.round(d)} km</span>
+                      <span className="text-[12px] text-ink-faint">PRC {o.prc} · {whatLabel(o.derived.typeKey, o.derived.categoryKey)}<PlainLabel kind="estimate" /> · {d < 1 ? "<1" : Math.round(d)} km</span>
                     </span>
                   </Link>
                 </li>

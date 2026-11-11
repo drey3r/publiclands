@@ -15,6 +15,7 @@
 //   CAMERAS_EXTRA=path                    more Fly-in camera overrides, same format as data/cameras.json
 //   OVERLAYS_DIR=path                     your own GeoJSON overlay layers (see README "Build your own layer")
 //   LAYERS_DIR=path                       use other land-layer files instead of data/layers
+//   REVIEW_DIR=path                       "What the records show" files (<PRC>.json); default RESEARCH_DIR/review, else data/review
 //   DATA_SOURCE=fixture                   tiny development sample (data/fixtures/)
 //   FIXTURE_LAYERS=1                      hand-drawn placeholder outlines (development only)
 //
@@ -136,6 +137,11 @@ mkdirp(path.join(root, "public/data/layers"));
 mkdirp(path.join(root, "data/generated"));
 fs.writeFileSync(path.join(root, "public/data/leases.min.json"), JSON.stringify({ meta, leases: min }));
 fs.writeFileSync(path.join(root, "data/generated/leases.full.json"), JSON.stringify({ meta, leases: L.full }));
+
+// ---------- what the records show (Finding), optional ----------
+const { buildReview } = await import("./sync/review.mjs");
+const review = buildReview(root);
+fs.writeFileSync(path.join(root, "data/generated/review.json"), JSON.stringify(review.byPrc));
 
 // ---------- layers ----------
 // Map layer name -> file name. A layer with no file is left out and hidden in the UI.
@@ -262,3 +268,4 @@ console.log(`sync: ${isFixture ? "FIXTURE" : "snapshot"} ${rel(snapshot)}: ${min
 for (const k of LAYERS) console.log(`  layer ${k}: ${manifest[k] ? `${manifest[k].kind}${manifest[k].fixture ? " (fixture)" : ""}` : "none (hidden)"}`);
 console.log(`  state oil & gas: ${ogIndex ? ogIndex.datasets.map((d) => `${d.key} (${d.count})`).join(", ") : "none"}`);
 console.log(`  overlays: ${overlays.length ? overlays.map((o) => `${o.id} (${o.count})`).join(", ") : `none in ${rel(overlayDir)}`}`);
+console.log(`  what the records show: ${review.dir ? `${Object.keys(review.byPrc).length} leases from ${rel(review.dir)}` : "none (no review files)"}`);

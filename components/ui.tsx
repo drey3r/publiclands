@@ -105,6 +105,15 @@ export function DataLabel({ kind, title }: { kind: LabelKind; title?: string }) 
   );
 }
 
+/** Lease pages: the same label, linked to its explanation on the About page. */
+export function LinkedLabel({ kind, title }: { kind: LabelKind; title?: string }) {
+  return (
+    <a href={`/about#label-${kind}`} className="no-underline hover:opacity-80" aria-label={`${LABEL_TEXT[kind]}: what this label means`}>
+      <DataLabel kind={kind} title={`${title ?? LABEL_TITLE[kind]} (click for what this label means)`} />
+    </a>
+  );
+}
+
 /** What a lease is, in a word: its infrastructure type, else its category (both estimates). */
 export function whatLabel(t: TypeKey, k: CatKey, og?: 0 | 1) {
   return k === "infra" && t !== "other" ? TYPE_LABEL[t] : og ? "Oil and gas" : CAT_LABEL[k];
