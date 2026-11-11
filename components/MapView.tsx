@@ -301,12 +301,17 @@ export default function MapView(props: Props) {
         const p = e.features?.[0]?.properties.p as string | undefined;
         if (p) cb.current.onSelect(p);
       });
-      m.on("click", (e: maplibregl.MapMouseEvent) => {
+      m.on("click", async (e: maplibregl.MapMouseEvent) => {
         const hits = m.queryRenderedFeatures(e.point, { layers: ["lease-pt", "cluster"].filter((id) => m.getLayer(id)) });
         if (hits.length) return;
         // State oil & gas: points first (wells, terminals, former leases), then footprints.
         const ogPt = cb.current.og.on ? m.queryRenderedFeatures(e.point, { layers: OG_POINT_LAYERS.filter((id) => m.getLayer(id)) })[0] : null;
         const ogFp = cb.current.og.on && !ogPt ? m.queryRenderedFeatures(e.point, { layers: OG_FILL_LAYERS.filter((id) => m.getLayer(id)) })[0] : null;
+        if (ogPt?.layer.id === "og-well-cluster") {
+          const z = await (m.getSource("og-wells-c") as GeoJSONSource).getClusterExpansionZoom(ogPt.properties.cluster_id);
+          m.easeTo({ center: (ogPt.geometry as GeoJSON.Point).coordinates as [number, number], zoom: z + 0.2 });
+          return;
+        }
         if (ogPt || ogFp) {
           const f = (ogPt ?? ogFp)!;
           const p = f.properties ?? {};
@@ -329,7 +334,8 @@ export default function MapView(props: Props) {
         const id = f.layer.id;
         const line = (t: string, label = "") => `<div style="color:#57534a">${t}${label}</div>`;
         let html = "";
-        if (id.startsWith("og-well")) html = `<div style="font-weight:600;color:#2b2a26">Well ${esc(String(p.leaseName ?? ""))} ${esc(String(p.wellNumber ?? ""))}</div>${line(`API ${esc(String(p.api))} · ${esc(String(p.wellStatus ?? ""))}`, TIP_LABEL.source)}${line(LABEL.wells)}`;
+        if (id === "og-well-cluster") html = `<div style="font-weight:600;color:#2b2a26">${p.point_count} wells</div>${line(`${p.idle} idle · click to zoom in`)}`;
+        else if (id.startsWith("og-well")) html = `<div style="font-weight:600;color:#2b2a26">Well ${esc(String(p.leaseName ?? ""))} ${esc(String(p.wellNumber ?? ""))}</div>${line(`API ${esc(String(p.api))} · ${esc(String(p.wellStatus ?? ""))}`, TIP_LABEL.source)}${line(LABEL.wells)}`;
         else if (id.startsWith("og-term")) html = `<div style="font-weight:600;color:#2b2a26">${esc(String(p.terminal ?? "Marine oil terminal"))}</div>${line(`Berth ${esc(String(p.berth))}`, TIP_LABEL.source)}${line(LABEL.terminals)}`;
         else if (id.startsWith("og-former")) html = `<div style="font-weight:600;color:#2b2a26">Former lease PRC ${esc(String(p.prc))}</div>${line(actionLabel(String(p.former)), TIP_LABEL.source)}`;
         else if (id === "og-fp-hatch") html = `<div style="font-weight:600;color:#2b2a26">PRC ${esc(String(p.prc))}</div>${line(esc(compLabel(String(p.prc))))}`;

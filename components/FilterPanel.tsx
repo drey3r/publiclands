@@ -38,7 +38,7 @@ export function FilterPanel({ f, set, counties, waterbodies, methods }: Props) {
 
   return (
     <div className="space-y-4 text-sm">
-      <p className="-mb-2.5 text-[11.5px] font-semibold text-ink-soft">Quick filters <DataLabel kind="estimate" title="Estimate: both use this map's classification; this map assigns candidates for review, not the state" /></p>
+      <p className="mb-1.5 text-[11.5px] font-semibold leading-snug text-ink-soft">Quick filters <DataLabel kind="estimate" title="Estimate: both use this map's classification; this map assigns candidates for review, not the state" /></p>
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Quick filters">
         <button type="button" aria-pressed={isPre} className={chip(isPre)} onClick={() => set(isPre ? { ...EMPTY, q: f.q } : pre1960)} title="Cable, pipeline, water and power leases with an estimated issue date before 1960">
           Pre-1960 infrastructure

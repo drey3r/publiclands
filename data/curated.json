@@ -4,17 +4,48 @@
     "1579": {
       "title": "Lake Tahoe telephone cables, removed",
       "completed": true,
-      "summary": "CSLC lease PRC 1579 began November 14, 1955 for submarine telephone and telegraph cables on the bed of Lake Tahoe between Rubicon Bay and Baldwin Beach. On February 28, 2023 (Staff Report 29), Commission staff recommended amending the lease to authorize the lessee to remove the facilities in their entirety, including severed segments and debris, and restore the lease area so the lease could be terminated. The staff report notes a November 2021 federal consent decree between the lessee and the California Sportfishing Protection Alliance and concerns about lead leaching from the cable. The League to Save Lake Tahoe reported in November 2024 that the lakebed cable removal was complete, with a short shoreline segment at Baldwin Beach scheduled for later removal.",
+      "summary": "CSLC lease PRC 1579 began November 14, 1955 for submarine telephone and telegraph cables on the bed of Lake Tahoe between Rubicon Bay and Baldwin Beach. On February 28, 2023 (Staff Report 29), Commission staff recommended amending the lease to authorize the lessee to remove the facilities in their entirety, including severed segments and debris, and restore the lease area so the lease could be terminated. The staff report notes a November 2021 federal consent decree between the lessee and the California Sportfishing Protection Alliance and concerns about lead leaching from the cable. The cable is fully removed: it came out of the lake in November 2024, and the final shore section at Baldwin Beach and Tallac Creek was removed on September 17, 2025.",
       "layerCaveat": "The public GIS layer still lists this lease with RecordStatus \"Active\". RecordStatus does not show whether the facilities are still there.",
       "milestones": [
-        { "date": "1955-11-14", "event": "Lease term begins (authorized April 12, 1956, Item 47)", "source": "CSLC Staff Report 29, Feb 28, 2023" },
-        { "date": "2021-11-04", "event": "Amended federal consent decree between the lessee and the California Sportfishing Protection Alliance", "source": "CSLC Staff Report 29, Feb 28, 2023" },
-        { "date": "2023-02-28", "event": "Commission considers lease amendment authorizing full removal (Staff Report 29)", "source": "CSLC Staff Report 29, Feb 28, 2023" },
-        { "date": "2024-11", "event": "Lakebed cable removal reported complete", "source": "League to Save Lake Tahoe" }
+        {
+          "date": "1955-11-14",
+          "event": "Lease term begins (authorized April 12, 1956, Item 47)",
+          "source": "CSLC Staff Report 29, Feb 28, 2023"
+        },
+        {
+          "date": "2021-11-04",
+          "event": "Amended federal consent decree between the lessee and the California Sportfishing Protection Alliance",
+          "source": "CSLC Staff Report 29, Feb 28, 2023"
+        },
+        {
+          "date": "2023-02-28",
+          "event": "Commission considers lease amendment authorizing full removal (Staff Report 29)",
+          "source": "CSLC Staff Report 29, Feb 28, 2023"
+        },
+        {
+          "date": "2024-11",
+          "event": "Cable removed from the lake",
+          "source": "tahoelead.com/removal; League to Save Lake Tahoe"
+        },
+        {
+          "date": "2025-09-17",
+          "event": "Final shore section at Baldwin Beach and Tallac Creek removed: cable fully removed",
+          "source": "tahoelead.com/removal"
+        }
       ],
       "sources": [
-        { "label": "CSLC Staff Report 29 (Minute Item 29), February 28, 2023 (PDF)", "url": "https://slcprdwordpressstorage.blob.core.windows.net/wordpressdata/2023/02/02-28-23_29.pdf" },
-        { "label": "League to Save Lake Tahoe: removal of decades-old telecom cables from Lake Tahoe", "url": "https://www.keeptahoeblue.org/combat-pollution/cable-removal/" }
+        {
+          "label": "CSLC Staff Report 29 (Minute Item 29), February 28, 2023 (PDF)",
+          "url": "https://slcprdwordpressstorage.blob.core.windows.net/wordpressdata/2023/02/02-28-23_29.pdf"
+        },
+        {
+          "label": "League to Save Lake Tahoe: removal of decades-old telecom cables from Lake Tahoe",
+          "url": "https://www.keeptahoeblue.org/combat-pollution/cable-removal/"
+        },
+        {
+          "label": "Tahoe lead cable removal: tahoelead.com/removal",
+          "url": "https://tahoelead.com/removal"
+        }
       ]
     }
   },

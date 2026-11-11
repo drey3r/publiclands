@@ -47,7 +47,8 @@ committed or deployed; at least 1 second between requests) and built by `scripts
 | BOEM [OCS boundary lines, Submerged Lands Act boundary](https://services7.arcgis.com/G5Ma95RzqJRPKsWL/arcgis/rest/services/OCS_BOEM_Offshore_Boundary_Lines/FeatureServer/8) | Seaward edge of state sovereign lands | `sla-boundary.geojson`, `sla-outside.geojson` |
 | CSLC [Significant_Lands_Waterbodies](https://services3.arcgis.com/5aaQCuq3e4GRvkFG/ArcGIS/rest/services/Significant_Lands_Waterbodies/FeatureServer/0) | Sovereign lake and lagoon beds (42 records, clipped to California) | `sovereign-waterbodies.geojson` |
 | Commission staff reports and meeting records named in `data/reference/*.csv` | Commission records on footprint cards, the former-leases table and lease pages | `data/records/cslc-oil-gas-study/` |
-| [Natural Earth](https://www.naturalearthdata.com/) 1:10m land (public domain) | Only to stop the state-waters tint at the Oregon and Mexico lines | `data/ref/ne-land-near-ca.geojson` |
+| [Natural Earth](https://www.naturalearthdata.com/) 1:10m land (public domain) | Only to stop the state-waters tint at the Oregon and Mexico lines, beyond the map's pan range | `data/ref/ne-land-near-ca.geojson` |
+| [OpenStreetMap](https://www.openstreetmap.org/copyright) coastline via the Overpass API (© OpenStreetMap contributors, ODbL), fetched 2026-11-11 | Land in Baja California and Oregon within the map's pan range, so the state-waters tint stops exactly at the basemap's coast (`scripts/data/osm_land_near_ca.py`) | `data/ref/osm-land-near-ca.geojson` |
 
 The shoreline of the state-waters area inside California is the basemap's own (OpenStreetMap coastline via
 OpenFreeMap), so it meets the coast where the map draws it; it is a display line, not the ordinary high water mark.

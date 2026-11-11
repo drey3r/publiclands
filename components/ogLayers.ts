@@ -2,7 +2,7 @@
 // the lease marks (lease points and their icons stay on top, infrastructure strongest).
 import type { ExpressionSpecification, GeoJSONSource, Map as MLMap } from "maplibre-gl";
 import { GLYPH, MARK_GLYPH, markImage } from "@/lib/icons";
-import { FP, MARK, OG_BASE, WELL_GROUPS, type Footprint, type OgPart, type WellGroup } from "@/lib/oilgas";
+import { FP, MARK, OG_BASE, WELL_BROWN, WELL_GROUPS, WELL_IDLE, type Footprint, type OgPart, type WellGroup } from "@/lib/oilgas";
 
 export const OG_ICON_Z = 11;
 const ICON_PX = 24;
@@ -40,10 +40,14 @@ function hatch(color: string, gap = 8): ImageData {
   return g.getImageData(0, 0, S, S);
 }
 
-export const OG_POINT_LAYERS = ["og-well-dot", "og-well-icon", "og-term-dot", "og-term-icon", "og-former-dot", "og-former-icon"];
+/** Wells from zoom 11 to 13 are grouped (count marks) so dense shores such as Huntington Beach stay readable. */
+export const WELL_CLUSTER_MAX = 13;
+export const OG_POINT_LAYERS = ["og-well-dot", "og-well-icon", "og-well-c-icon", "og-well-cluster", "og-term-dot", "og-term-icon", "og-former-dot", "og-former-icon"];
 export const OG_FILL_LAYERS = ["og-fp-fill", "og-fp-hatch"];
-const OG_LAYERS = ["og-fp-fill", "og-fp-hatch", "og-fp-line", "og-fp-line-d", "og-fp-sel", ...OG_POINT_LAYERS, "og-pt-sel"];
+const OG_LAYERS = ["og-fp-fill", "og-fp-hatch", "og-fp-line", "og-fp-line-d", "og-fp-sel", ...OG_POINT_LAYERS, "og-well-cluster-n", "og-pt-sel"];
 
+let wellsAll: GeoJSON.FeatureCollection<GeoJSON.Point> | null = null;
+let wellsKey = "";
 /** Add the family's sources, images and layers (once), under `before`. */
 export function addOg(m: MLMap, d: OgData, before: string) {
   if (m.getSource("og-fp")) return;
@@ -55,6 +59,10 @@ export function addOg(m: MLMap, d: OgData, before: string) {
   m.addSource("og-fp", { type: "geojson", data: d.footprints, attribution: "Offshore leases, terminals: California State Lands Commission" });
   m.addSource("og-former", { type: "geojson", data: formerPoints(d.footprints) });
   m.addSource("og-wells", { type: "geojson", data: d.wells, attribution: "Wells: CalGEM (California Geologic Energy Management Division)" });
+  // The same wells, grouped from zoom 11 to 13 (data set by syncOg to the statuses shown).
+  m.addSource("og-wells-c", { type: "geojson", data: d.wells, cluster: true, clusterRadius: 40, clusterMaxZoom: WELL_CLUSTER_MAX, clusterProperties: { idle: ["+", ["case", ["==", ["get", "statusGroup"], "idle"], 1, 0]] } });
+  wellsAll = d.wells;
+  wellsKey = "";
   m.addSource("og-term", { type: "geojson", data: d.terminals });
   m.addSource("og-sel", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
   const add = (l: Parameters<MLMap["addLayer"]>[0]) => m.addLayer(l, before);
@@ -82,7 +90,12 @@ export function addOg(m: MLMap, d: OgData, before: string) {
       "circle-radius": X(["interpolate", ["linear"], ["zoom"], 5, ["case", hollow, 1.6, 2.1], 10.99, ["case", hollow, 2.8, 3.4]]),
     },
   });
-  add({ id: "og-well-icon", type: "symbol", source: "og-wells", minzoom: OG_ICON_Z, layout: { "icon-image": X(["concat", "og|well-", ["get", "statusGroup"]]), "icon-allow-overlap": true, "icon-ignore-placement": true } });
+  // Zoom 11-13: groups of nearby wells as one count mark; single wells as their mark.
+  const isC = X(["has", "point_count"]);
+  add({ id: "og-well-cluster", type: "circle", source: "og-wells-c", minzoom: OG_ICON_Z, maxzoom: WELL_CLUSTER_MAX + 1, filter: isC, paint: { "circle-color": "#f3ead2", "circle-opacity": 0.92, "circle-stroke-color": X(["case", [">", ["get", "idle"], 0], WELL_IDLE, WELL_BROWN]), "circle-stroke-width": 1.6, "circle-radius": X(["interpolate", ["linear"], ["sqrt", ["get", "point_count"]], 1, 10, 6, 14, 15, 19]) } });
+  add({ id: "og-well-cluster-n", type: "symbol", source: "og-wells-c", minzoom: OG_ICON_Z, maxzoom: WELL_CLUSTER_MAX + 1, filter: isC, layout: { "text-field": ["get", "point_count_abbreviated"], "text-font": ["Noto Sans Bold"], "text-size": 10.5, "text-allow-overlap": true, "text-ignore-placement": true }, paint: { "text-color": "#5b3a1c" } });
+  add({ id: "og-well-c-icon", type: "symbol", source: "og-wells-c", minzoom: OG_ICON_Z, maxzoom: WELL_CLUSTER_MAX + 1, filter: X(["!", isC]), layout: { "icon-image": X(["concat", "og|well-", ["get", "statusGroup"]]), "icon-allow-overlap": true, "icon-ignore-placement": true } });
+  add({ id: "og-well-icon", type: "symbol", source: "og-wells", minzoom: WELL_CLUSTER_MAX + 1, layout: { "icon-image": X(["concat", "og|well-", ["get", "statusGroup"]]), "icon-allow-overlap": true, "icon-ignore-placement": true } });
   // Marine oil terminals and former leases: quiet dots below zoom 11, marks from zoom 11.
   const dot = (id: string, source: string, fill: string, line: string, lineOpacity: number) =>
     add({ id, type: "circle", source, maxzoom: OG_ICON_Z, paint: { "circle-color": fill, "circle-radius": X(["interpolate", ["linear"], ["zoom"], 6, 2.6, 10.99, 4.5]), "circle-stroke-color": line, "circle-stroke-width": 1, "circle-stroke-opacity": lineOpacity } });
@@ -103,9 +116,13 @@ export function syncOg(m: MLMap, on: boolean, v: OgView) {
   for (const id of ["og-former-dot", "og-former-icon"]) vis(id, on && p.former);
   vis("og-pt-sel", on);
   const groups = (WELL_GROUPS.map((g) => g.key) as WellGroup[]).filter((g) => p[`well-${g}`] && (!v.watch || g === "idle"));
-  for (const id of ["og-well-dot", "og-well-icon"]) {
-    vis(id, on && groups.length > 0);
-    m.setFilter(id, X(["in", ["get", "statusGroup"], ["literal", groups]]));
+  for (const id of ["og-well-dot", "og-well-icon", "og-well-cluster", "og-well-cluster-n", "og-well-c-icon"]) vis(id, on && groups.length > 0);
+  for (const id of ["og-well-dot", "og-well-icon"]) m.setFilter(id, X(["in", ["get", "statusGroup"], ["literal", groups]]));
+  // Groups count only the wells shown: the grouped source gets the shown statuses' wells.
+  const key = groups.join(",");
+  if (wellsAll && key !== wellsKey) {
+    wellsKey = key;
+    (m.getSource("og-wells-c") as GeoJSONSource).setData({ ...wellsAll, features: wellsAll.features.filter((f) => groups.includes(f.properties?.statusGroup)) });
   }
   const watchFp = X(["in", ["get", "prc"], ["literal", v.watchFp]]);
   for (const id of ["og-fp-fill", "og-fp-line", "og-fp-line-d"]) {

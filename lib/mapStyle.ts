@@ -40,7 +40,7 @@ const C = {
   outside: "#ebe7de",
   outsideLine: "#cfc6b4",
   caLine: "#8a806d",
-  county: "#b9ad96",
+  county: "#9c8f76",
   countyStrong: "#6f6656",
   countyText: "#7d7360",
   range: "#8a7b62",
@@ -291,7 +291,7 @@ function countyLayers(): LayerSpecification[] {
       type: "line",
       source: "caCounties",
       layout: { "line-join": "round" },
-      paint: { "line-color": C.county, "line-width": ["interpolate", ["linear"], ["zoom"], 6.5, 0.4, 12, 1], "line-opacity": ["interpolate", ["linear"], ["zoom"], 6.5, 0, 8, 0.55, 12, 0.7] },
+      paint: { "line-color": C.county, "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.4, 12, 1.1], "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0.35, 8, 0.65, 12, 0.8] },
     },
     {
       id: "county-line-strong",

@@ -337,8 +337,14 @@ zone = unary_union([landward] + rings)
 # Outside California the tint must stop at the state lines (Oregon, Baja California, the Gulf of California). There the
 # mask covers everything that is not land in Natural Earth's 1:10m land (data/ref/ne-land-near-ca.geojson, public domain);
 # its coast is within a few hundred meters of the basemap's, invisible at the zooms where it shows.
+# Near the Oregon and Mexico lines (as far as the map pans) the land is OpenStreetMap's own coastline
+# (data/ref/osm-land-near-ca.geojson, scripts/data/osm_land_near_ca.py), the coast the basemap draws, so no tinted
+# sliver shows along the Baja California or Oregon coast at any zoom.
 ne_land = gpd.read_file(os.path.join(ROOT, "data", "ref", "ne-land-near-ca.geojson")).to_crs(4326).union_all()
-seaward = box(-130.0, 24.0, -106.0, 48.0).difference(zone).difference(ne_land).simplify(0.0005)
+osm = json.load(open(os.path.join(ROOT, "data", "ref", "osm-land-near-ca.geojson")))["features"]
+osm_regions = unary_union([box(*f["properties"]["region"]) for f in osm])
+land = unary_union([ne_land.difference(osm_regions)] + [shape(f["geometry"]).buffer(0) for f in osm])
+seaward = box(-130.0, 24.0, -106.0, 48.0).difference(zone).difference(land).simplify(0.00002)
 sla_outside = [{"type": "Feature", "properties": {"note": "Seaward of the SLA line (display mask)"}, "geometry": rnd(seaward, 5)}]
 
 # ---------------------------------------------------------------- sovereign waterbodies (42 records)

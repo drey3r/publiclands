@@ -33,7 +33,7 @@ export const STORIES = [
     prc: "1579",
     kicker: "Completed",
     title: "Lake Tahoe's telephone cables, removed",
-    blurb: "A 1955 right-of-way for telephone cables on the lakebed. The Commission authorized full removal in 2023; the lakebed cable was reported removed in 2024.",
+    blurb: "A 1955 right-of-way for telephone cables on the lakebed. The Commission authorized full removal in 2023. The cable came out of the lake in November 2024; the last shore section went on September 17, 2025: fully removed.",
     camera: { center: [-120.081, 38.972] as [number, number], zoom: 13.2, pitch: 64, bearing: 165 },
   },
   {
