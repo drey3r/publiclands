@@ -234,26 +234,34 @@ const cloudCalls = (page, body, status = 200) => {
 };
 const attribution = (page) => page.evaluate(() => document.querySelector(".maplibregl-ctrl-attrib-inner")?.textContent ?? "");
 
-await check("clouds: off by default, a toggle loads them with Open-Meteo credit, off hides them", async (page) => {
+const order = (page) => page.evaluate(() => window.__map.getLayersOrder());
+
+await check("clouds: on by default on desktop (one request, Open-Meteo credit); above land fills and tints, below lines, names and marks; the switch hides them", async (page) => {
   const calls = await cloudCalls(page, CLOUD_GRID);
-  await open(page);
+  await open(page, "/?layers=state,leases,federal,local,waters");
   const sw = page.getByRole("switch", { name: "Clouds" });
-  assert((await sw.getAttribute("aria-checked")) === "false", "clouds switch is on by default");
-  assert(calls.length === 0, `clouds fetched while off (${calls.length})`);
-  assert(!(await page.evaluate(() => !!window.__map.getLayer("clouds"))), "cloud layer exists while off");
-  assert(await page.evaluate(() => window.__ambience.running()), "wave animation not running at Home");
-  await sw.click();
+  assert((await sw.getAttribute("aria-checked")) === "true", "clouds switch is off by default on desktop");
   await page.waitForFunction(() => window.__map.getLayer("clouds"), null, { timeout: 15000 });
   await idle(page);
   assert(calls.length === 1, `expected one clouds request, got ${calls.length}`);
-  assert((await page.evaluate(() => window.__map.getLayoutProperty("clouds", "visibility"))) === "visible", "cloud layer hidden after toggle on");
+  assert(await page.evaluate(() => window.__ambience.cloudsShown()), "clouds not drawn at Home");
   assert(/Open-Meteo/.test(await attribution(page)), "Open-Meteo credit missing while clouds are on");
-  // Clouds sit under the lease marks and labels.
-  const order = await page.evaluate(() => window.__map.getStyle().layers.map((l) => l.id));
-  assert(order.indexOf("clouds") < order.indexOf("lease-pt"), "clouds drawn over lease marks");
+  // Layer order: every land fill, tint and mask below; county lines, names, clusters, lease marks and the selection above.
+  const ids = await order(page);
+  const at = (id) => { const i = ids.indexOf(id); assert(i >= 0, `layer ${id} missing`); return i; };
+  const c = at("clouds");
+  const below = ["access-fill", "access-line", "outside-base", "outside-veil", "water-ocean", "ocean-depth", "ocean-waves", "hillshade", ...ids.filter((id) => id.startsWith("sov-"))];
+  assert(ids.some((id) => id.startsWith("sov-")), "sovereign-lands tint not loaded for the order check");
+  for (const id of below) assert(at(id) < c, `${id} is drawn over the clouds`);
+  const above = ["county-line", "ca-outline", "label-range", "label-water", "place-town", "place-city", "cluster", "cluster-count", "lease-flag", "lease-pt", "lease-icon", "hl-ring", "access-sel-fill", "access-sel-line", "access-label"];
+  for (const id of above) assert(at(id) > c, `clouds are drawn over ${id}`);
+  // Zooming in: gone before zoom 8 (lease detail), back at Home.
+  await jump(page, [-122.3, 37.8], 8);
+  assert(!(await page.evaluate(() => window.__ambience.cloudsShown())), "clouds still drawn at zoom 8");
+  assert(await page.evaluate(() => window.__ambience.running()), "wave animation not running at zoom 8");
   await sw.click();
   await page.waitForTimeout(500);
-  assert((await page.evaluate(() => window.__map.getLayoutProperty("clouds", "visibility"))) === "none", "cloud layer still visible after toggle off");
+  assert((await page.evaluate(() => window.__map.getLayoutProperty("clouds", "visibility"))) === "none", "cloud layer still visible after the switch");
   assert(!/Open-Meteo/.test(await attribution(page)), "Open-Meteo credit shown while clouds are off");
   // Waves fade by zoom 11 and the ticker stops there.
   await jump(page, [-119.75, 34.15], 11.5);
@@ -263,10 +271,24 @@ await check("clouds: off by default, a toggle loads them with Open-Meteo credit,
   assert(await page.evaluate(() => window.__ambience.running()), "animation did not restart after zooming out");
 });
 
+await check("idle is idle: no map renders at rest once nothing animates", async (page) => {
+  await cloudCalls(page, CLOUD_GRID);
+  await open(page);
+  await jump(page, [-121.5, 38.55], 12);
+  await page.waitForTimeout(1500);
+  const n = await page.evaluate(() => new Promise((r) => { let k = 0; const f = () => k++; window.__map.on("render", f); setTimeout(() => { window.__map.off("render", f); r(k); }, 3000); }));
+  assert(n === 0, `${n} renders in 3 s at rest (zoom 12, nothing animating)`);
+  // At Home the ticker runs at about 12 frames a second, never the display's 60.
+  await page.evaluate(() => window.__map.jumpTo({ center: [-119.4, 37.2], zoom: 5.6 }));
+  await idle(page);
+  await page.waitForTimeout(1500);
+  const h = await page.evaluate(() => new Promise((r) => { let k = 0; const f = () => k++; window.__map.on("render", f); setTimeout(() => { window.__map.off("render", f); r(k); }, 3000); }));
+  assert(h > 20 && h < 48, `${h} renders in 3 s at Home (expected about 36)`);
+});
+
 await check("clouds: a failed load shows none and breaks nothing", async (page) => {
   const calls = await cloudCalls(page, { error: "down" }, 503);
   await open(page, "/?tab=leases");
-  await page.getByRole("switch", { name: "Clouds" }).click();
   await page.waitForTimeout(2500);
   assert(calls.length === 1, `expected one clouds request, got ${calls.length}`);
   assert(!(await page.evaluate(() => !!window.__map.getLayer("clouds"))), "cloud layer added after a failed load");
@@ -276,21 +298,28 @@ await check("clouds: a failed load shows none and breaks nothing", async (page) 
   assert(await page.locator(".sel-pop").isVisible(), "no popup after card click");
 });
 
-await check("reduced motion: one still frame (waves and clouds drawn, nothing animates)", async (page) => {
-  await cloudCalls(page, CLOUD_GRID);
+await check("reduced motion: clouds off by default and never fetched; switched on they are one still frame", async (page) => {
+  const calls = await cloudCalls(page, CLOUD_GRID);
   await open(page);
   assert(await page.evaluate(() => !!window.__map.getLayer("ocean-waves") && !!window.__map.getLayer("ocean-depth")), "wave or depth layer missing");
   assert(!(await page.evaluate(() => window.__ambience.running())), "animation running with reduced motion");
-  await page.getByRole("switch", { name: "Clouds" }).click();
+  const sw = page.getByRole("switch", { name: "Clouds" });
+  assert((await sw.getAttribute("aria-checked")) === "false", "clouds on by default with reduced motion");
+  assert(calls.length === 0, `clouds fetched while off (${calls.length})`);
+  await sw.click();
   await page.waitForFunction(() => window.__map.getLayer("clouds"), null, { timeout: 15000 });
   await idle(page);
+  assert(await page.evaluate(() => window.__ambience.cloudsShown()), "clouds not drawn after the switch");
   assert(!(await page.evaluate(() => window.__ambience.running())), "animation started by the clouds with reduced motion");
 }, { width: 1440, height: 900 }, { reducedMotion: "reduce" });
 
-await check("phone: waves and clouds are a still frame", async (page) => {
+await check("phone: clouds off by default and never fetched; waves are a still frame", async (page) => {
+  const calls = await cloudCalls(page, CLOUD_GRID);
   await open(page);
   assert(await page.evaluate(() => !!window.__map.getLayer("ocean-waves")), "wave layer missing on phone");
   assert(!(await page.evaluate(() => window.__ambience.running())), "animation running on a phone");
+  assert(calls.length === 0, `clouds fetched on a phone (${calls.length})`);
+  assert(!(await page.evaluate(() => !!window.__map.getLayer("clouds"))), "cloud layer exists on a phone by default");
 }, { width: 390, height: 844 });
 
 // ---------------------------------------------------------------- nothing clipped

@@ -2,8 +2,8 @@
 
 Everything the map shows comes from the public sources below. The build reads only the snapshots committed in `data/`.
 The deployed site never calls the State Lands Commission. The only network requests a visitor's browser makes are for
-basemap tiles, terrain tiles and place search, and, only if the reader turns on Clouds, the site's own `/api/clouds`
-(see Clouds below).
+basemap tiles, terrain tiles and place search, and, while Clouds is on, the site's own `/api/clouds` (see Clouds
+below).
 
 > **Not legal or survey data.** Positions, boundaries and dates are as published by each source, generalized for display.
 > For official records, contact the [California State Lands Commission](https://www.slc.ca.gov/).
@@ -87,20 +87,24 @@ Grant boundaries for Los Angeles, Long Beach, San Francisco and Oakland are not 
 - [Photon](https://photon.komoot.io/) geocoder by komoot, built on OpenStreetMap data (ODbL). Search is limited to
   California's bounding box. The public endpoint is free for fair use. Self-host Photon if you expect heavy traffic.
 
-## Clouds: Open-Meteo (off by default)
+## Clouds: Open-Meteo (on by default on desktop)
 
 - [Open-Meteo](https://open-meteo.com/) forecast API, "best match" model (in the US, NOAA HRRR and GFS): current low,
-  mid and high cloud cover and 10 m wind on a 1° grid over California (143 points). Only when a reader turns on
-  "Clouds", the site's server route `app/api/clouds/route.ts` asks Open-Meteo and caches the answer for three hours
-  (data cache and CDN), so Open-Meteo is called about eight times a day per deployment however many people use it. The
-  reader's browser never calls Open-Meteo. If the request fails, the map draws no clouds.
+  mid and high cloud cover, and the wind at 850 hPa and 300 hPa (which way the low and the high cloud drift). Two sets
+  of points: every 0.5° over California and its coastal waters (278 points), and every 3° from 138°W to 102°W and
+  23°N to 50°N (130 points: the open Pacific, Oregon, Nevada, Arizona, northern Mexico), about 400 in all. The site's
+  server route `app/api/clouds/route.ts` asks Open-Meteo, merges them into one 0.5° grid and caches the answer for
+  three hours (data cache and CDN), so Open-Meteo is called about eight times a day per deployment however many people
+  use the map. The reader's browser never calls Open-Meteo. Clouds are on by default on desktop; on phones, and for
+  readers who prefer reduced motion, nothing is requested until "Clouds" is switched on. If the request fails, the map
+  draws no clouds.
 - **Terms** (checked 2026-11-10: [terms](https://open-meteo.com/en/terms), [pricing](https://open-meteo.com/en/pricing),
   [licence](https://open-meteo.com/en/licence)): the free API is for non-commercial use only. Open-Meteo lists
   "non-profit websites or apps that do not have subscriptions or advertising" as non-commercial, which fits this site.
   If the site ever carries ads or subscriptions, it needs a paid API key. Limits: under 10,000 calls a day, 5,000 an
-  hour, 600 a minute, per IP; Open-Meteo warns that apps on hosts like Vercel may be limited earlier. Open-Meteo does
-  not say how a request with many points is counted; even at one call per point, that is about 1,150 calls a day per
-  deployment, and both deployments (public and private) together stay under the daily limit.
+  hour, 600 a minute, per IP; Open-Meteo warns that apps on hosts like Vercel may be limited earlier. Each location in
+  a request counts as a call: about 400 × 8 = 3,200 calls a day per deployment, 6,400 for both deployments (public
+  and private), under the daily limit; one refresh is 400 calls in a minute, under the minute limit.
 - **License:** data CC BY 4.0. Required credit with a link wherever the data is shown: the map's attribution reads
   "Clouds: Weather data by Open-Meteo.com (CC BY 4.0, smoothed and drawn as clouds)" while the clouds are on. The
   smoothing, noise texture and drift are ours, so the clouds show where cover is reported, not the shape of real

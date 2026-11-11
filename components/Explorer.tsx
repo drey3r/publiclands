@@ -161,6 +161,8 @@ export default function Explorer() {
     setShow(v0.show);
     setOpenOnly(v0.openOnly);
     setFindParam(initial.current.get("find"));
+    // Clouds: on by default on desktop; a switch only on phones and for readers who prefer reduced motion.
+    setClouds(!window.matchMedia("(max-width: 600px)").matches && !reduceMotion());
     const t0 = initial.current.get("tab") as ListTab | null;
     if (t0 && LIST_TABS.includes(t0)) setTab(t0);
     fetch("/data/cameras.json")

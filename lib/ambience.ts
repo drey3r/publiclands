@@ -1,10 +1,11 @@
-import type { CanvasSource, Map as MLMap, StyleImageInterface } from "maplibre-gl";
+import type { CustomLayerInterface, CustomRenderMethodInput, Map as MLMap, StyleImageInterface } from "maplibre-gl";
 
 /**
  * Ambience: the ocean's moving wave marks and the live cloud layer.
  *
- * Both run off one slow ticker (about 12 frames a second, never 60; clouds redraw at 4) that only
- * asks the map to repaint, so the map can still rest and fire `idle` between frames. The ticker
+ * Both run off one slow ticker (about 12 frames a second, never 60) that only asks the map to
+ * repaint, so the map can still rest and fire `idle` between frames. The clouds are shaded on the
+ * GPU (one draw call a frame); the wave tile is a small canvas redrawn each tick. The ticker
  * stops past the zooms where waves and clouds have faded, while the tab is hidden, on screens
  * 600 px wide or less, and when the reader prefers reduced motion (one still frame instead).
  */
@@ -12,8 +13,21 @@ import type { CanvasSource, Map as MLMap, StyleImageInterface } from "maplibre-g
 const FPS = 12;
 /** Wave marks fade out by this zoom; past it the ticker stops (lease marks and icons own the water there). */
 export const WAVES_MAX_Z = 11;
-/** Clouds fade out by this zoom. */
-const CLOUDS_MAX_Z = 10.5;
+/** Clouds are whole up to this zoom, then thin, spread and fade, as if the reader descends through them… */
+const CLOUDS_FULL_Z = 5.9;
+/** …and are gone by this zoom, before lease detail matters. */
+export const CLOUDS_MAX_Z = 7.6;
+const cloudFade = (z: number) => 1 - smooth(CLOUDS_FULL_Z + 0.3, CLOUDS_MAX_Z, z);
+/** Drift along the wind, in screen pixels a second: slow enough to notice only after a few seconds. */
+const CLOUD_DRIFT_PX = 2.4;
+/** How far the field spreads from the map's centre by the time it has faded (0.2 = 20%). */
+const CLOUD_SPREAD = 0.2;
+/**
+ * Clouds sit right below this layer: above every land fill, tint and mask (the map inserts all of
+ * those below the county lines), and below county lines, state lines, every name, mark and outline.
+ */
+const CLOUDS_BELOW = "county-line";
+const CLOUD_CREDIT_LAYER = "clouds-credit";
 export const WAVE_IMAGE = "ocean-waves";
 export const CLOUD_SOURCE = "clouds";
 export const CLOUD_LAYER = "clouds";
@@ -38,7 +52,6 @@ const smooth = (e0: number, e1: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 const mercY = (lat: number) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
-const invMercY = (y: number) => (360 / Math.PI) * Math.atan(Math.exp(y)) - 90;
 
 // ---------------------------------------------------------------------------------------------
 // Ocean: an animated fill pattern of short engraved wave strokes
@@ -150,8 +163,10 @@ export type CloudGrid = {
   low: number[];
   mid: number[];
   high: number[];
-  /** Mean 10 m wind over the grid, m/s, toward east (u) and north (v). */
+  /** Mean wind at low-cloud height (850 hPa), m/s, toward east (u) and north (v). */
   wind: [number, number];
+  /** Mean wind at high-cloud height (300 hPa); the low wind if absent. */
+  windHigh?: [number, number];
   source: string;
 };
 
@@ -198,155 +213,274 @@ function fbm(n: number, seed: number, octaves: number, base: number, sx = 1): Fl
 }
 
 const NOISE = 256;
-function sampler(tex: Float32Array) {
-  return (x: number, y: number) => {
-    const fx = ((x % NOISE) + NOISE) % NOISE;
-    const fy = ((y % NOISE) + NOISE) % NOISE;
-    const x0 = fx | 0;
-    const y0 = fy | 0;
-    const tx = fx - x0;
-    const ty = fy - y0;
-    const x1 = (x0 + 1) & (NOISE - 1);
-    const y1 = (y0 + 1) & (NOISE - 1);
-    const a = tex[y0 * NOISE + x0];
-    const b = tex[y0 * NOISE + x1];
-    const c = tex[y1 * NOISE + x0];
-    const d = tex[y1 * NOISE + x1];
-    return (a + (b - a) * tx) * (1 - ty) + (c + (d - c) * tx) * ty;
-  };
-}
+/** One noise tile spans this many degrees of longitude (its largest billows are a quarter of that). */
+const NOISE_DEG = 7;
+
+const CLOUD_VERT = `#version 300 es
+uniform mat4 u_matrix;
+in vec2 a_pos;
+out vec2 v_m;
+void main() {
+  v_m = a_pos;
+  gl_Position = u_matrix * vec4(a_pos, 0.0, 1.0);
+}`;
 
 /**
- * Turns the coarse model grid into soft clouds on a small canvas (the map scales it up).
- * Cover sets how much of the noise passes a threshold, so thin cover reads as scattered puffs and
- * full cover as a solid deck; high cloud is drawn thinner and streakier. Each cloud casts a faint
- * shadow down-right, matching the hillshade's light from the northwest.
+ * Per pixel: where on the weather grid is this (smoothly interpolated cover), and does the drifting
+ * noise there pass the threshold that cover sets? Thin cover leaves scattered puffs, full cover a
+ * deck with soft cells in it. High cloud is a thinner, streakier veil. All of it is plain white at
+ * low opacity, with wide soft edges; the only dark is a very faint shadow to the southeast.
  */
-export class CloudField {
-  canvas: HTMLCanvasElement;
-  coordinates: [[number, number], [number, number], [number, number], [number, number]];
-  private ctx: CanvasRenderingContext2D;
-  private img: ImageData;
-  private W: number;
-  private H: number;
-  private lowD: Float32Array;
-  private highD: Float32Array;
-  private edge: Float32Array;
-  private alpha: Float32Array;
-  private puff = sampler(fbm(NOISE, 7, 6, 4));
-  private puff2 = sampler(fbm(NOISE, 31, 5, 4));
-  private streak = sampler(fbm(NOISE, 53, 4, 4, 4));
-  private wind: [number, number];
+const CLOUD_FRAG = `#version 300 es
+precision highp float;
+in vec2 v_m;
+uniform sampler2D u_cover;
+uniform sampler2D u_noise;
+uniform vec4 u_ext;     // lon0, lat0, lon span, lat span of the grid points (degrees)
+uniform vec2 u_res;     // grid points across and up
+uniform vec2 u_center;  // the map's centre (mercator)
+uniform float u_spread; // >= 1: clouds slide outward from the centre as the reader zooms in
+uniform float u_fade;   // overall opacity for this zoom
+uniform float u_thin;   // 0..1: how far the reader has descended into them
+uniform vec2 u_d1;      // drift of the low cloud (noise units)
+uniform vec2 u_d2;      // drift of the high cloud
+uniform float u_k;      // mercator -> noise units
+out vec4 o;
+const float PI = 3.141592653589793;
 
-  constructor(g: CloudGrid, width = 300) {
-    const w = g.lon0;
-    const e = g.lon0 + (g.nx - 1) * g.step;
-    const s = g.lat0;
-    const n = g.lat0 + (g.ny - 1) * g.step;
-    this.coordinates = [[w, n], [e, n], [e, s], [w, s]];
-    const lonRad = ((e - w) * Math.PI) / 180;
-    const yTop = mercY(n);
-    const yBot = mercY(s);
-    this.W = width;
-    this.H = Math.round((width * (yTop - yBot)) / lonRad);
-    this.canvas = document.createElement("canvas");
-    this.canvas.width = this.W;
-    this.canvas.height = this.H;
-    this.ctx = this.canvas.getContext("2d")!;
-    this.img = this.ctx.createImageData(this.W, this.H);
-    const N = this.W * this.H;
-    this.lowD = new Float32Array(N);
-    this.highD = new Float32Array(N);
-    this.edge = new Float32Array(N);
-    this.alpha = new Float32Array(N);
-    const sp = Math.hypot(g.wind[0], g.wind[1]) || 1;
-    // Drift direction from the wind, at a slow fixed pace (the data is a snapshot, not a forecast).
-    this.wind = [g.wind[0] / sp, g.wind[1] / sp];
+// Cover at a mercator point: x low, y mid, z high (0..1). Cubic B-spline over the grid (four
+// bilinear taps), so neither the half-degree cells nor single odd points show.
+vec3 cover(vec2 m) {
+  float lon = m.x * 360.0 - 180.0;
+  float lat = degrees(atan(sinh(PI * (1.0 - 2.0 * m.y))));
+  vec2 uv = vec2((lon - u_ext.x) / u_ext.z, (lat - u_ext.y) / u_ext.w);
+  vec2 p = uv * (u_res - 1.0) + 0.5;
+  vec2 i = floor(p - 0.5) + 0.5;
+  vec2 f = p - i;
+  vec2 w0 = (1.0 - f) * (1.0 - f) * (1.0 - f) / 6.0;
+  vec2 w1 = (4.0 - 6.0 * f * f + 3.0 * f * f * f) / 6.0;
+  vec2 w3 = f * f * f / 6.0;
+  vec2 w2 = 1.0 - w0 - w1 - w3;
+  vec2 s0 = w0 + w1;
+  vec2 s1 = w2 + w3;
+  vec2 t0 = (i - 1.0 + w1 / s0) / u_res;
+  vec2 t1 = (i + 1.0 + w3 / s1) / u_res;
+  vec3 c = (texture(u_cover, vec2(t0.x, t0.y)).rgb * s0.x + texture(u_cover, vec2(t1.x, t0.y)).rgb * s1.x) * s0.y
+         + (texture(u_cover, vec2(t0.x, t1.y)).rgb * s0.x + texture(u_cover, vec2(t1.x, t1.y)).rgb * s1.x) * s1.y;
+  // The grid ends far outside any view of California; feather it anyway.
+  vec2 e = min(uv, 1.0 - uv);
+  return c * smoothstep(0.0, 0.07, e.x) * smoothstep(0.0, 0.07, e.y);
+}
 
-    // Grid → canvas, with smoothstep-weighted bilinear so the 0.5° cells don't show as diamonds.
-    const at = (arr: number[], i: number, j: number) => arr[Math.min(g.ny - 1, Math.max(0, j)) * g.nx + Math.min(g.nx - 1, Math.max(0, i))] / 100;
-    const sample = (arr: number[], fx: number, fy: number) => {
-      const i = Math.floor(fx);
-      const j = Math.floor(fy);
-      const tx = smooth(0, 1, fx - i);
-      const ty = smooth(0, 1, fy - j);
-      return (at(arr, i, j) * (1 - tx) + at(arr, i + 1, j) * tx) * (1 - ty) + (at(arr, i, j + 1) * (1 - tx) + at(arr, i + 1, j + 1) * tx) * ty;
-    };
-    for (let py = 0; py < this.H; py++) {
-      const lat = invMercY(yTop - ((py + 0.5) / this.H) * (yTop - yBot));
-      const fy = (lat - g.lat0) / g.step;
-      const ey = Math.min(py, this.H - 1 - py) / this.H;
-      for (let px = 0; px < this.W; px++) {
-        const fx = (px + 0.5) / this.W * (g.nx - 1);
-        const k = py * this.W + px;
-        const lo = sample(g.low, fx, fy);
-        const mi = sample(g.mid, fx, fy);
-        this.lowD[k] = 1 - (1 - lo) * (1 - 0.85 * mi);
-        this.highD[k] = sample(g.high, fx, fy);
-        const ex = Math.min(px, this.W - 1 - px) / this.W;
-        this.edge[k] = smooth(0, 0.14, ex) * smooth(0, 0.12, ey);
-      }
-    }
+vec2 rot(vec2 p, float c, float s) { return vec2(p.x * c - p.y * s, p.x * s + p.y * c); }
+
+// Low and mid cloud: billows from drifting noise at three scales (each turned a different way, so no
+// grid shows), eroded as the reader descends.
+float lowCloud(vec2 m, vec3 c) {
+  float d = 1.0 - (1.0 - c.x) * (1.0 - 0.8 * c.y);
+  if (d < 0.02) return 0.0;
+  vec2 q = m * u_k;
+  float n = 0.55 * texture(u_noise, rot(q, 0.94, 0.34) + u_d1).r
+          + 0.3 * texture(u_noise, rot(q, 0.8, -0.6) * 2.3 + u_d1 * 1.6).g
+          + 0.15 * texture(u_noise, rot(q, 0.5, 0.87) * 5.3 + u_d1 * 2.6).r;
+  float th = 0.5 + 0.42 * (1.0 - 2.0 * d) + 0.3 * u_thin;
+  float a = smoothstep(th - 0.13, th + 0.22, n) * smoothstep(0.02, 0.12, d);
+  // Inside a deck: broad soft swells of thicker and thinner cloud, never a flat sheet.
+  float swell = 0.6 * texture(u_noise, rot(q, 0.77, 0.64) * 1.7 + u_d1 * 1.3).g + 0.4 * texture(u_noise, rot(q, 0.26, -0.97) * 3.9 + u_d1 * 2.2).a;
+  return a * mix(0.55, 1.0, smoothstep(0.3, 0.7, swell));
+}
+
+void main() {
+  // Lifted off the map: as the reader zooms in the field spreads from the centre a little faster
+  // than the ground does.
+  vec2 m = u_center + (v_m - u_center) / u_spread;
+  vec3 c = cover(m);
+  float low = 0.68 * lowCloud(m, c);
+  // High cloud: thin streaks.
+  float hi = 0.0;
+  if (c.z > 0.02) {
+    vec2 q = m * u_k;
+    float s = 0.7 * texture(u_noise, vec2(q.x * 0.55, q.y * 1.5) + u_d2).b + 0.3 * texture(u_noise, q * 1.9 + u_d2 * 1.4).r;
+    float th = 0.5 + 0.42 * (1.0 - 2.0 * c.z) + 0.3 * u_thin;
+    hi = 0.3 * smoothstep(th - 0.16, th + 0.34, s) * smoothstep(0.02, 0.15, c.z);
+  }
+  float a = 1.0 - (1.0 - low) * (1.0 - hi);
+  // A very faint shadow, cast to the southeast like the hillshade's light, only where no cloud is.
+  vec2 ms = m - vec2(0.9, 0.9) / (u_k * float(${NOISE}));
+  float sh = 0.075 * lowCloud(ms, cover(ms)) * (1.0 - a);
+  o = vec4(vec3(a) + vec3(0.2, 0.26, 0.34) * sh, a + sh) * u_fade;
+}`;
+
+/**
+ * The cloud layer: one quad over the weather grid, shaded on the GPU. Nothing is computed per pixel
+ * on the CPU and nothing is uploaded per frame; a frame costs one draw call. It never asks for a
+ * repaint itself (the ambience ticker does, and only while clouds are in view).
+ */
+class CloudLayer implements CustomLayerInterface {
+  id = CLOUD_LAYER;
+  type = "custom" as const;
+  renderingMode = "2d" as const;
+  /** Whether the layer draws (the switch). */
+  on = true;
+  /** No drift and no spread: readers who prefer reduced motion, and phones. */
+  still = false;
+  private map: MLMap | null = null;
+  private program: WebGLProgram | null = null;
+  private vao: WebGLVertexArrayObject | null = null;
+  private buf: WebGLBuffer | null = null;
+  private cover: WebGLTexture | null = null;
+  private noise: WebGLTexture | null = null;
+  private uni: Record<string, WebGLUniformLocation | null> = {};
+  private grid: CloudGrid;
+  private dirty = true;
+  private d1: [number, number] = [0.13, 0.71];
+  private d2: [number, number] = [0.57, 0.29];
+  private last = 0;
+
+  constructor(g: CloudGrid) {
+    this.grid = g;
   }
 
-  /** Draw the frame for time `t` (seconds). */
-  draw(t: number) {
-    const { W, H, lowD, highD, edge, alpha, puff, puff2, streak } = this;
-    const [u, v] = this.wind;
-    // Canvas px a second: y grows south, so northward wind moves the texture up.
-    const d1 = t * 0.55;
-    const d2 = t * 0.4;
-    const d3 = t * 0.9;
-    const ox1 = -u * d1, oy1 = v * d1;
-    const ox2 = -u * d2 + t * 0.12, oy2 = v * d2 - t * 0.08;
-    const ox3 = -u * d3, oy3 = v * d3;
-    const SC = 1.15; // noise texels per canvas px
-    for (let py = 0, k = 0; py < H; py++) {
-      for (let px = 0; px < W; px++, k++) {
-        const e = edge[k];
-        if (e <= 0) {
-          alpha[k] = 0;
-          continue;
-        }
-        const dl = lowD[k];
-        const dh = highD[k];
-        let a = 0;
-        if (dl > 0.04) {
-          const n = 0.6 * puff(px * SC + ox1, py * SC + oy1) + 0.4 * puff2(px * SC * 1.7 + ox2, py * SC * 1.7 + oy2);
-          const th = 1 - dl;
-          a = smooth(th - 0.05, th + 0.3, n);
-        }
-        if (dh > 0.04) {
-          const th = 1 - dh;
-          const h = 0.5 * smooth(th, th + 0.45, streak(px * 0.9 + ox3, py * 1.6 + oy3));
-          a = 1 - (1 - a) * (1 - h);
-        }
-        alpha[k] = a * e;
-      }
+  setGrid(g: CloudGrid) {
+    this.grid = g;
+    this.dirty = true;
+  }
+
+  onAdd(map: MLMap, gl: WebGL2RenderingContext) {
+    this.map = map;
+    const sh = (type: number, src: string) => {
+      const s = gl.createShader(type)!;
+      gl.shaderSource(s, src);
+      gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.warn("[clouds] shader", gl.getShaderInfoLog(s));
+      return s;
+    };
+    const p = gl.createProgram()!;
+    gl.attachShader(p, sh(gl.VERTEX_SHADER, CLOUD_VERT));
+    gl.attachShader(p, sh(gl.FRAGMENT_SHADER, CLOUD_FRAG));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      console.warn("[clouds] program", gl.getProgramInfoLog(p));
+      return;
     }
-    const data = this.img.data;
-    const SX = 3;
-    const SY = 3;
-    for (let py = 0, k = 0; py < H; py++) {
-      for (let px = 0; px < W; px++, k++) {
-        const a = alpha[k];
-        const sk = py >= SY && px >= SX ? alpha[k - SY * W - SX] : 0;
-        const s = sk * 0.2;
-        const outA = a + (1 - a) * s;
-        const o = k * 4;
-        if (outA < 0.004) {
-          data[o + 3] = 0;
-          continue;
-        }
-        // Cloud: warm white. Shadow: the map's ink, cool.
-        const w = a / outA;
-        data[o] = 252 * w + 52 * (1 - w);
-        data[o + 1] = 251 * w + 62 * (1 - w);
-        data[o + 2] = 247 * w + 72 * (1 - w);
-        data[o + 3] = outA * 255;
-      }
+    this.program = p;
+    for (const u of ["u_matrix", "u_cover", "u_noise", "u_ext", "u_res", "u_center", "u_spread", "u_fade", "u_thin", "u_d1", "u_d2", "u_k"]) this.uni[u] = gl.getUniformLocation(p, u);
+    this.vao = gl.createVertexArray();
+    this.buf = gl.createBuffer();
+    this.cover = gl.createTexture();
+    // Four noise fields in one repeating texture: billows (r, g), cirrus streaks (b), fine cells (a).
+    const ch = [fbm(NOISE, 7, 6, 4), fbm(NOISE, 31, 5, 4), fbm(NOISE, 53, 4, 4, 4), fbm(NOISE, 97, 4, 8)];
+    const px = new Uint8Array(NOISE * NOISE * 4);
+    for (let i = 0; i < NOISE * NOISE; i++) for (let c = 0; c < 4; c++) px[i * 4 + c] = Math.round(ch[c][i] * 255);
+    this.noise = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.noise);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, NOISE, NOISE, 0, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    this.dirty = true;
+  }
+
+  onRemove(_map: MLMap, gl: WebGL2RenderingContext) {
+    gl.deleteProgram(this.program);
+    gl.deleteTexture(this.cover);
+    gl.deleteTexture(this.noise);
+    gl.deleteBuffer(this.buf);
+    gl.deleteVertexArray(this.vao);
+    this.program = null;
+  }
+
+  /** The grid as a texture (row 0 = south) and its quad in mercator units. */
+  private upload(gl: WebGL2RenderingContext) {
+    const g = this.grid;
+    const px = new Uint8Array(g.nx * g.ny * 4);
+    for (let i = 0; i < g.nx * g.ny; i++) {
+      px[i * 4] = Math.round((g.low[i] ?? 0) * 2.55);
+      px[i * 4 + 1] = Math.round((g.mid[i] ?? 0) * 2.55);
+      px[i * 4 + 2] = Math.round((g.high[i] ?? 0) * 2.55);
+      px[i * 4 + 3] = 255;
     }
-    this.ctx.putImageData(this.img, 0, 0);
+    gl.bindTexture(gl.TEXTURE_2D, this.cover);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, g.nx, g.ny, 0, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const x0 = (g.lon0 + 180) / 360;
+    const x1 = (g.lon0 + (g.nx - 1) * g.step + 180) / 360;
+    const y = (lat: number) => 0.5 - mercY(lat) / (2 * Math.PI);
+    const yS = y(g.lat0);
+    const yN = y(g.lat0 + (g.ny - 1) * g.step);
+    gl.bindVertexArray(this.vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([x0, yN, x1, yN, x0, yS, x1, yS]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(this.program!, "a_pos");
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    gl.bindVertexArray(null);
+    this.dirty = false;
+  }
+
+  render(gl: WebGL2RenderingContext, args: CustomRenderMethodInput) {
+    const m = this.map;
+    if (!m || !this.program || !this.on) return;
+    const z = m.getZoom();
+    const fade = cloudFade(z);
+    if (fade <= 0) return;
+    if (this.dirty) this.upload(gl);
+    const g = this.grid;
+    const k = 360 / NOISE_DEG;
+    // Drift: a steady few screen pixels a second along the real wind, whatever the zoom (advanced
+    // per frame, so zooming never makes the clouds jump).
+    const t = performance.now() / 1000;
+    const dt = this.last ? Math.min(0.25, t - this.last) : 0;
+    this.last = t;
+    if (!this.still && dt > 0) {
+      const perPx = k / (512 * 2 ** z); // noise units per screen pixel
+      const step = (d: [number, number], w: [number, number], pxPerS: number) => {
+        const sp = Math.hypot(w[0], w[1]) || 1;
+        // The texture moves against the lookup; mercator y grows south.
+        d[0] = (d[0] - (w[0] / sp) * pxPerS * perPx * dt) % 1;
+        d[1] = (d[1] + (w[1] / sp) * pxPerS * perPx * dt) % 1;
+      };
+      step(this.d1, g.wind, CLOUD_DRIFT_PX);
+      step(this.d2, g.windHigh ?? g.wind, CLOUD_DRIFT_PX * 1.5);
+    }
+    const thin = this.still ? 0 : smooth(CLOUDS_FULL_Z, CLOUDS_MAX_Z, z);
+    const c = m.getCenter();
+    gl.useProgram(this.program);
+    gl.uniformMatrix4fv(this.uni.u_matrix, false, args.defaultProjectionData.mainMatrix as Float32Array);
+    gl.uniform4f(this.uni.u_ext, g.lon0, g.lat0, (g.nx - 1) * g.step, (g.ny - 1) * g.step);
+    gl.uniform2f(this.uni.u_res, g.nx, g.ny);
+    gl.uniform2f(this.uni.u_center, (c.lng + 180) / 360, 0.5 - mercY(c.lat) / (2 * Math.PI));
+    gl.uniform1f(this.uni.u_spread, 1 + CLOUD_SPREAD * thin);
+    gl.uniform1f(this.uni.u_fade, fade);
+    gl.uniform1f(this.uni.u_thin, thin);
+    gl.uniform2f(this.uni.u_d1, this.d1[0], this.d1[1]);
+    gl.uniform2f(this.uni.u_d2, this.d2[0], this.d2[1]);
+    gl.uniform1f(this.uni.u_k, k);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.cover);
+    gl.uniform1i(this.uni.u_cover, 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.noise);
+    gl.uniform1i(this.uni.u_noise, 1);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.STENCIL_TEST);
+    gl.disable(gl.CULL_FACE);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.bindVertexArray(this.vao);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindVertexArray(null);
+    gl.activeTexture(gl.TEXTURE0);
   }
 }
 
@@ -357,12 +491,14 @@ export type Ambience = {
   setClouds: (on: boolean) => void;
   /** Whether the animation ticker is running (for the browser checks). */
   running: () => boolean;
+  /** Whether clouds are being drawn at this zoom (for the browser checks). */
+  cloudsShown: () => boolean;
   destroy: () => void;
 };
 
 /**
  * Adds the wave pattern over the ocean (`ocean-waves`, right above `water-ocean`) and, once
- * /api/clouds answers, the cloud layer below the first label layer. Returns switches.
+ * /api/clouds answers, the cloud layer right below the county lines. Returns switches.
  */
 export function addAmbience(
   m: MLMap,
@@ -370,7 +506,7 @@ export function addAmbience(
 ): Ambience {
   const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
   // Phones get the same still frame: measured on a 390 px viewport at 4x CPU throttle, the ticker's
-  // repaints cost ~5-10% of panning frame rate and a cloud frame takes ~27 ms.
+  // repaints cost ~5-10% of panning frame rate.
   const small = window.matchMedia("(max-width: 600px)");
   const reduce = () => motion.matches || small.matches;
   const waves = new WavePattern();
@@ -398,29 +534,18 @@ export function addAmbience(
   }
 
   let cloudsOn = opts.clouds;
-  let field: CloudField | null = null;
-  let src: CanvasSource | null = null;
+  let layer: CloudLayer | null = null;
   let timer: ReturnType<typeof setInterval> | null = null;
   let refetch: ReturnType<typeof setInterval> | null = null;
   let dead = false;
 
-  const cloudsVisible = () => !!(cloudsOn && field && m.getZoom() < CLOUDS_MAX_Z);
+  const cloudsVisible = () => !!(cloudsOn && layer && m.getZoom() < CLOUDS_MAX_Z);
   const wavesVisible = () => opts.waves !== false && m.getZoom() < WAVES_MAX_Z;
 
-  const firstLabel = () => m.getStyle().layers.find((l) => l.type === "symbol")?.id;
-
-  let tick = 0;
   function frame() {
-    const t = now();
     if (!wavesVisible() && !cloudsVisible()) return stop();
-    if (wavesVisible()) waves.draw(t);
-    // Clouds drift a fraction of a pixel a second: a third of the ticks (4 fps) is plenty.
-    if (cloudsVisible() && field && src && ++tick % 3 === 0) {
-      field.draw(t);
-      // A canvas source uploads only while "playing"; play for one frame, then rest.
-      src.play();
-      m.once("render", () => src?.pause());
-    }
+    if (wavesVisible()) waves.draw(now());
+    // The clouds advance themselves when the map draws them; all they need is the repaint.
     m.triggerRepaint();
   }
 
@@ -437,9 +562,23 @@ export function addAmbience(
   // Zooming back out past the fade zooms restarts the ticker.
   m.on("zoomend", start);
   // Reduced motion switched on while the map is open: hold the current frame.
-  const onMotion = () => (reduce() ? stop() : start());
+  const onMotion = () => {
+    if (layer) layer.still = reduce();
+    if (reduce()) stop();
+    else start();
+  };
   motion.addEventListener?.("change", onMotion);
   small.addEventListener?.("change", onMotion);
+
+  // Layers added later (public lands, the sovereign-lands tint, a private build's own) go in below the
+  // county lines too, which would put them over the clouds: keep the clouds directly under the lines.
+  const keepOrder = () => {
+    if (dead || !layer || !m.getLayer(CLOUD_LAYER) || !m.getLayer(CLOUDS_BELOW)) return;
+    // getLayersOrder, not getStyle: a custom layer is not part of the serialized style.
+    const ids = m.getLayersOrder();
+    if (ids[ids.indexOf(CLOUD_LAYER) + 1] !== CLOUDS_BELOW) m.moveLayer(CLOUD_LAYER, CLOUDS_BELOW);
+  };
+  m.on("styledata", keepOrder);
 
   async function loadClouds() {
     try {
@@ -447,32 +586,20 @@ export function addAmbience(
       if (!res.ok) throw new Error(`clouds ${res.status}`);
       const g = (await res.json()) as CloudGrid;
       if (dead || !g?.nx) return;
-      field = new CloudField(g);
-      field.draw(now());
-      if (m.getSource(CLOUD_SOURCE)) {
-        if (m.getLayer(CLOUD_LAYER)) m.removeLayer(CLOUD_LAYER);
-        m.removeSource(CLOUD_SOURCE);
+      if (layer) layer.setGrid(g);
+      else {
+        layer = new CloudLayer(g);
+        layer.on = cloudsOn;
+        layer.still = reduce();
+        m.addLayer(layer, m.getLayer(CLOUDS_BELOW) ? CLOUDS_BELOW : undefined);
+        // A custom layer has no source to carry a credit: an empty source with Open-Meteo's attribution,
+        // used by a layer that is visible only while the clouds are, puts it in the attribution control.
+        m.addSource(CLOUD_SOURCE, { type: "geojson", data: { type: "FeatureCollection", features: [] }, attribution: CLOUDS_CREDIT });
+        m.addLayer({ id: CLOUD_CREDIT_LAYER, type: "line", source: CLOUD_SOURCE, layout: { visibility: cloudsOn ? "visible" : "none" } }, CLOUD_LAYER);
+        m.setLayoutProperty(CLOUD_LAYER, "visibility", cloudsOn ? "visible" : "none");
       }
-      m.addSource(CLOUD_SOURCE, { type: "canvas", canvas: field.canvas, coordinates: field.coordinates, animate: false });
-      src = m.getSource(CLOUD_SOURCE) as CanvasSource;
-      // Canvas sources ignore the spec's attribution; set it on the source so the attribution control
-      // lists Open-Meteo while the cloud layer is shown (and drops it when clouds are off).
-      (src as unknown as { attribution?: string }).attribution = CLOUDS_CREDIT;
-      m.addLayer(
-        {
-          id: CLOUD_LAYER,
-          type: "raster",
-          source: CLOUD_SOURCE,
-          layout: { visibility: cloudsOn ? "visible" : "none" },
-          paint: {
-            "raster-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.72, 7, 0.6, 9, 0.3, CLOUDS_MAX_Z, 0],
-            "raster-fade-duration": 0,
-            "raster-resampling": "linear",
-          },
-        },
-        firstLabel(),
-      );
       opts.onClouds?.(g.time);
+      m.triggerRepaint();
       start();
     } catch (e) {
       console.warn("[clouds]", e instanceof Error ? e.message : e);
@@ -480,8 +607,8 @@ export function addAmbience(
     }
   }
 
-  // Clouds are off by default: nothing is fetched until the reader turns them on. A page left open
-  // then picks up new clouds every three hours (the route's cache period).
+  // Nothing is fetched until clouds are on (by default on desktop; a switch on phones and with reduced
+  // motion). A page left open then picks up new clouds every three hours (the route's cache period).
   function wantClouds() {
     if (refetch || dead) return;
     loadClouds();
@@ -492,10 +619,13 @@ export function addAmbience(
 
   return {
     running: () => timer !== null,
+    cloudsShown: cloudsVisible,
     setClouds(on) {
       cloudsOn = on;
       if (on) wantClouds();
-      if (m.getLayer(CLOUD_LAYER)) m.setLayoutProperty(CLOUD_LAYER, "visibility", on ? "visible" : "none");
+      if (layer) layer.on = on;
+      for (const id of [CLOUD_LAYER, CLOUD_CREDIT_LAYER]) if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", on ? "visible" : "none");
+      m.triggerRepaint();
       start();
     },
     destroy() {
@@ -506,6 +636,7 @@ export function addAmbience(
       motion.removeEventListener?.("change", onMotion);
       small.removeEventListener?.("change", onMotion);
       m.off("zoomend", start);
+      m.off("styledata", keepOrder);
     },
   };
 }
