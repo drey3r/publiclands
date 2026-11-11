@@ -250,7 +250,7 @@ await check("clouds: on by default on desktop (one request, Open-Meteo credit); 
   const ids = await order(page);
   const at = (id) => { const i = ids.indexOf(id); assert(i >= 0, `layer ${id} missing`); return i; };
   const c = at("clouds");
-  const below = ["access-fill", "access-line", "outside-base", "outside-veil", "water-ocean", "ocean-depth", "ocean-waves", "hillshade", ...ids.filter((id) => id.startsWith("sov-"))];
+  const below = ["access-fill", "access-line", "outside-base", "outside-veil", "water-ocean", "ocean-depth", "ocean-waves", "surf-line", "hillshade", ...ids.filter((id) => id.startsWith("sov-"))];
   assert(ids.some((id) => id.startsWith("sov-")), "sovereign-lands tint not loaded for the order check");
   for (const id of below) assert(at(id) < c, `${id} is drawn over the clouds`);
   const above = ["county-line", "ca-outline", "label-range", "label-water", "place-town", "place-city", "cluster", "cluster-count", "lease-flag", "lease-pt", "lease-icon", "hl-ring", "access-sel-fill", "access-sel-line", "access-label"];
@@ -269,6 +269,23 @@ await check("clouds: on by default on desktop (one request, Open-Meteo credit); 
   await jump(page, [-119.75, 34.15], 8);
   await page.waitForTimeout(300);
   assert(await page.evaluate(() => window.__ambience.running()), "animation did not restart after zooming out");
+});
+
+await check("surf line: along the coast above the wave marks, under the clouds, gone by zoom 10, and no repaint of its own", async (page) => {
+  await cloudCalls(page, CLOUD_GRID);
+  await open(page);
+  const ids = await order(page);
+  assert(ids.includes("surf-line"), "surf line layer missing");
+  assert(ids.indexOf("surf-line") === ids.indexOf("ocean-waves") + 1, "surf line is not right above the wave marks");
+  assert(ids.indexOf("surf-line") < ids.indexOf("county-line"), "surf line drawn over the county lines");
+  assert((await page.evaluate(() => window.__map.getLayer("surf-line").maxzoom)) === 10, "surf line does not end at zoom 10");
+  assert((await page.evaluate(() => window.__map.queryRenderedFeatures({ layers: ["surf-line"] }).length)) > 0, "no surf line drawn at Home");
+  // The same ticker as the waves: about 12 redraws a second at Home, not more.
+  await page.waitForTimeout(1500);
+  const n = await page.evaluate(() => new Promise((r) => { let k = 0; const f = () => k++; window.__map.on("render", f); setTimeout(() => { window.__map.off("render", f); r(k); }, 3000); }));
+  assert(n > 20 && n < 48, `${n} renders in 3 s at Home with the surf line (expected about 36)`);
+  await jump(page, [-119.75, 34.4], 10.5);
+  assert((await page.evaluate(() => window.__map.queryRenderedFeatures({ layers: ["surf-line"] }).length)) === 0, "surf line still drawn at zoom 10.5");
 });
 
 await check("idle is idle: no map renders at rest once nothing animates", async (page) => {

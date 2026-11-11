@@ -1,7 +1,7 @@
 import type { CustomLayerInterface, CustomRenderMethodInput, Map as MLMap, StyleImageInterface } from "maplibre-gl";
 
 /**
- * Ambience: the ocean's moving wave marks and the live cloud layer.
+ * Ambience: the ocean's moving wave marks, the surf line along the coast, and the live cloud layer.
  *
  * Both run off one slow ticker (about 12 frames a second, never 60) that only asks the map to
  * repaint, so the map can still rest and fire `idle` between frames. The clouds are shaded on the
@@ -29,6 +29,14 @@ const CLOUD_SPREAD = 0.2;
 const CLOUDS_BELOW = "county-line";
 const CLOUD_CREDIT_LAYER = "clouds-credit";
 export const WAVE_IMAGE = "ocean-waves";
+/** The surf line fades out by this zoom, before shore leases and their icons matter. */
+export const SURF_MAX_Z = 10;
+export const SURF_IMAGE = "surf-line";
+export const SURF_LAYER = "surf-line";
+const SURF_W = 128;
+const SURF_H = 12;
+/** Seconds for one breath of the surf line. */
+const SURF_BREATH_S = 6.5;
 /** Seconds for one swell (a band of brighter wave marks) to pass a point. */
 const SWELL_S = 7;
 export const CLOUD_SOURCE = "clouds";
@@ -151,6 +159,54 @@ export class WavePattern implements StyleImageInterface {
     if (!this.dirty) return false;
     this.dirty = false;
     this.data.set(this.ctx.getImageData(0, 0, this.width, this.height).data);
+    return true;
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Surf: a soft white line along the coast that breathes
+
+/**
+ * The surf line's pattern: a soft white band, drawn along the coast as a line pattern. It swells
+ * and eases as a whole on a slow breath, and brighter stretches slide slowly along the shore. It
+ * is redrawn on the same ticker as the waves (a 256 × 24 px canvas), so it adds no repaint of its own.
+ */
+export class SurfPattern implements StyleImageInterface {
+  width = SURF_W * 2;
+  height = SURF_H * 2;
+  data: Uint8ClampedArray;
+  private dirty = true;
+
+  constructor() {
+    this.data = new Uint8ClampedArray(this.width * this.height * 4);
+  }
+
+  /** Draw the frame for time `t` (seconds). */
+  draw(t: number) {
+    const { width: W, height: H, data } = this;
+    const breath = 0.72 + 0.28 * Math.sin((t * Math.PI * 2) / SURF_BREATH_S);
+    for (let x = 0; x < W; x++) {
+      // Two sets a tile (so it repeats seamlessly), sliding along the shore.
+      const along = 0.62 + 0.38 * Math.sin(Math.PI * 2 * ((2 * x) / W - t / 9));
+      const peak = breath * along;
+      // The band is widest when it is brightest, like a wash running up and drawing back.
+      const half = 0.28 + 0.2 * peak;
+      for (let y = 0; y < H; y++) {
+        const d = Math.abs((y + 0.5) / H - 0.5) / half;
+        const a = d >= 1 ? 0 : peak * (1 - d * d) ** 2;
+        const o = (y * W + x) * 4;
+        data[o] = 255;
+        data[o + 1] = 255;
+        data[o + 2] = 255;
+        data[o + 3] = Math.round(a * 255);
+      }
+    }
+    this.dirty = true;
+  }
+
+  render() {
+    if (!this.dirty) return false;
+    this.dirty = false;
     return true;
   }
 }
@@ -542,6 +598,32 @@ export function addAmbience(
     );
   }
 
+  // The surf line: the ocean polygons' own edge (the basemap's coastline, so it is exact), right above the
+  // wave marks and under the clouds.
+  const surf = new SurfPattern();
+  surf.draw(now());
+  if (!m.hasImage(SURF_IMAGE)) m.addImage(SURF_IMAGE, surf, { pixelRatio: 2 });
+  if (!m.getLayer(SURF_LAYER) && m.getLayer("ocean-waves")) {
+    const ids = m.getLayersOrder();
+    m.addLayer(
+      {
+        id: SURF_LAYER,
+        type: "line",
+        source: "omt",
+        "source-layer": "water",
+        filter: ["==", ["get", "class"], "ocean"],
+        maxzoom: SURF_MAX_Z,
+        layout: { "line-join": "round" },
+        paint: {
+          "line-pattern": SURF_IMAGE,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 5, 4, 8, 7, SURF_MAX_Z, 10],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.9, 8.5, 0.9, SURF_MAX_Z, 0],
+        },
+      },
+      ids[ids.indexOf("ocean-waves") + 1],
+    );
+  }
+
   let cloudsOn = opts.clouds;
   let layer: CloudLayer | null = null;
   let timer: ReturnType<typeof setInterval> | null = null;
@@ -554,6 +636,7 @@ export function addAmbience(
   function frame() {
     if (!wavesVisible() && !cloudsVisible()) return stop();
     if (wavesVisible()) waves.draw(now());
+    if (m.getZoom() < SURF_MAX_Z) surf.draw(now());
     // The clouds advance themselves when the map draws them; all they need is the repaint.
     m.triggerRepaint();
   }
