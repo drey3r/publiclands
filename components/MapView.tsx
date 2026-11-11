@@ -472,6 +472,7 @@ export default function MapView(props: Props) {
       ready.current = true;
       // Moving water and live clouds (after the lease layers exist, so clouds sit under them).
       ambience.current = addAmbience(m, { clouds: cb.current.clouds, onClouds: (t) => cb.current.onCloudsTime?.(t) });
+      if (process.env.NODE_ENV !== "production") (window as unknown as { __ambience: Ambience }).__ambience = ambience.current; // dev: browser checks
       emit();
       syncAll();
       syncSelection();

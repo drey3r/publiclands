@@ -3,15 +3,22 @@ import type { CanvasSource, Map as MLMap, StyleImageInterface } from "maplibre-g
 /**
  * Ambience: the ocean's moving wave marks and the live cloud layer.
  *
- * Both run off one slow ticker (about 12 frames a second, never 60) that only asks the map to
- * repaint, so the map can still rest and fire `idle` between frames. Nothing animates while the
- * tab is hidden or when the reader prefers reduced motion (one still frame is drawn instead).
+ * Both run off one slow ticker (about 12 frames a second, never 60; clouds redraw at 4) that only
+ * asks the map to repaint, so the map can still rest and fire `idle` between frames. The ticker
+ * stops past the zooms where waves and clouds have faded, while the tab is hidden, on screens
+ * 600 px wide or less, and when the reader prefers reduced motion (one still frame instead).
  */
 
 const FPS = 12;
+/** Wave marks fade out by this zoom; past it the ticker stops (lease marks and icons own the water there). */
+export const WAVES_MAX_Z = 11;
+/** Clouds fade out by this zoom. */
+const CLOUDS_MAX_Z = 10.5;
 export const WAVE_IMAGE = "ocean-waves";
 export const CLOUD_SOURCE = "clouds";
 export const CLOUD_LAYER = "clouds";
+/** Open-Meteo's CC BY 4.0 credit, shown in the map's attribution only while the clouds are drawn. */
+const CLOUDS_CREDIT = 'Clouds: <a href="https://open-meteo.com/">Weather data by Open-Meteo.com</a> (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, smoothed and drawn as clouds)';
 
 // ---------------------------------------------------------------------------------------------
 // Small helpers
@@ -348,6 +355,8 @@ export class CloudField {
 
 export type Ambience = {
   setClouds: (on: boolean) => void;
+  /** Whether the animation ticker is running (for the browser checks). */
+  running: () => boolean;
   destroy: () => void;
 };
 
@@ -357,18 +366,23 @@ export type Ambience = {
  */
 export function addAmbience(
   m: MLMap,
-  opts: { clouds: boolean; cloudsUrl?: string; onClouds?: (time: string | null) => void },
+  opts: { clouds: boolean; waves?: boolean; cloudsUrl?: string; onClouds?: (time: string | null) => void },
 ): Ambience {
-  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  // Phones get the same still frame: measured on a 390 px viewport at 4x CPU throttle, the ticker's
+  // repaints cost ~5-10% of panning frame rate and a cloud frame takes ~27 ms.
+  const small = window.matchMedia("(max-width: 600px)");
+  const reduce = () => motion.matches || small.matches;
   const waves = new WavePattern();
   const t0 = performance.now();
   const now = () => (performance.now() - t0) / 1000 + 40; // start mid-cycle, never at a blank frame
   waves.draw(now());
   if (!m.hasImage(WAVE_IMAGE)) m.addImage(WAVE_IMAGE, waves, { pixelRatio: 2 });
   if (!m.getLayer("ocean-waves") && m.getLayer("water-ocean")) {
-    const after = m.getStyle().layers.findIndex((l) => l.id === "ocean-depth" || l.id === "water-ocean");
+    // Right above the sea-floor depth (or the plain ocean), so the State sovereign lands tint, which
+    // ogLayers.addWaters puts below the depth, never covers them.
     const ids = m.getStyle().layers.map((l) => l.id);
-    const before = ids.slice(after + 1).find((id) => id !== "ocean-depth");
+    const before = ids[ids.indexOf(m.getLayer("ocean-depth") ? "ocean-depth" : "water-ocean") + 1];
     m.addLayer(
       {
         id: "ocean-waves",
@@ -376,7 +390,8 @@ export function addAmbience(
         source: "omt",
         "source-layer": "water",
         filter: ["==", ["get", "class"], "ocean"],
-        paint: { "fill-pattern": WAVE_IMAGE, "fill-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.75, 8, 0.9, 12, 0.7, 16, 0.4] },
+        paint: { "fill-pattern": WAVE_IMAGE, "fill-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.6, 8, 0.6, 10, 0.3, WAVES_MAX_Z, 0] },
+        maxzoom: WAVES_MAX_Z,
       },
       before,
     );
@@ -389,14 +404,18 @@ export function addAmbience(
   let refetch: ReturnType<typeof setInterval> | null = null;
   let dead = false;
 
-  const cloudsVisible = () => cloudsOn && field && m.getZoom() < 10.5;
+  const cloudsVisible = () => !!(cloudsOn && field && m.getZoom() < CLOUDS_MAX_Z);
+  const wavesVisible = () => opts.waves !== false && m.getZoom() < WAVES_MAX_Z;
 
   const firstLabel = () => m.getStyle().layers.find((l) => l.type === "symbol")?.id;
 
+  let tick = 0;
   function frame() {
     const t = now();
-    waves.draw(t);
-    if (cloudsVisible() && field && src) {
+    if (!wavesVisible() && !cloudsVisible()) return stop();
+    if (wavesVisible()) waves.draw(t);
+    // Clouds drift a fraction of a pixel a second: a third of the ticks (4 fps) is plenty.
+    if (cloudsVisible() && field && src && ++tick % 3 === 0) {
       field.draw(t);
       // A canvas source uploads only while "playing"; play for one frame, then rest.
       src.play();
@@ -406,7 +425,7 @@ export function addAmbience(
   }
 
   function start() {
-    if (reduce || timer || document.hidden) return;
+    if (reduce() || timer || document.hidden || (!wavesVisible() && !cloudsVisible())) return;
     timer = setInterval(frame, 1000 / FPS);
   }
   function stop() {
@@ -415,6 +434,12 @@ export function addAmbience(
   }
   const onVis = () => (document.hidden ? stop() : start());
   document.addEventListener("visibilitychange", onVis);
+  // Zooming back out past the fade zooms restarts the ticker.
+  m.on("zoomend", start);
+  // Reduced motion switched on while the map is open: hold the current frame.
+  const onMotion = () => (reduce() ? stop() : start());
+  motion.addEventListener?.("change", onMotion);
+  small.addEventListener?.("change", onMotion);
 
   async function loadClouds() {
     try {
@@ -430,6 +455,9 @@ export function addAmbience(
       }
       m.addSource(CLOUD_SOURCE, { type: "canvas", canvas: field.canvas, coordinates: field.coordinates, animate: false });
       src = m.getSource(CLOUD_SOURCE) as CanvasSource;
+      // Canvas sources ignore the spec's attribution; set it on the source so the attribution control
+      // lists Open-Meteo while the cloud layer is shown (and drops it when clouds are off).
+      (src as unknown as { attribution?: string }).attribution = CLOUDS_CREDIT;
       m.addLayer(
         {
           id: CLOUD_LAYER,
@@ -437,7 +465,7 @@ export function addAmbience(
           source: CLOUD_SOURCE,
           layout: { visibility: cloudsOn ? "visible" : "none" },
           paint: {
-            "raster-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.72, 7, 0.6, 9, 0.3, 10.5, 0],
+            "raster-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.72, 7, 0.6, 9, 0.3, CLOUDS_MAX_Z, 0],
             "raster-fade-duration": 0,
             "raster-resampling": "linear",
           },
@@ -445,27 +473,39 @@ export function addAmbience(
         firstLabel(),
       );
       opts.onClouds?.(g.time);
+      start();
     } catch (e) {
       console.warn("[clouds]", e instanceof Error ? e.message : e);
       opts.onClouds?.(null);
     }
   }
 
-  loadClouds();
-  // A page left open picks up new clouds every three hours (the route's cache period).
-  refetch = setInterval(loadClouds, 3 * 3600 * 1000);
+  // Clouds are off by default: nothing is fetched until the reader turns them on. A page left open
+  // then picks up new clouds every three hours (the route's cache period).
+  function wantClouds() {
+    if (refetch || dead) return;
+    loadClouds();
+    refetch = setInterval(loadClouds, 3 * 3600 * 1000);
+  }
+  if (cloudsOn) wantClouds();
   start();
 
   return {
+    running: () => timer !== null,
     setClouds(on) {
       cloudsOn = on;
+      if (on) wantClouds();
       if (m.getLayer(CLOUD_LAYER)) m.setLayoutProperty(CLOUD_LAYER, "visibility", on ? "visible" : "none");
+      start();
     },
     destroy() {
       dead = true;
       stop();
       if (refetch) clearInterval(refetch);
       document.removeEventListener("visibilitychange", onVis);
+      motion.removeEventListener?.("change", onMotion);
+      small.removeEventListener?.("change", onMotion);
+      m.off("zoomend", start);
     },
   };
 }
