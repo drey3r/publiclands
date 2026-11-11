@@ -322,11 +322,12 @@ const countyLabel: LayerSpecification = {
  * California read faintly without changing the tint's color on the shelf. Transparent above -150 m,
  * so land below sea level (Death Valley, -86 m; the Salton Sea floor) is never tinted.
  */
+export const DEPTH_DEM_MAX_Z = 8;
 function oceanDepth(): LayerSpecification {
   return {
     id: "ocean-depth",
     type: "color-relief",
-    source: "hillshadeDem",
+    source: "depthDem",
     paint: {
       "color-relief-color": [
         "interpolate", ["linear"], ["elevation"],
@@ -351,6 +352,11 @@ export function baseStyle(opts: { mask?: MaskMode } = {}): StyleSpecification {
       omt: { type: "vector", url: "https://tiles.openfreemap.org/planet", attribution: ATTRIBUTION },
       hillshadeDem: { type: "raster-dem", tiles: [TERRARIUM], encoding: "terrarium", tileSize: 256, maxzoom: 15, attribution: TERRAIN_ATTR },
       terrainDem: { type: "raster-dem", tiles: [TERRARIUM], encoding: "terrarium", tileSize: 256, maxzoom: 14 },
+      // The sea floor reads its own copy of the terrain tiles, never past zoom 8. Deeper tiles are built
+      // from land surveys near the coast: most carry no bathymetry (the sea is flat zero), a few do, and
+      // the depth shading showed that as lighter rectangles and dark seams from zoom 9. Zoom 8 tiles
+      // carry the ocean-wide bathymetry (about as fine as it is surveyed) everywhere, and scale up smoothly.
+      depthDem: { type: "raster-dem", tiles: [TERRARIUM], encoding: "terrarium", tileSize: 256, maxzoom: DEPTH_DEM_MAX_Z },
       caMask: { type: "geojson", data: "/data/ca-mask.geojson" },
       caBorder: { type: "geojson", data: "/data/ca-border.geojson" },
       caCounties: { type: "geojson", data: "/data/ca-county-lines.geojson" },

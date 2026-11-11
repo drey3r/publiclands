@@ -309,6 +309,14 @@ await check("surf line: along the coast above the wave marks, under the clouds, 
   assert((await page.evaluate(() => window.__map.queryRenderedFeatures({ layers: ["surf-line"] }).length)) === 0, "surf line still drawn at zoom 10.5");
 });
 
+await check("sea floor: depth shading reads terrain tiles no deeper than zoom 8 (deeper tiles have seams and holes in the bathymetry)", async (page) => {
+  await cloudCalls(page, CLOUD_GRID);
+  await open(page);
+  const r = await page.evaluate(() => { const m = window.__map; const l = m.getLayer("ocean-depth"); return { source: l.source, maxzoom: m.getStyle().sources[l.source].maxzoom }; });
+  assert(r.source === "depthDem", `ocean-depth reads ${r.source}`);
+  assert(r.maxzoom <= 8, `depth tiles go to zoom ${r.maxzoom}`);
+});
+
 await check("idle is idle: no map renders at rest once nothing animates", async (page) => {
   await cloudCalls(page, CLOUD_GRID);
   await open(page);
