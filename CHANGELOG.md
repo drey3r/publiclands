@@ -3,6 +3,21 @@
 Changes to the California Public Lands Map, newest first. Data snapshots and
 counts are unchanged unless an entry says otherwise.
 
+## 2026-11-11 · Sea-floor seams, cloud time
+
+**Data:** counts unchanged (4,206 leases; categories, kinds and Worth watching groups as before).
+
+- **Sea floor without seams.** From about zoom 9 the depth shading showed a dark vertical line and lighter rectangles
+  off Santa Barbara and Monterey, and went flat closer in. The cause is in the terrain tiles: past zoom 9 most
+  coastal tiles carry no bathymetry (the sea is a flat zero) and a few do. The depth shading now reads its own copy
+  of the tiles, never deeper than zoom 8, where the ocean-wide bathymetry is complete, and scales it up. The Channel,
+  Monterey Canyon and the Golden Gate shade smoothly at every zoom.
+- **Clouds "as of".** With clouds on, the panel shows the weather model's time for the grid actually on the map and
+  how old it is ("Clouds as of 7:30 AM PST · 55 min old"), in red past four hours. The server reports the oldest of
+  its batches, and when its cache hands back a stale grid while refreshing, that answer is kept by the CDN for two
+  minutes instead of three hours. The three-hour cache is unchanged.
+- **Checks:** 25 pass (new: the depth layer's source, the cloud time caption).
+
 ## 2026-11-11 · Surf line, clouds over land, lessees in titles
 
 **Data:** counts unchanged (4,206 leases; categories, kinds and Worth watching groups as before). New: lessee names for
