@@ -185,7 +185,7 @@ export function MapControls(p: Props) {
       role="switch"
       onClick={() => p.setTerrain(!p.terrain)}
       aria-checked={p.terrain}
-      className="flex min-h-9 items-center gap-2 rounded-lg px-2 text-[13px] font-semibold text-ink-soft hover:bg-sand hover:text-ink"
+      className="flex min-h-9 items-center gap-2 whitespace-nowrap rounded-lg px-2 text-[13px] font-semibold text-ink-soft hover:bg-sand hover:text-ink"
       title="Tilt the current view with 3D terrain (or right-drag / two-finger drag to tilt)"
     >
       3D terrain
@@ -200,11 +200,10 @@ export function MapControls(p: Props) {
       role="switch"
       onClick={() => p.setClouds(!p.clouds)}
       aria-checked={p.clouds}
-      className="flex min-h-9 items-center gap-2 rounded-lg px-2 text-[13px] font-semibold text-ink-soft hover:bg-sand hover:text-ink"
+      className="flex min-h-9 items-center gap-2 whitespace-nowrap rounded-lg px-2 text-[13px] font-semibold text-ink-soft hover:bg-sand hover:text-ink"
       title={`Current cloud cover over California (Open-Meteo: NOAA HRRR and GFS models), refreshed every three hours${cloudsTime ? `. Model time ${cloudsTime}` : ""}`}
     >
       Clouds
-      {cloudsTime && <span className="font-normal text-ink-faint">{cloudsTime}</span>}
       <SwitchMark on={p.clouds} />
     </button>
   );

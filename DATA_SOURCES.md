@@ -2,7 +2,8 @@
 
 Everything the map shows comes from the public sources below. The build reads only the snapshots committed in `data/`.
 The deployed site never calls the State Lands Commission. The only network requests a visitor's browser makes are for
-basemap tiles, terrain tiles and place search.
+basemap tiles, terrain tiles and place search, and, only if the reader turns on Clouds, the site's own `/api/clouds`
+(see Clouds below).
 
 > **Not legal or survey data.** Positions, boundaries and dates are as published by each source, generalized for display.
 > For official records, contact the [California State Lands Commission](https://www.slc.ca.gov/).
@@ -76,7 +77,8 @@ Grant boundaries for Los Angeles, Long Beach, San Francisco and Oakland are not 
 ## Terrain: AWS Terrain Tiles
 
 - [Terrain Tiles on the Registry of Open Data on AWS](https://registry.opendata.aws/terrain-tiles/) (Terrarium encoding),
-  used for hillshade and 3D terrain.
+  used for hillshade, 3D terrain and the faint sea-floor depth offshore (their bathymetry, from ETOPO1 and GMTED; the
+  water deepens only below 150 m, so the shelf and the State sovereign lands tint keep their color).
 - Required attribution, shown on the map: data sources include USGS 3DEP, SRTM, GMTED2010 and ETOPO1. See the
   [attribution list](https://github.com/tilezen/joerd/blob/master/docs/attribution.md) for the full set.
 
@@ -84,6 +86,25 @@ Grant boundaries for Los Angeles, Long Beach, San Francisco and Oakland are not 
 
 - [Photon](https://photon.komoot.io/) geocoder by komoot, built on OpenStreetMap data (ODbL). Search is limited to
   California's bounding box. The public endpoint is free for fair use. Self-host Photon if you expect heavy traffic.
+
+## Clouds: Open-Meteo (off by default)
+
+- [Open-Meteo](https://open-meteo.com/) forecast API, "best match" model (in the US, NOAA HRRR and GFS): current low,
+  mid and high cloud cover and 10 m wind on a 1° grid over California (143 points). Only when a reader turns on
+  "Clouds", the site's server route `app/api/clouds/route.ts` asks Open-Meteo and caches the answer for three hours
+  (data cache and CDN), so Open-Meteo is called about eight times a day per deployment however many people use it. The
+  reader's browser never calls Open-Meteo. If the request fails, the map draws no clouds.
+- **Terms** (checked 2026-11-10: [terms](https://open-meteo.com/en/terms), [pricing](https://open-meteo.com/en/pricing),
+  [licence](https://open-meteo.com/en/licence)): the free API is for non-commercial use only. Open-Meteo lists
+  "non-profit websites or apps that do not have subscriptions or advertising" as non-commercial, which fits this site.
+  If the site ever carries ads or subscriptions, it needs a paid API key. Limits: under 10,000 calls a day, 5,000 an
+  hour, 600 a minute, per IP; Open-Meteo warns that apps on hosts like Vercel may be limited earlier. Open-Meteo does
+  not say how a request with many points is counted; even at one call per point, that is about 1,150 calls a day per
+  deployment, and both deployments (public and private) together stay under the daily limit.
+- **License:** data CC BY 4.0. Required credit with a link wherever the data is shown: the map's attribution reads
+  "Clouds: Weather data by Open-Meteo.com (CC BY 4.0, smoothed and drawn as clouds)" while the clouds are on. The
+  smoothing, noise texture and drift are ours, so the clouds show where cover is reported, not the shape of real
+  clouds.
 
 ## County boundaries
 
@@ -117,5 +138,6 @@ Grant boundaries for Los Angeles, Long Beach, San Francisco and Oakland are not 
 ## Where attribution appears
 
 - On the map: the attribution control credits the CSLC, CPAD (when that layer is on), OpenFreeMap, OpenMapTiles,
-  OpenStreetMap contributors and AWS Terrain Tiles. It also says "Not legal or survey data".
+  OpenStreetMap contributors and AWS Terrain Tiles, and Open-Meteo while Clouds is on. It also says "Not legal or
+  survey data".
 - In the list footer and on every lease page: the source label with its pull date, the layer caveats and the disclaimer.

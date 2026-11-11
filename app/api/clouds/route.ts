@@ -5,9 +5,12 @@ import { NextResponse } from "next/server";
  *
  * Source: Open-Meteo (https://open-meteo.com, CC BY 4.0; free for non-commercial use). In the US its
  * "best match" blends NOAA's HRRR and GFS models. One request asks for low, mid and high cloud cover
- * at every point of a 0.5° grid (25 × 22 = 550 points) from the Pacific off Cape Mendocino to the
+ * at every point of a 1° grid (13 × 11 = 143 points) from the Pacific off Cape Mendocino to the
  * Colorado River. The answer is cached for three hours (server data cache and CDN), so the API is
- * called at most about eight times a day however many people open the map.
+ * asked about eight times a day per deployment however many people open the map. Open-Meteo does not
+ * say how a multi-point request is counted; even at one call per point that is ~1,150 a day per
+ * deployment, under the free tier's 10,000 a day and 600 a minute. Free tier: non-commercial use only.
+ * Nothing is fetched until a reader turns clouds on (they are off by default).
  */
 
 export const dynamic = "force-dynamic";
@@ -15,9 +18,9 @@ export const dynamic = "force-dynamic";
 const CACHE_S = 3 * 3600;
 const LAT0 = 32;
 const LON0 = -126;
-const STEP = 0.5;
-const NX = 25; // -126 … -114
-const NY = 22; // 32 … 42.5
+const STEP = 1;
+const NX = 13; // -126 … -114
+const NY = 11; // 32 … 42
 
 type Point = {
   current?: {
