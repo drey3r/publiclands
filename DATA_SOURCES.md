@@ -31,6 +31,28 @@ generalized for the web.
 **Attribution:** "California State Lands Commission". For school lands: "California State Lands Commission, Land
 Management Division".
 
+## State oil & gas and state sovereign lands
+
+Snapshots are taken by `scripts/fetch-state-oil-gas.ts` (byte-exact pages with sha256 manifests in `data-archive/`, never
+committed or deployed; at least 1 second between requests) and built by `scripts/data/build_state_oil_gas.py` into
+`data/state-oil-gas/` (see `scripts/data/README.md`). Pull dates and the sources' own last-updated dates are in
+`data/state-oil-gas/index.json` and on the map under "Data sources and dates".
+
+| Source | Used for | Built file |
+|---|---|---|
+| CSLC [Offshore_Lease_Polygons](https://services3.arcgis.com/5aaQCuq3e4GRvkFG/ArcGIS/rest/services/Offshore_Lease_Polygons/FeatureServer/0) | Offshore lease footprints (34), compensatory agreement areas | `offshore-leases.geojson` |
+| CSLC [oil and gas leases page](https://www.slc.ca.gov/oil-gas/leases/) and [lease information page](https://www.slc.ca.gov/oil-gas/leases/lease-information/) | Stated statuses, the 47 former (quitclaimed or terminated) leases and their dates | `offshore-leases.geojson`, `former-leases.json` |
+| CSLC [Marine_Oil_Terminals](https://services3.arcgis.com/5aaQCuq3e4GRvkFG/ArcGIS/rest/services/Marine_Oil_Terminals/FeatureServer/0) | Marine oil terminals (59 berths) | `marine-oil-terminals.geojson` |
+| CalGEM [WellSTAR wells](https://gis.conservation.ca.gov/server/rest/services/WellSTAR/Wells/MapServer/0) | Oil and gas wells on state leases (1,738; this map's selection) | `state-lease-wells.geojson` |
+| BOEM [OCS boundary lines, Submerged Lands Act boundary](https://services7.arcgis.com/G5Ma95RzqJRPKsWL/arcgis/rest/services/OCS_BOEM_Offshore_Boundary_Lines/FeatureServer/8) | Seaward edge of state sovereign lands | `sla-boundary.geojson`, `sla-outside.geojson` |
+| CSLC [Significant_Lands_Waterbodies](https://services3.arcgis.com/5aaQCuq3e4GRvkFG/ArcGIS/rest/services/Significant_Lands_Waterbodies/FeatureServer/0) | Sovereign lake and lagoon beds (42 records, clipped to California) | `sovereign-waterbodies.geojson` |
+| Commission staff reports and meeting records named in `data/reference/*.csv` | Commission records on footprint cards, the former-leases table and lease pages | `data/records/cslc-oil-gas-study/` |
+| [Natural Earth](https://www.naturalearthdata.com/) 1:10m land (public domain) | Only to stop the state-waters tint at the Oregon and Mexico lines | `data/ref/ne-land-near-ca.geojson` |
+
+The shoreline of the state-waters area inside California is the basemap's own (OpenStreetMap coastline via
+OpenFreeMap), so it meets the coast where the map draws it; it is a display line, not the ordinary high water mark.
+Grant boundaries for Los Angeles, Long Beach, San Francisco and Oakland are not published; river beds are not shown.
+
 ## California Protected Areas Database (CPAD)
 
 - Source: [CPAD units by agency level](https://gis.cnra.ca.gov/arcgis/rest/services/Boundaries/CPAD_AgencyLevel/MapServer/1),

@@ -27,6 +27,8 @@ export default function AboutPage() {
   const { meta, leases } = data;
   const n = (k: string) => leases.filter((l) => l.derived.categoryKey === k).length;
   const infra = n("infra");
+  const og = (k: string) => (meta.datasets.find((d) => d.key === k)?.count ?? 0).toLocaleString();
+  const compN = leases.filter((l) => l.facts.typeOfLease === "Compensatory Agreement").length;
   const kindAny = (t: string) => leases.filter((l) => l.derived.categoryKey === "infra" && l.derived.typeKeys.includes(t as never)).length;
 
   return (
@@ -35,6 +37,7 @@ export default function AboutPage() {
         <Link href="/" className="rounded-full border border-line bg-paper px-3 py-1.5 text-[13px] font-medium text-ink hover:border-ink-soft">← Back to map</Link>
         <nav className="flex gap-3 text-[13px] font-medium text-ink-soft">
           <a href="#data" className="hover:text-ink">Data</a>
+          <a href="#oil-gas" className="hover:text-ink">Oil &amp; gas</a>
           <a href="#methodology" className="hover:text-ink">Methodology</a>
           <a href="#changes" className="hover:text-ink">Changes</a>
           {BACK_URL && <a href={BACK_URL} className="hover:text-ink">{BACK_LABEL}</a>}
@@ -63,6 +66,44 @@ export default function AboutPage() {
         <h2 id="data" className="display mt-10 scroll-mt-16 text-[26px] text-ink">Where the data comes from</h2>
         <p className="mt-2">When each dataset was pulled for this map, and the source&apos;s own last-updated date where it publishes one.</p>
         <div className="mt-4"><DataDates datasets={meta.datasets} /></div>
+
+        <h2 id="oil-gas" className="display mt-10 scroll-mt-16 text-[26px] text-ink">State oil and gas on public lands</h2>
+        <p className="mt-2">
+          California owns the tide and submerged lands along its coast, out to three nautical miles, and the beds of its navigable
+          lakes and rivers. It holds them in trust for the public. The State Lands Commission leases rights on these lands,
+          including rights to produce oil and gas. When a lease or a well stops producing, what is left on or under these lands can
+          become a cleanup job. This part of the map shows the state&apos;s own records about those leases and wells, each with its source.
+        </p>
+        <ul className="mt-3 space-y-2">
+          <li><b className="text-ink">Offshore lease footprints</b> (CSLC, {og("og-footprints")} polygons). Each shows the status in CSLC&apos;s lease layer and CSLC&apos;s stated status from its oil and gas pages side by side; where they differ, both are shown and the map does not pick one. Footprints are dashed where CSLC lists the lease as quitclaimed, terminated or not producing. The compensatory agreement areas are hatched: PRC 4736 (1973) includes private &ldquo;Leased Lands&rdquo; parcels per CSLC&apos;s polygon notes, so it is not all state land; PRC 1482 (1955) shows the State&apos;s interest in three slough parcels.</li>
+          <li><b className="text-ink">Former leases</b>: the 47 leases CSLC lists as quitclaimed or terminated, from its own tables. Exact dates come from CSLC&apos;s lease information page where it gives one; the table&apos;s date or period is kept as a second source. Eleven have a public footprint; the others have none, and the map does not invent one.</li>
+          <li><b className="text-ink">Oil and gas wells on state leases</b> (CalGEM, {og("og-wells")} wells). This map selects them (an <b className="text-ink">estimate</b>): the surface location is inside a production-lease footprint, CalGEM&apos;s lease name names a CSLC lease, or CalGEM lists the State Lands Commission as operator. Onshore or offshore is CalGEM&apos;s own county field. A well drilled from shore may have its surface location on private land.</li>
+          <li><b className="text-ink">Marine oil terminals</b> (CSLC, {og("og-terminals")} berths). Locations are approximate; the map makes no land-ownership claim for them.</li>
+          <li><b className="text-ink">Oil and gas leases</b> in the lease layer (the state&apos;s lease types Oil &amp; Gas Lease and Compensatory Agreement) have their own icon, as a kind under Commercial and industrial. They are not counted as infrastructure.</li>
+          <li><b className="text-ink">Commission records</b> on footprint cards and in the former-leases table are staff reports and meeting records that name the lease, newest first, as <b className="text-ink">source data</b>.</li>
+        </ul>
+
+        <h3 className="mt-6 text-[18px] font-semibold text-ink">State sovereign lands (public trust)</h3>
+        <p className="mt-2">
+          Tide and submerged lands, managed by the State Lands Commission, or by local trustees where the state has granted them. The
+          ocean area runs from the shoreline to BOEM&apos;s Submerged Lands Act line. For the shoreline the map uses the basemap&apos;s own
+          coastline (OpenStreetMap, via OpenFreeMap), so the shaded area meets the coast exactly where the map draws it; it is a
+          display line, not the legal ordinary high water mark. Lakes and lagoons come from CSLC&apos;s Significant Lands inventory (42
+          records; Lake Tahoe and Goose Lake clipped to California). Where CSLC&apos;s granted lands layer covers an area, it is hatched.
+        </p>
+        <p className="mt-2">
+          Two gaps: the grant boundaries for Los Angeles, Long Beach, San Francisco and Oakland are not published, so those ports are
+          shaded like other state lands without the granted hatch; and river beds are not shown. None of this is a legal boundary.
+        </p>
+
+        <h3 className="mt-6 text-[18px] font-semibold text-ink">Worth watching</h3>
+        <p className="mt-2">
+          A map-wide filter, labeled <b className="text-ink">estimate</b>: this map flags it; the state does not. It means &ldquo;look here
+          first&rdquo;, not that anything is wrong, and every item says why. Infrastructure leases whose state record says non-operational,
+          abandoned, inactive or out of service (quoting the state&apos;s word), and infrastructure leases past their expiration date. With
+          State oil &amp; gas on: leases CSLC lists as not producing, idle wells, footprints where CSLC&apos;s sources disagree, and former
+          leases with a footprint where none of the Commission records this map holds is about decommissioning.
+        </p>
 
         <h2 id="methodology" className="display mt-10 scroll-mt-16 text-[26px] text-ink">Methodology</h2>
 
@@ -116,6 +157,11 @@ export default function AboutPage() {
 
         <h2 id="changes" className="display mt-10 scroll-mt-16 text-[26px] text-ink">Changes to our numbers</h2>
         <ul className="mt-3 space-y-3">
+          <li>
+            <b className="text-ink">November 11, 2026.</b> Compensatory agreements ({compN} leases, the state&apos;s lease type
+            Compensatory Agreement) moved from Other to Commercial and industrial, where oil and gas leases already were; both now have
+            the oil and gas icon.
+          </li>
           <li>
             <b className="text-ink">November 10, 2026.</b> We narrowed the infrastructure classifier, so the infrastructure count went from
             842 to {infra.toLocaleString()}. The earlier count included leases where a utility word was an accessory (a dock&apos;s

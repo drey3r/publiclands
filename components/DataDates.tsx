@@ -6,8 +6,25 @@ const fmt = (d: string | null) => (d ? new Date(d + "T12:00:00Z").toLocaleDateSt
  * When each dataset was pulled, and the source's own last-updated date where it publishes one.
  * `compact` for the map key; the full version (with every caveat) for the About page.
  */
+const FAMILY_TITLE: Record<string, string> = { "state-oil-gas": "State oil & gas and state sovereign lands" };
+
 export function DataDates({ datasets, compact = false }: { datasets: Dataset[]; compact?: boolean }) {
   if (!datasets?.length) return null;
+  const families = [...new Set(datasets.map((d) => d.family).filter(Boolean))] as string[];
+  return (
+    <>
+      <DateList datasets={datasets.filter((d) => !d.family)} compact={compact} />
+      {families.map((f) => (
+        <div key={f} className={compact ? "mt-3" : "mt-6"}>
+          <p className={compact ? "mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-faint" : "mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-faint"}>{FAMILY_TITLE[f] ?? f}</p>
+          <DateList datasets={datasets.filter((d) => d.family === f)} compact={compact} />
+        </div>
+      ))}
+    </>
+  );
+}
+
+function DateList({ datasets, compact }: { datasets: Dataset[]; compact: boolean }) {
   return (
     <ul className={compact ? "space-y-2 text-[11.5px]" : "space-y-4 text-[14px]"}>
       {datasets.map((d) => (

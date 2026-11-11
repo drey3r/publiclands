@@ -3,6 +3,36 @@
 Changes to the California Public Lands Map, newest first. Data snapshots and
 counts are unchanged unless an entry says otherwise.
 
+## 2026-11-11 · State oil & gas on public lands; state sovereign lands
+
+**Data:** new State oil & gas datasets (pulled 2026-11-11; see Data sources and dates). Lease snapshot unchanged.
+Compensatory agreements (12 leases) move from Other to Commercial and industrial (classifier 2026-11-11).
+
+- **State oil & gas** in the layer stack (off by default; quick view "Oil & gas" turns it on and frames the coast from
+  Point Conception to Huntington Beach). Its key rows are the switches:
+  - Offshore lease footprints (CSLC): outline with a light fill, dashed where CSLC lists the lease as quitclaimed,
+    terminated or not producing. Compensatory agreement areas 4736 and 1482 are hatched, with their own labels.
+  - Former leases (CSLC's quitclaimed and terminated tables): the platform mark with a dashed ring on the 11 with a
+    footprint; all 47 in a "Former state offshore oil leases" table with dates, sources and Commission records.
+  - Oil and gas wells on state leases (CalGEM): brown dots by status below zoom 11, the wellhead mark from zoom 11.
+    Idle and active on; plugged and other statuses off by default. Cards show CalGEM's fields, onshore or offshore
+    from CalGEM's county field, and why each well is included.
+  - Marine oil terminals (CSLC), cards grouped by terminal, locations approximate, no land-ownership claim.
+  - Footprint cards show the status in CSLC's lease layer next to CSLC's stated status, each with its source and dates,
+    and the lease's Commission records.
+- **Oil and gas leases** in the lease layer (Oil & Gas Lease, Compensatory Agreement) get the platform icon, as a kind
+  under Commercial and industrial. They do not count as infrastructure.
+- **State sovereign lands** (off by default): tide and submerged lands from the shoreline to BOEM's Submerged Lands Act
+  line, plus CSLC's 42 sovereign lake and lagoon beds (Lake Tahoe clipped to California and drawn once). Granted lands
+  are hatched. Stronger tint and a thin line at statewide zoom so the 3-mile band reads at Home.
+- **Worth watching** (Estimate, map-wide): this map flags it; the state does not. Each item gives a one-line reason and
+  each group a count. Infrastructure leases whose state record says non-operational, abandoned, inactive or out of
+  service (46) or that are past their expiration date (113); with State oil & gas on: leases CSLC lists as not producing
+  (2), idle wells (206), footprints where CSLC's sources disagree (5), and former leases with a footprint and no
+  Commission record on decommissioning among the records this map holds (11).
+- **About:** a section on state oil and gas and state sovereign lands, and "Changes to our numbers".
+- **Quick views:** the default is now "Lands and leases"; "Everything" includes the two new layers.
+
 ## 2026-11-10 · Quieter labels on list cards
 
 - **List cards** (lease cards, the selected-lease preview, featured story cards, public-land cards) now put one
