@@ -617,6 +617,8 @@ export function addAmbience(
         paint: {
           "line-pattern": SURF_IMAGE,
           "line-width": ["interpolate", ["linear"], ["zoom"], 5, 4, 8, 7, SURF_MAX_Z, 10],
+          // Shifted onto the water: centred on the coastline, half the band lay on pale land and vanished.
+          "line-offset": ["interpolate", ["linear"], ["zoom"], 5, 1.5, 8, 2.8, SURF_MAX_Z, 4],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.9, 8.5, 0.9, SURF_MAX_Z, 0],
         },
       },
