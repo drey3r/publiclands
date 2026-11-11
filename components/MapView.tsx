@@ -6,6 +6,7 @@ import type { GeoJSONSource, Map as MLMap, ExpressionSpecification, MapLayerMous
 import { baseStyle } from "@/lib/mapStyle";
 import { CA_BOUNDS, CA_PATH, type MaskMode } from "@/lib/config";
 import { kindMarker } from "@/lib/icons";
+import { CAT_COLOR, TYPE_COLOR } from "@/lib/legend";
 import { CATS, CAT_LABEL, ERAS, ERA_UNKNOWN, LAND, LAYER_INFO, LEASE_MARK, LEASE_TIER, NONPROFIT_COLOR, SCORE_BANDS, SCORE_UNKNOWN, TYPES, TYPE_LABEL, type LandKey } from "@/lib/legend";
 import type { KindKey, LayerManifest, LayerName, MiniLease, OverlayDef } from "@/lib/types";
 import type { Place as Space } from "./PlaceCard";
@@ -39,7 +40,11 @@ type Props = {
   attribution: string;
   onHover: (prc: string | null) => void;
   onSelect: (prc: string | null) => void;
-  onSelectPlace: (id: string | null) => void;
+  /** The selected public-land unit: outlined in dark gold, with a popup (name, manager, Fly in). */
+  selectedPlace: Space | null;
+  onSelectPlace: (place: Space | null) => void;
+  onFlyPlace: (place: Space) => void;
+  onFlyLease: (prc: string) => void;
   onViewport: (b: Bounds) => void;
   /** Right after the map is created, before tiles load (Home framing). */
   onCreate: (map: MLMap) => void;
@@ -123,10 +128,30 @@ const ICON_KINDS: KindKey[] = ["cable", "pipeline", "outfall", "power", "roads",
 const ICON_FILLS = [...new Set([LEASE_TIER[1].fill, LEASE_TIER[2].fill, LEASE_TIER[3].fill, ...CATS.map((c) => c.color), ...TYPES.map((t) => t.color), ...ERAS.map((e) => e.color), ERA_UNKNOWN, ...SCORE_BANDS.map((b) => b.color), SCORE_UNKNOWN])];
 const iconOf = (l: MiniLease) => (l.k === "infra" && l.t !== "other" ? l.t : l.k === "roads" || l.k === "shore" ? l.k : l.og ? "oilgas" : "");
 
-/** The data labels inside map popups (plain HTML). */
-const tipLabel = (text: string, color: string, dashed = false) =>
-  `<span style="display:inline-block;margin-left:3px;padding:0 3px;border:1px ${dashed ? "dashed" : "solid"} ${color};border-radius:3px;font-size:9.5px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:${color};vertical-align:1px">${text}</span>`;
-const TIP_LABEL = { source: tipLabel("Source data", "#56664f"), estimate: tipLabel("Estimate", "#736e63", true) };
+/** The selected public-land unit's outline color (dark gold). */
+const SEL_GOLD = "#8a6a1f";
+const SEL_NONE = ["==", ["literal", 0], 1] as unknown as ExpressionSpecification;
+/** Kind icons for popups (data URLs from the map's own marker images). */
+const iconUrls = new Map<string, string>();
+function iconUrl(k: KindKey) {
+  let u = iconUrls.get(k);
+  if (u) return u;
+  const img = kindMarker(k, 22, 2);
+  const c = document.createElement("canvas");
+  c.width = img.width;
+  c.height = img.height;
+  c.getContext("2d")!.putImageData(img, 0, 0);
+  u = c.toDataURL();
+  iconUrls.set(k, u);
+  return u;
+}
+/** A lease in a popup: name, PRC, kind icon and kind (no labels; those are on the lease page). */
+function leaseHead(l: MiniLease) {
+  const ic = iconOf(l) as KindKey | "";
+  const kind = l.k === "infra" ? (l.ts ?? [l.t]).map((t) => TYPE_LABEL[t]).join(" + ") : l.og ? "Oil and gas" : CAT_LABEL[l.k];
+  const mark = ic ? `<img src="${iconUrl(ic)}" width="22" height="22" alt="" />` : `<span class="pop-dot" style="background:${l.k === "infra" ? TYPE_COLOR[l.t] : CAT_COLOR[l.k]}"></span>`;
+  return `<span class="pop-title">${esc(l.n)}</span><span class="pop-sub">PRC ${esc(l.p)}</span><span class="pop-kind">${mark}${esc(kind)}</span>`;
+}
 
 function toGeoJSON(ls: MiniLease[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
   const features: GeoJSON.Feature<GeoJSON.Point>[] = [];
@@ -144,6 +169,32 @@ export default function MapView(props: Props) {
   const cb = useRef(props);
   cb.current = props;
   const byPrc = useRef(new Map<string, MiniLease>());
+  /** The selection's popup: stays open until a click elsewhere or Esc (separate from hover tooltips). */
+  const pin = useRef<maplibregl.Popup | null>(null);
+  /** Where the selected lease or unit was clicked (its popup opens there). */
+  const selPt = useRef<{ prc: string; at: [number, number] } | null>(null);
+  const placePt = useRef<{ id: string; at: [number, number] } | null>(null);
+  /** A public-land feature's properties as a list item. */
+  const spaceOf = (f: { properties: Record<string, any> | null; id?: string | number; geometry: GeoJSON.Geometry }): Space | null => {
+    const p = f.properties ?? {};
+    const id = String(p.id ?? p.unitId ?? f.id ?? "");
+    if (!id) return null;
+    return { id, name: p.name ?? "Public land", manager: p.managingAgency ?? p.manager, access: p.access, kind: p.agencyLevel ?? p.kind, visit: p.visit, url: p.url, acres: typeof p.acres === "number" ? p.acres : null, fixture: !!p.fixture, bbox: bboxOf(f.geometry) };
+  };
+  /** A unit's extent over the loaded tiles (units are split across tiles). */
+  const unitExtent = (id: string): [number, number, number, number] | null => {
+    const m = map.current;
+    const def = cb.current.manifest?.access;
+    if (!m || !def || !m.getSource("ov-access")) return null;
+    let b: [number, number, number, number] | null = null;
+    for (const f of m.querySourceFeatures("ov-access", def.kind === "pmtiles" ? { sourceLayer: def.sourceLayer } : undefined)) {
+      const p = f.properties ?? {};
+      if (String(p.id ?? p.unitId ?? f.id ?? "") !== id) continue;
+      const x = bboxOf(f.geometry);
+      b = b ? [Math.min(b[0], x[0]), Math.min(b[1], x[1]), Math.max(b[2], x[2]), Math.max(b[3], x[3])] : x;
+    }
+    return b;
+  };
   const spacesDirty = useRef(true);
 
   // ---- create map once
@@ -287,10 +338,10 @@ export default function MapView(props: Props) {
         const p = f.properties.p as string;
         if (cb.current.hover !== p) cb.current.onHover(p);
         const l = byPrc.current.get(p);
-        if (!l) return;
-        const html = `<div style="font-size:12px;line-height:1.35;max-width:220px"><div style="font-weight:600;color:#2b2a26">${esc(l.n)}</div><div style="color:#57534a">PRC ${esc(l.p)} ${TIP_LABEL.source}</div><div style="color:#57534a">${l.k === "infra" ? (l.ts ?? [l.t]).map((t) => TYPE_LABEL[t]).join(" + ") : l.og ? "Oil and gas" : CAT_LABEL[l.k]} ${l.og ? TIP_LABEL.source : TIP_LABEL.estimate}</div></div>`;
-        popup.current ??= new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 10, className: "lease-tip" });
-        popup.current.setLngLat((f.geometry as GeoJSON.Point).coordinates as [number, number]).setHTML(html).addTo(m);
+        // The selected lease already has its popup open; no second tooltip over it.
+        if (!l || cb.current.selected === p) return void popup.current?.remove();
+        popup.current ??= new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 12, className: "lease-tip" });
+        popup.current.setLngLat((f.geometry as GeoJSON.Point).coordinates as [number, number]).setHTML(`<div class="pop-body">${leaseHead(l)}</div>`).addTo(m);
       });
       m.on("mouseleave", "lease-pt", () => {
         pointer(false);
@@ -298,8 +349,12 @@ export default function MapView(props: Props) {
         cb.current.onHover(null);
       });
       m.on("click", "lease-pt", (e: MapLayerMouseEvent) => {
-        const p = e.features?.[0]?.properties.p as string | undefined;
-        if (p) cb.current.onSelect(p);
+        const f = e.features?.[0];
+        const p = f?.properties.p as string | undefined;
+        if (!p || !f) return;
+        selPt.current = { prc: p, at: (f.geometry as GeoJSON.Point).coordinates as [number, number] };
+        popup.current?.remove();
+        cb.current.onSelect(p);
       });
       m.on("click", async (e: maplibregl.MapMouseEvent) => {
         const hits = m.queryRenderedFeatures(e.point, { layers: ["lease-pt", "cluster"].filter((id) => m.getLayer(id)) });
@@ -321,9 +376,20 @@ export default function MapView(props: Props) {
           return;
         }
         cb.current.onSelectOg(null);
-        const place = m.getLayer("access-fill") ? m.queryRenderedFeatures(e.point, { layers: ["access-fill"] })[0] : null;
-        cb.current.onSelectPlace((place?.properties?.id as string) ?? null);
-        if (!place) cb.current.onSelect(null);
+        // Public land: any green area selects its unit (outline, popup, card).
+        const place = m.getLayer("access-fill") && m.getLayoutProperty("access-fill", "visibility") !== "none" ? m.queryRenderedFeatures(e.point, { layers: ["access-fill"] })[0] : null;
+        if (place) {
+          const sp = spaceOf(place);
+          if (sp) {
+            sp.bbox = unitExtent(sp.id) ?? sp.bbox;
+            placePt.current = { id: sp.id, at: [e.lngLat.lng, e.lngLat.lat] };
+            cb.current.onSelectPlace(sp);
+            return;
+          }
+        }
+        // Clicked empty map: close the popup and clear the selection.
+        cb.current.onSelectPlace(null);
+        cb.current.onSelect(null);
       });
       // State oil & gas tooltips (plain HTML; full details in the card).
       const ogTip = (e: MapLayerMouseEvent) => {
@@ -335,11 +401,11 @@ export default function MapView(props: Props) {
         const line = (t: string, label = "") => `<div style="color:#57534a">${t}${label}</div>`;
         let html = "";
         if (id === "og-well-cluster") html = `<div style="font-weight:600;color:#2b2a26">${p.point_count} wells</div>${line(`${p.idle} idle · click to zoom in`)}`;
-        else if (id.startsWith("og-well")) html = `<div style="font-weight:600;color:#2b2a26">Well ${esc(String(p.leaseName ?? ""))} ${esc(String(p.wellNumber ?? ""))}</div>${line(`API ${esc(String(p.api))} · ${esc(String(p.wellStatus ?? ""))}`, TIP_LABEL.source)}${line(LABEL.wells)}`;
-        else if (id.startsWith("og-term")) html = `<div style="font-weight:600;color:#2b2a26">${esc(String(p.terminal ?? "Marine oil terminal"))}</div>${line(`Berth ${esc(String(p.berth))}`, TIP_LABEL.source)}${line(LABEL.terminals)}`;
-        else if (id.startsWith("og-former")) html = `<div style="font-weight:600;color:#2b2a26">Former lease PRC ${esc(String(p.prc))}</div>${line(actionLabel(String(p.former)), TIP_LABEL.source)}`;
+        else if (id.startsWith("og-well")) html = `<div style="font-weight:600;color:#2b2a26">Well ${esc(String(p.leaseName ?? ""))} ${esc(String(p.wellNumber ?? ""))}</div>${line(`API ${esc(String(p.api))} · ${esc(String(p.wellStatus ?? ""))}`)}${line(LABEL.wells)}`;
+        else if (id.startsWith("og-term")) html = `<div style="font-weight:600;color:#2b2a26">${esc(String(p.terminal ?? "Marine oil terminal"))}</div>${line(`Berth ${esc(String(p.berth))}`)}${line(LABEL.terminals)}`;
+        else if (id.startsWith("og-former")) html = `<div style="font-weight:600;color:#2b2a26">Former lease PRC ${esc(String(p.prc))}</div>${line(actionLabel(String(p.former)))}`;
         else if (id === "og-fp-hatch") html = `<div style="font-weight:600;color:#2b2a26">PRC ${esc(String(p.prc))}</div>${line(esc(compLabel(String(p.prc))))}`;
-        else html = `<div style="font-weight:600;color:#2b2a26">Offshore lease PRC ${esc(String(p.prc))}</div>${line(`CSLC: ${esc(String(p.cslc_stated_status ?? ""))}`, TIP_LABEL.source)}`;
+        else html = `<div style="font-weight:600;color:#2b2a26">Offshore lease PRC ${esc(String(p.prc))}</div>${line(`CSLC: ${esc(String(p.cslc_stated_status ?? ""))}`)}`;
         popup.current ??= new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 10, className: "lease-tip" });
         popup.current.setLngLat(e.lngLat).setHTML(`<div style="font-size:12px;line-height:1.35;max-width:240px">${html}</div>`).addTo(m);
       };
@@ -350,7 +416,7 @@ export default function MapView(props: Props) {
       m.on("mousemove", "sov-wb", (e: MapLayerMouseEvent) => {
         const p = e.features?.[0]?.properties ?? {};
         popup.current ??= new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 10, className: "lease-tip" });
-        popup.current.setLngLat(e.lngLat).setHTML(`<div style="font-size:12px;line-height:1.35;max-width:240px"><div style="font-weight:600;color:#2b2a26">${esc(titleCase(String(p.name ?? "")))}</div><div style="color:#57534a">${esc(LABEL.waterbodies)}${TIP_LABEL.source}</div></div>`).addTo(m);
+        popup.current.setLngLat(e.lngLat).setHTML(`<div style="font-size:12px;line-height:1.35;max-width:240px"><div style="font-weight:600;color:#2b2a26">${esc(titleCase(String(p.name ?? "")))}</div><div style="color:#57534a">${esc(LABEL.waterbodies)}</div></div>`).addTo(m);
       });
       m.on("mouseleave", "sov-wb", () => popup.current?.remove());
       m.on("mouseenter", "access-fill", () => pointer(true));
@@ -361,6 +427,15 @@ export default function MapView(props: Props) {
         cb.current.onViewport([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
       };
       m.on("moveend", emit);
+      // Esc closes the popup and clears the selection.
+      const onKey = (ev: KeyboardEvent) => {
+        if (ev.key !== "Escape") return;
+        if (!cb.current.selected && !cb.current.selectedPlace) return;
+        cb.current.onSelect(null);
+        cb.current.onSelectPlace(null);
+      };
+      window.addEventListener("keydown", onKey);
+      m.once("remove", () => window.removeEventListener("keydown", onKey));
       // Public spaces list = features in the rendered tiles, merged by id (tiles split big parks).
       const emitSpaces = () => {
         const cbk = cb.current.onSpaces;
@@ -381,19 +456,7 @@ export default function MapView(props: Props) {
           if (bb[0] > view[2] || bb[2] < view[0] || bb[1] > view[3] || bb[3] < view[1]) continue;
           const prev = byId.get(id);
           if (prev) prev.bbox = [Math.min(prev.bbox[0], bb[0]), Math.min(prev.bbox[1], bb[1]), Math.max(prev.bbox[2], bb[2]), Math.max(prev.bbox[3], bb[3])];
-          else
-            byId.set(id, {
-              id,
-              name: p.name ?? "Public land",
-              manager: p.managingAgency ?? p.manager,
-              access: p.access,
-              kind: p.agencyLevel ?? p.kind,
-              visit: p.visit,
-              url: p.url,
-              acres: typeof p.acres === "number" ? p.acres : null,
-              fixture: !!p.fixture,
-              bbox: bb,
-            });
+          else byId.set(id, { ...spaceOf(f)!, bbox: bb });
         }
         cbk([...byId.values()]);
       };
@@ -403,6 +466,7 @@ export default function MapView(props: Props) {
       ready.current = true;
       emit();
       syncAll();
+      syncSelection();
       cb.current.onReady(m);
     });
 
@@ -473,6 +537,12 @@ export default function MapView(props: Props) {
         },
         before,
       );
+      if (name === "access") {
+        // The selected unit: its whole outline in dark gold, obvious at any zoom (above land, under the lease marks).
+        m.addLayer({ id: "access-sel-fill", type: "fill", source: src, ...sl, filter: SEL_NONE, paint: { "fill-color": SEL_GOLD, "fill-opacity": 0.16 } }, "cluster");
+        m.addLayer({ id: "access-sel-halo", type: "line", source: src, ...sl, filter: SEL_NONE, layout: { "line-join": "round" }, paint: { "line-color": "#faf7f0", "line-width": ["interpolate", ["linear"], ["zoom"], 5, 4, 12, 7], "line-opacity": 0.85 } }, "cluster");
+        m.addLayer({ id: "access-sel-line", type: "line", source: src, ...sl, filter: SEL_NONE, layout: { "line-join": "round" }, paint: { "line-color": SEL_GOLD, "line-width": ["interpolate", ["linear"], ["zoom"], 5, 2.2, 12, 3.6] } }, "cluster");
+      }
       if (name === "access")
         m.addLayer(
           {
@@ -489,6 +559,41 @@ export default function MapView(props: Props) {
         );
     }
     syncLayers();
+    syncSelection();
+  }
+
+  // ---- the selection's popup and outline (lease or public-land unit); map and list agree both ways
+  function syncSelection() {
+    const m = map.current;
+    if (!m || !ready.current) return;
+    const { selected, selectedPlace: sp } = cb.current;
+    const f = sp ? (["==", ["to-string", ["coalesce", ["get", "id"], ["get", "unitId"], ""]], sp.id] as unknown as ExpressionSpecification) : SEL_NONE;
+    for (const id of ["access-sel-fill", "access-sel-halo", "access-sel-line"]) if (m.getLayer(id)) m.setFilter(id, f);
+    const l = selected ? byPrc.current.get(selected) : null;
+    let at: [number, number] | null = null;
+    let el: HTMLElement | null = null;
+    if (l) {
+      at = selPt.current?.prc === l.p ? selPt.current.at : l.pts[0];
+      el = document.createElement("div");
+      el.className = "pop-body";
+      el.innerHTML = `<a class="pop-link" href="/lease/${encodeURIComponent(l.p)}" aria-label="Open the lease page for PRC ${esc(l.p)}">${leaseHead(l)}<span class="pop-hint">Open lease page →</span></a>`;
+    } else if (sp) {
+      at = placePt.current?.id === sp.id ? placePt.current.at : [(sp.bbox[0] + sp.bbox[2]) / 2, (sp.bbox[1] + sp.bbox[3]) / 2];
+      el = document.createElement("div");
+      el.className = "pop-body";
+      el.innerHTML = `<button type="button" class="pop-link pop-card" aria-label="Show ${esc(sp.name)} in the list"><span class="pop-title">${esc(sp.name)}</span><span class="pop-sub">${esc(sp.manager ?? "Manager not recorded")}</span></button><button type="button" class="pop-fly">Fly in</button>`;
+      el.querySelector(".pop-card")!.addEventListener("click", () => cb.current.onSelectPlace(sp));
+      el.querySelector(".pop-fly")!.addEventListener("click", () => cb.current.onFlyPlace(sp));
+    }
+    if (!at || !el) {
+      pin.current?.remove();
+      return;
+    }
+    popup.current?.remove();
+    pin.current ??= new maplibregl.Popup({ closeButton: true, closeOnClick: false, closeOnMove: false, offset: 14, className: "sel-pop", maxWidth: "260px", focusAfterOpen: false });
+    pin.current.setLngLat(at).setDOMContent(el).addTo(m);
+    // The close button clears the selection too (Esc and a click on empty map do the same).
+    pin.current.getElement()?.querySelector(".maplibregl-popup-close-button")?.addEventListener("click", () => { cb.current.onSelect(null); cb.current.onSelectPlace(null); }, { once: true });
   }
 
   // ---- your own overlays (OVERLAYS_DIR): drawn above everything, added on first use
@@ -646,6 +751,7 @@ export default function MapView(props: Props) {
 
   useEffect(syncData, [props.leases]);
   useEffect(syncHighlight, [props.hover, props.selected, props.leases]);
+  useEffect(syncSelection, [props.selected, props.selectedPlace, props.leases]);
   useEffect(syncColor, [props.colorBy]);
   useEffect(syncLeasesVisible, [props.showLeases]);
   useEffect(syncUserOverlays, [props.overlays, props.overlayVis]);

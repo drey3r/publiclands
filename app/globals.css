@@ -60,6 +60,22 @@ body { background: var(--cream); color: var(--ink); overflow-wrap: break-word; }
 .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: var(--paper) !important; }
 .maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: var(--paper) !important; }
 
+/* Hover tooltips never catch the pointer; the selection's popup does (it stays until a click elsewhere or Esc). */
+.lease-tip { pointer-events: none; }
+.sel-pop { z-index: 11; }
+.sel-pop .maplibregl-popup-content { padding: 10px 28px 10px 12px; border: 1.5px solid var(--ink); }
+.sel-pop .maplibregl-popup-close-button { font-size: 18px; width: 26px; height: 26px; right: 2px; top: 2px; color: var(--ink-faint); }
+.pop-body { font-size: 12.5px; line-height: 1.35; max-width: 230px; }
+.pop-title { display: block; font-weight: 600; color: var(--ink); font-size: 13.5px; }
+.pop-sub { display: block; color: var(--ink-soft); }
+.pop-kind { display: flex; align-items: center; gap: 6px; margin-top: 3px; color: var(--ink-soft); }
+.pop-dot { display: inline-block; width: 11px; height: 11px; border-radius: 999px; border: 1px solid rgba(43,42,38,.3); margin: 0 5px; }
+.pop-link { display: block; text-align: left; color: inherit; text-decoration: none; border-radius: 8px; margin: -4px; padding: 4px; }
+.pop-link:hover { background: var(--sand); }
+.pop-hint { display: block; margin-top: 5px; font-weight: 600; color: var(--water); }
+.pop-fly { margin-top: 8px; min-height: 30px; padding: 0 12px; border-radius: 999px; background: var(--ink); color: var(--paper); font-weight: 600; font-size: 12.5px; }
+.pop-fly:hover { background: var(--ink-soft); }
+
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
