@@ -736,7 +736,7 @@ export default function Explorer() {
           aria-selected={curTab === t.key}
           aria-controls="list-scroll"
           onClick={() => { setTab(t.key); scrollListTop(); }}
-          className={`-mb-px flex min-h-11 items-center gap-2 whitespace-nowrap rounded-t-xl border font-semibold transition-colors ${tabs.length > 2 ? (mobile ? "gap-1.5 px-2 text-[13px]" : "px-2.5 text-[13.5px]") : "px-3.5 text-[14.5px]"} ${curTab === t.key ? "border-line border-b-cream bg-cream text-ink" : "border-transparent text-ink-soft hover:text-ink"} ${t.on ? "" : "opacity-60"}`}
+          className={`-mb-px flex min-h-11 items-center gap-2 whitespace-nowrap rounded-t-xl border font-semibold transition-colors ${tabs.length > 2 ? (mobile ? "min-w-0 flex-1 flex-col justify-center gap-0.5 px-1 py-1 text-[13px]" : "px-2.5 text-[13.5px]") : "px-3.5 text-[14.5px]"} ${curTab === t.key ? "border-line border-b-cream bg-cream text-ink" : "border-transparent text-ink-soft hover:text-ink"} ${t.on ? "" : "opacity-60"}`}
         >
           {t.label}
           <span className={`rounded-full px-2 py-0.5 text-[12px] tabular-nums ${curTab === t.key ? "bg-ink text-paper" : "bg-sand text-ink-soft"}`} aria-live="polite">{t.count == null ? "…" : tabs.length > 2 && mobile && t.count >= 10000 ? `${Math.round(t.count / 1000)}k` : t.count.toLocaleString()}</span>
