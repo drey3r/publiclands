@@ -127,6 +127,35 @@ Grant boundaries for Los Angeles, Long Beach, San Francisco and Oakland are not 
   smoothing, noise texture and drift are ours, so the clouds show where cover is reported, not the shape of real
   clouds.
 
+
+## Ocean currents and swell: Open-Meteo Marine (moving wave marks)
+
+- [Open-Meteo Marine API](https://open-meteo.com/en/docs/marine-weather-api): the surface current (speed and the
+  direction it heads) at 91 sea points, every 1° from 128°W to the coast and 31°N to 43°N, and the swell (direction
+  it comes from, period, height), averaged into one coast-wide swell. Open-Meteo's default models here, checked
+  2026-11-11 by asking for each model by name and comparing: currents from Météo-France / Mercator Ocean SMOC (0.08°,
+  tides included, updated daily), swell from Météo-France MFWAM (0.08°, updated every 12 hours); both "generated using
+  E.U. Copernicus Marine Service Information".
+- **What the map does with it:** the ocean's wave marks drift a few pixels along the current at their own place
+  (further where it is faster), and the bands of brighter marks roll in from the swell's direction at its period. It
+  is the look of the water, not a chart: one value per degree, smoothed between. Open-Meteo's own caution: "Accuracy
+  at coastal areas is limited. This is not suitable for coastal navigation".
+- **How it is fetched:** the server route `app/api/ocean/route.ts`, one request for the 91 points, cached for three
+  hours (data cache and CDN) like the clouds; the reader's browser never calls Open-Meteo. It is not asked for where
+  the water is a still frame (phones, reduced motion). A second deployment reads the route from the public map, as
+  with the clouds.
+- **Limits** (same free tier and terms as the clouds, above; non-commercial only): 91 points × about 8 requests a day
+  = about 730 calls a day by Open-Meteo's count, on top of the clouds' ~3,200: about 3,900 of the 10,000 a day
+  allowed, and at most ~500 in one minute if both refresh together (limit 600).
+- **Credit:** in the map's attribution while live data moves the water: "Sea currents and swell: Open-Meteo Marine,
+  generated using E.U. Copernicus Marine Service Information (CC BY 4.0; coarse, not for navigation)".
+- **If it cannot be loaded:** the marks keep an illustrative drift drawn by hand (south-southeast along the coast,
+  stronger offshore, swell from the west-northwest; `SKETCH_FLOW` in `lib/ocean.ts`), and the attribution says "Sea
+  drift: illustrative, not data".
+- **Where the sea is:** the wave marks are drawn by a shader, which cannot be clipped to the basemap's ocean shapes,
+  so it reads `data/ref/ocean-mask.png`: the basemap's own ocean polygons (OpenFreeMap / OpenMapTiles, © OpenStreetMap
+  contributors) at zoom 7, drawn into a 2048 px picture by `scripts/make-water.mjs`.
+
 ## County boundaries
 
 - `data/ref/ca-counties.geojson`: California county boundaries derived from US Census Bureau data (public domain), via

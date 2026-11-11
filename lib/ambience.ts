@@ -1,4 +1,5 @@
 import type { CustomLayerInterface, CustomRenderMethodInput, Map as MLMap, StyleImageInterface } from "maplibre-gl";
+import { OCEAN_LAYER, OceanLayer, WAVES_MAX_Z, type OceanFlow } from "./ocean";
 
 /**
  * Ambience: the ocean's moving wave marks, the surf line along the coast, and the live cloud layer.
@@ -6,14 +7,14 @@ import type { CustomLayerInterface, CustomRenderMethodInput, Map as MLMap, Style
  * Both run off one slow ticker (about 12 frames a second, never 60) that only asks the map to
  * repaint, so the map can still rest and fire `idle` between frames. The clouds are three layers
  * (high, mid, low) shaded on the GPU in one draw call a frame, passed one after another as the reader
- * zooms in; phones get one light layer, still. The wave tile is a small canvas redrawn each tick. The ticker
+ * zooms in; phones get one light layer, still. The wave marks are a shader too (lib/ocean.ts): they
+ * drift with the live current and brighten with the swell from its real direction. Only the surf
+ * line is a small canvas redrawn each tick. The ticker
  * stops past the zooms where waves and clouds have faded, while the tab is hidden, on screens
  * 600 px wide or less, and when the reader prefers reduced motion (one still frame instead).
  */
 
 const FPS = 12;
-/** Wave marks fade out by this zoom; past it the ticker stops (lease marks and icons own the water there). */
-export const WAVES_MAX_Z = 11;
 /**
  * Three cloud layers, each passed in turn as the reader comes down: high cloud first, then mid, then
  * low cloud and fog. Per layer: [whole until, gone by] in zoom levels below Home, how far it sits off
@@ -39,7 +40,6 @@ const CLOUD_CAP = 0.6;
  */
 const CLOUDS_BELOW = "county-line";
 const CLOUD_CREDIT_LAYER = "clouds-credit";
-export const WAVE_IMAGE = "ocean-waves";
 /** The surf line fades out by this zoom, before shore leases and their icons matter. */
 export const SURF_MAX_Z = 10;
 export const SURF_IMAGE = "surf-line";
@@ -48,8 +48,9 @@ const SURF_W = 128;
 const SURF_H = 12;
 /** Seconds for one breath of the surf line. */
 const SURF_BREATH_S = 6.5;
-/** Seconds for one swell (a band of brighter wave marks) to pass a point. */
-const SWELL_S = 7;
+/** Credits for the sea's motion: the live grid's, or a plain statement that the drift is a sketch. */
+const OCEAN_CREDIT = 'Sea currents and swell: <a href="https://open-meteo.com/en/docs/marine-weather-api">Open-Meteo Marine</a>, generated using E.U. Copernicus Marine Service Information (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>; coarse, not for navigation)';
+const OCEAN_SKETCH_CREDIT = "Sea drift: illustrative, not data";
 export const CLOUD_SOURCE = "clouds";
 export const CLOUD_LAYER = "clouds";
 /** Open-Meteo's CC BY 4.0 credit, shown in the map's attribution only while the clouds are drawn. */
@@ -73,106 +74,6 @@ const smooth = (e0: number, e1: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 const mercY = (lat: number) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
-
-// ---------------------------------------------------------------------------------------------
-// Ocean: an animated fill pattern of short engraved wave strokes
-
-type Mark = { x: number; y: number; len: number; phase: number; period: number; bob: number; weight: number };
-
-/**
- * A seamless tile of wave strokes. A slow swell brightens and lengthens the strokes in bands that
- * travel shoreward (east) while the whole field drifts the same way, like the wave marks on an
- * engraved chart set gently moving.
- */
-export class WavePattern implements StyleImageInterface {
-  width: number;
-  height: number;
-  data: Uint8ClampedArray;
-  private ctx: CanvasRenderingContext2D;
-  private marks: Mark[] = [];
-  private dirty = true;
-  private size: number;
-  private ratio: number;
-
-  constructor(size = 240, ratio = 2) {
-    this.size = size;
-    this.ratio = ratio;
-    this.width = this.height = size * ratio;
-    this.data = new Uint8ClampedArray(this.width * this.height * 4);
-    const c = document.createElement("canvas");
-    c.width = c.height = this.width;
-    this.ctx = c.getContext("2d", { willReadFrequently: true })!;
-    // Scattered by rejection sampling (no two marks crowd each other), so the tile never reads as a grid.
-    const r = rng(1579);
-    const want = 30;
-    for (let tries = 0; this.marks.length < want && tries < 4000; tries++) {
-      const x = r() * size;
-      const y = r() * size;
-      const ok = this.marks.every((m) => {
-        const dx = Math.min(Math.abs(m.x - x), size - Math.abs(m.x - x));
-        const dy = Math.min(Math.abs(m.y - y), size - Math.abs(m.y - y));
-        return (dx / 30) ** 2 + (dy / 13) ** 2 > 1;
-      });
-      if (!ok) continue;
-      this.marks.push({ x, y, len: 7 + r() * 12, phase: r() * Math.PI * 2, period: 6 + r() * 7, bob: r() * Math.PI * 2, weight: 0.45 + r() * 0.55 });
-    }
-  }
-
-  /** Draw the frame for time `t` (seconds). */
-  draw(t: number) {
-    const { ctx, size, ratio } = this;
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    ctx.clearRect(0, 0, size, size);
-    ctx.lineCap = "round";
-    const drift = (t * 2.2) % size; // css px a second, shoreward
-    for (const m of this.marks) {
-      const x0 = (m.x + drift) % size;
-      // Swell: a slow band of brighter marks crosses the tile shoreward (two crests a tile, so it tiles),
-      // a little faster than the marks drift; each mark also keeps its own slower breath.
-      const swell = 0.5 + 0.5 * Math.sin(Math.PI * 2 * (t / SWELL_S - (2 * x0) / size - (0.6 * m.y) / size));
-      const own = 0.5 + 0.5 * Math.sin((t * Math.PI * 2) / m.period + m.phase);
-      const breath = 0.6 * swell + 0.4 * own;
-      const a = m.weight * (0.25 + 0.75 * breath);
-      const len = m.len * (0.8 + 0.25 * breath);
-      const y0 = m.y + 1.1 * Math.sin(t * 0.55 + m.bob) * (0.4 + 0.6 * swell);
-      for (const dx of [-size, 0, size]) {
-        for (const dy of [-size, 0, size]) {
-          const x = x0 + dx;
-          const y = y0 + dy;
-          if (x < -len || x > size + len || y < -6 || y > size + 6) continue;
-          this.stroke(x, y, len, a);
-        }
-      }
-    }
-    this.dirty = true;
-  }
-
-  private stroke(x: number, y: number, len: number, a: number) {
-    const { ctx } = this;
-    const h = len / 2;
-    const path = (oy: number) => {
-      // A swash: a low crest that eases into a shallow trough, like a wave mark on an old chart.
-      ctx.beginPath();
-      ctx.moveTo(x - h, y + oy + 0.6);
-      ctx.bezierCurveTo(x - h * 0.55, y + oy - 1.5, x - h * 0.1, y + oy - 1.5, x + h * 0.2, y + oy);
-      ctx.bezierCurveTo(x + h * 0.5, y + oy + 1.1, x + h * 0.8, y + oy + 0.9, x + h, y + oy + 0.1);
-      ctx.stroke();
-    };
-    ctx.lineWidth = 0.9;
-    ctx.strokeStyle = `rgba(104,138,158,${(0.3 * a).toFixed(3)})`;
-    path(1);
-    ctx.lineWidth = 1.1;
-    ctx.strokeStyle = `rgba(246,250,252,${(0.72 * a).toFixed(3)})`;
-    path(0);
-  }
-
-  render() {
-    if (!this.dirty) return false;
-    this.dirty = false;
-    this.data.set(this.ctx.getImageData(0, 0, this.width, this.height).data);
-    return true;
-  }
-}
 
 // ---------------------------------------------------------------------------------------------
 // Surf: a soft white line along the coast that breathes
@@ -628,6 +529,8 @@ class CloudLayer implements CustomLayerInterface {
 
 export type Ambience = {
   setClouds: (on: boolean) => void;
+  /** Where the sea's motion comes from: the live grid, the illustrative sketch (load failed), or not asked yet. */
+  oceanFlow: () => "live" | "sketch" | "none";
   /** Whether the animation ticker is running (for the browser checks). */
   running: () => boolean;
   /** Whether clouds are being drawn at this zoom (for the browser checks). */
@@ -638,40 +541,56 @@ export type Ambience = {
 };
 
 /**
- * Adds the wave pattern over the ocean (`ocean-waves`, right above `water-ocean`) and, once
+ * Adds the wave marks over the ocean (`ocean-waves`, right above the sea-floor depth) and, once
  * /api/clouds answers, the cloud layer right below the county lines. Returns switches.
  */
 export function addAmbience(
   m: MLMap,
-  opts: { clouds: boolean; waves?: boolean; cloudsUrl?: string; onClouds?: (time: string | null) => void },
+  opts: { clouds: boolean; waves?: boolean; cloudsUrl?: string; oceanUrl?: string; maskUrl?: string; onClouds?: (time: string | null) => void },
 ): Ambience {
   const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
   // Phones get the same still frame: measured on a 390 px viewport at 4x CPU throttle, the ticker's
   // repaints cost ~5-10% of panning frame rate.
   const small = window.matchMedia("(max-width: 600px)");
   const reduce = () => motion.matches || small.matches;
-  const waves = new WavePattern();
   const t0 = performance.now();
   const now = () => (performance.now() - t0) / 1000 + 40; // start mid-cycle, never at a blank frame
-  waves.draw(now());
-  if (!m.hasImage(WAVE_IMAGE)) m.addImage(WAVE_IMAGE, waves, { pixelRatio: 2 });
-  if (!m.getLayer("ocean-waves") && m.getLayer("water-ocean")) {
+  const ocean = new OceanLayer(opts.maskUrl ?? "/data/ocean-mask.png");
+  if (!m.getLayer(OCEAN_LAYER) && m.getLayer("water-ocean")) {
     // Right above the sea-floor depth (or the plain ocean), so the State sovereign lands tint, which
     // ogLayers.addWaters puts below the depth, never covers them.
     const ids = m.getStyle().layers.map((l) => l.id);
-    const before = ids[ids.indexOf(m.getLayer("ocean-depth") ? "ocean-depth" : "water-ocean") + 1];
-    m.addLayer(
-      {
-        id: "ocean-waves",
-        type: "fill",
-        source: "omt",
-        "source-layer": "water",
-        filter: ["==", ["get", "class"], "ocean"],
-        paint: { "fill-pattern": WAVE_IMAGE, "fill-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.85, 8.5, 0.85, 10, 0.4, WAVES_MAX_Z, 0] },
-        maxzoom: WAVES_MAX_Z,
-      },
-      before,
-    );
+    m.addLayer(ocean, ids[ids.indexOf(m.getLayer("ocean-depth") ? "ocean-depth" : "water-ocean") + 1]);
+    // Credits ride on empty sources, shown by a layer that is visible only while they apply.
+    for (const [id, attribution] of [["ocean-flow", OCEAN_CREDIT], ["ocean-sketch", OCEAN_SKETCH_CREDIT]] as const) {
+      m.addSource(id, { type: "geojson", data: { type: "FeatureCollection", features: [] }, attribution });
+      m.addLayer({ id: `${id}-credit`, type: "line", source: id, layout: { visibility: "none" } }, OCEAN_LAYER);
+    }
+  }
+  const oceanCredit = (which: "ocean-flow" | "ocean-sketch" | null) => {
+    for (const id of ["ocean-flow", "ocean-sketch"]) if (m.getLayer(`${id}-credit`)) m.setLayoutProperty(`${id}-credit`, "visibility", id === which ? "visible" : "none");
+  };
+  let flowKind: "live" | "sketch" | "none" = "none";
+  async function loadOcean() {
+    try {
+      const res = await fetch(opts.oceanUrl ?? "/api/ocean");
+      if (!res.ok) throw new Error(`ocean ${res.status}`);
+      const f = (await res.json()) as OceanFlow;
+      if (dead) return;
+      if (!f?.nx || !f.swell || f.u?.length !== f.nx * f.ny) throw new Error("ocean: unexpected answer");
+      ocean.setFlow(f);
+      flowKind = "live";
+      oceanCredit("ocean-flow");
+    } catch (e) {
+      if (dead) return;
+      console.warn("[ocean]", e instanceof Error ? e.message : e);
+      // The layer keeps (or falls back to) its own illustrative drift, and the credits say so.
+      if (flowKind !== "live") {
+        flowKind = "sketch";
+        oceanCredit("ocean-sketch");
+      }
+    }
+    m.triggerRepaint();
   }
 
   // The surf line: the ocean polygons' own edge (the basemap's coastline, so it is exact), right above the
@@ -679,7 +598,7 @@ export function addAmbience(
   const surf = new SurfPattern();
   surf.draw(now());
   if (!m.hasImage(SURF_IMAGE)) m.addImage(SURF_IMAGE, surf, { pixelRatio: 2 });
-  if (!m.getLayer(SURF_LAYER) && m.getLayer("ocean-waves")) {
+  if (!m.getLayer(SURF_LAYER) && m.getLayer(OCEAN_LAYER)) {
     const ids = m.getLayersOrder();
     m.addLayer(
       {
@@ -698,7 +617,7 @@ export function addAmbience(
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.9, 8.5, 0.9, SURF_MAX_Z, 0],
         },
       },
-      ids[ids.indexOf("ocean-waves") + 1],
+      ids[ids.indexOf(OCEAN_LAYER) + 1],
     );
   }
 
@@ -706,6 +625,7 @@ export function addAmbience(
   let layer: CloudLayer | null = null;
   let timer: ReturnType<typeof setInterval> | null = null;
   let refetch: ReturnType<typeof setInterval> | null = null;
+  let oceanRefetch: ReturnType<typeof setInterval> | null = null;
   let dead = false;
 
   const cloudsVisible = () => !!(cloudsOn && layer && m.getZoom() < cloudsMaxZoom(m, small.matches));
@@ -713,7 +633,7 @@ export function addAmbience(
 
   function frame() {
     if (!wavesVisible() && !cloudsVisible()) return stop();
-    if (wavesVisible()) waves.draw(now());
+    if (wavesVisible()) ocean.t = now();
     if (m.getZoom() < SURF_MAX_Z) surf.draw(now());
     // The clouds advance themselves when the map draws them; all they need is the repaint.
     m.triggerRepaint();
@@ -735,7 +655,10 @@ export function addAmbience(
   const onMotion = () => {
     if (layer) layer.still = reduce();
     if (reduce()) stop();
-    else start();
+    else {
+      wantOcean();
+      start();
+    }
   };
   motion.addEventListener?.("change", onMotion);
   small.addEventListener?.("change", onMotion);
@@ -785,10 +708,19 @@ export function addAmbience(
     refetch = setInterval(loadClouds, 3 * 3600 * 1000);
   }
   if (cloudsOn) wantClouds();
+  // The sea's motion is only asked for where it will be seen moving (not for a still frame), and again
+  // every three hours on a page left open.
+  function wantOcean() {
+    if (oceanRefetch || dead || reduce() || opts.waves === false) return;
+    loadOcean();
+    oceanRefetch = setInterval(loadOcean, 3 * 3600 * 1000);
+  }
+  wantOcean();
   start();
 
   return {
     running: () => timer !== null,
+    oceanFlow: () => flowKind,
     cloudsShown: cloudsVisible,
     cloudLevels() {
       const down = m.getZoom() - cloudBase(m);
@@ -808,6 +740,7 @@ export function addAmbience(
       dead = true;
       stop();
       if (refetch) clearInterval(refetch);
+      if (oceanRefetch) clearInterval(oceanRefetch);
       document.removeEventListener("visibilitychange", onVis);
       motion.removeEventListener?.("change", onMotion);
       small.removeEventListener?.("change", onMotion);

@@ -28,6 +28,8 @@ async function check(name, fn, view = { width: 1440, height: 900 }, opts = {}) {
   const page = await browser.newPage({ viewport: view, isMobile: view.width < 600, hasTouch: view.width < 600, ...opts });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  // The sea's currents and swell are answered here for every check (a check may route it again): never Open-Meteo.
+  await page.route("**/api/ocean", (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify(OCEAN_FLOW) }));
   try {
     await Promise.race([fn(page), new Promise((_, no) => setTimeout(() => no(new Error("timed out after 150 s")), 150000))]);
     if (errors.length) throw new Error(`page errors: ${errors.join(" | ")}`);
@@ -41,6 +43,7 @@ async function check(name, fn, view = { width: 1440, height: 900 }, opts = {}) {
     await page.close();
   }
 }
+const OCEAN_FLOW = { time: "2026-11-11T18:00Z", lat0: 31, lon0: -128, step: 1, nx: 12, ny: 13, u: Array(156).fill(0.1), v: Array(156).fill(-0.2), swell: { from: 290, period: 10, height: 2 }, source: "test" };
 const assert = (c, msg) => { if (!c) throw new Error(msg); };
 async function open(page, path = "/") {
   await page.goto(BASE + path, { waitUntil: "load", timeout: 90000 });
@@ -266,7 +269,7 @@ await check("clouds: on by default (one request, Open-Meteo credit); above land 
   await idle(page);
   assert(calls.length === 1, `expected one clouds request, got ${calls.length}`);
   assert(await page.evaluate(() => window.__ambience.cloudsShown()), "clouds not drawn at Home");
-  assert(/Open-Meteo/.test(await attribution(page)), "Open-Meteo credit missing while clouds are on");
+  assert(/Clouds: Weather data by Open-Meteo/.test(await attribution(page)), "Open-Meteo credit missing while clouds are on");
   // Layer order: every land fill, tint and mask below; county lines, names, clusters, lease marks and the selection above.
   const ids = await order(page);
   const at = (id) => { const i = ids.indexOf(id); assert(i >= 0, `layer ${id} missing`); return i; };
@@ -294,7 +297,7 @@ await check("clouds: on by default (one request, Open-Meteo credit); above land 
   await sw.click();
   await page.waitForTimeout(500);
   assert((await page.evaluate(() => window.__map.getLayoutProperty("clouds", "visibility"))) === "none", "cloud layer still visible after the switch");
-  assert(!/Open-Meteo/.test(await attribution(page)), "Open-Meteo credit shown while clouds are off");
+  assert(!/Clouds: Weather data by Open-Meteo/.test(await attribution(page)), "Open-Meteo credit shown while clouds are off");
   // Waves fade by zoom 11 and the ticker stops there.
   await jump(page, [-119.75, 34.15], 11.5);
   assert(!(await page.evaluate(() => window.__ambience.running())), "animation still running at zoom 11.5");
@@ -318,6 +321,27 @@ await check("surf line: along the coast above the wave marks, under the clouds, 
   assert(n > 20 && n < 48, `${n} renders in 3 s at Home with the surf line (expected about 36)`);
   await jump(page, [-119.75, 34.4], 10.5);
   assert((await page.evaluate(() => window.__map.queryRenderedFeatures({ layers: ["surf-line"] }).length)) === 0, "surf line still drawn at zoom 10.5");
+});
+
+await check("ocean: wave marks drift with the live currents and swell (one request, credited); if that fails, an illustrative drift, labeled so", async (page) => {
+  await cloudCalls(page, CLOUD_GRID);
+  const calls = [];
+  await page.route("**/api/ocean", (r) => { calls.push(1); r.fulfill({ contentType: "application/json", body: JSON.stringify(OCEAN_FLOW) }); });
+  await open(page);
+  await page.waitForFunction(() => window.__ambience.oceanFlow() === "live", null, { timeout: 15000 });
+  assert(calls.length === 1, `expected one ocean request, got ${calls.length}`);
+  assert((await page.evaluate(() => window.__map.getLayer("ocean-waves").type)) === "custom", "wave marks are not the shader layer");
+  assert(/Sea currents and swell: Open-Meteo Marine.*Copernicus Marine/.test(await attribution(page)), "marine credit missing");
+  assert(!/illustrative/.test(await attribution(page)), "live flow labeled illustrative");
+  assert((await page.evaluate(() => fetch("/data/ocean-mask.png").then((r) => r.ok))), "sea mask not published");
+  // A failed load: the sketch, and the credits say it is not data.
+  await page.unroute("**/api/ocean");
+  await page.route("**/api/ocean", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
+  await open(page);
+  await page.waitForFunction(() => window.__ambience.oceanFlow() === "sketch", null, { timeout: 15000 });
+  const credit = await attribution(page);
+  assert(/Sea drift: illustrative, not data/.test(credit) && !/Open-Meteo Marine/.test(credit), `credits after a failed load: ${credit}`);
+  assert(await page.evaluate(() => window.__ambience.running()), "water not moving on the illustrative drift");
 });
 
 await check("sea floor: depth shading reads terrain tiles no deeper than zoom 8 (deeper tiles have seams and holes in the bathymetry)", async (page) => {
@@ -373,8 +397,10 @@ await check("clouds: a failed load shows none and breaks nothing", async (page) 
   assert(await page.locator(".sel-pop").isVisible(), "no popup after card click");
 });
 
-await check("reduced motion: clouds off by default and never fetched; switched on they are one still frame", async (page) => {
+await check("reduced motion: clouds off by default and never fetched; switched on they are one still frame; the sea's motion is never asked for", async (page) => {
   const calls = await cloudCalls(page, CLOUD_GRID);
+  const sea = [];
+  await page.route("**/api/ocean", (r) => { sea.push(1); r.fulfill({ contentType: "application/json", body: JSON.stringify(OCEAN_FLOW) }); });
   await open(page);
   assert(await page.evaluate(() => !!window.__map.getLayer("ocean-waves") && !!window.__map.getLayer("ocean-depth")), "wave or depth layer missing");
   assert(!(await page.evaluate(() => window.__ambience.running())), "animation running with reduced motion");
@@ -386,6 +412,7 @@ await check("reduced motion: clouds off by default and never fetched; switched o
   await idle(page);
   assert(await page.evaluate(() => window.__ambience.cloudsShown()), "clouds not drawn after the switch");
   assert(!(await page.evaluate(() => window.__ambience.running())), "animation started by the clouds with reduced motion");
+  assert(sea.length === 0, `currents fetched for a still frame (${sea.length})`);
 }, { width: 1440, height: 900 }, { reducedMotion: "reduce" });
 
 await check("phone: one light, still cloud layer by default (one request); waves are a still frame; nothing animates", async (page) => {

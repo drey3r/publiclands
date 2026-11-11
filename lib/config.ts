@@ -11,6 +11,8 @@ export const REPO_URL = "https://github.com/drey3r/publiclands";
  * allows any origin, so only one deployment ever calls Open-Meteo.
  */
 export const CLOUDS_URL = process.env.NEXT_PUBLIC_CLOUDS_URL || "/api/clouds";
+/** Where the map reads the sea's currents and swell: the same deployment as the clouds, at /api/ocean. */
+export const OCEAN_URL = process.env.NEXT_PUBLIC_OCEAN_URL || CLOUDS_URL.replace(/\/api\/clouds$/, "/api/ocean");
 export const BACK_URL = process.env.NEXT_PUBLIC_BACK_URL || null;
 export const BACK_LABEL = process.env.NEXT_PUBLIC_BACK_LABEL || "Back";
 export const DISCLAIMER = "Not legal or survey data. See the California State Lands Commission for official records.";
