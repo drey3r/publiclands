@@ -1,6 +1,6 @@
 import type { CustomLayerInterface, CustomRenderMethodInput, Map as MLMap, StyleImageInterface } from "maplibre-gl";
 import { OCEAN_LAYER, OceanLayer, WAVES_MAX_Z, type OceanFlow } from "./ocean";
-import { addShimmer, type Shimmer } from "./water";
+import { DELTA_LAYER, LAKE_LAYER, RIVER_FAR_LAYER, RIVER_LAYER, addShimmer, type Shimmer } from "./water";
 
 /**
  * Ambience: the ocean's moving wave marks, the surf line along the coast, and the live cloud layer.
@@ -46,7 +46,7 @@ const CLOUD_CAP = 0.6;
  * The illustrative marine layer (not data): a deck of low cloud over the sea that reaches the coast,
  * at its fullest about 6 in the morning and thinnest about 3 in the afternoon, California time.
  * Returns its strength (0..1) and how far it reaches: the share of sea around a point (0.5 = the
- * shoreline) from which it begins.
+ * shoreline) from which it begins. It touches the shore at every hour, and comes a little inland in the morning.
  */
 function marineLayer(now = new Date()): [number, number] {
   let h = 9;
@@ -61,7 +61,7 @@ function marineLayer(now = new Date()): [number, number] {
     if (typeof pinned === "number") h = pinned;
   }
   const f = h >= 6 && h <= 15 ? 0.5 + 0.5 * Math.cos((Math.PI * (h - 6)) / 9) : 0.5 - 0.5 * Math.cos((Math.PI * ((h + 24 - 15) % 24)) / 15);
-  return [0.72 + 0.28 * f, 0.58 - 0.13 * f];
+  return [0.74 + 0.26 * f, 0.47 - 0.07 * f];
 }
 /** Keep in step with MASK in lib/ocean.ts: the sea mask's box. */
 const SEA_BOX = { west: -137, east: -107, south: 26, north: 48 };
@@ -337,8 +337,8 @@ void main() {
     vec2 m1 = lifted(u_spread.x);
     d1 = max(cover(m1).x, marine(m1));
     q1 = frame(m1, u_w1, u_s.x);
-    lowRaw = lowBody(q1, d1, 0.3 * u_thin.x);
-    low = (0.82 * lowRaw + haze(d1, u_thin.x)) * u_fade.x;
+    lowRaw = lowBody(q1, d1, 0.18 * u_thin.x);
+    low = (mix(0.82, 1.1, u_thin.x) * lowRaw + haze(d1, u_thin.x)) * u_fade.x;
   }
   // Mid: a thinner, flatter sheet in smaller pieces.
   float mid = 0.0;
@@ -363,24 +363,35 @@ void main() {
   float sh = 0.0;
   if (u_fade.x > 0.0 && d1 > 0.02) {
     vec2 off = vec2(-0.0055, -0.0055);
-    float toward = lowBody(q1 + vec2(dot(off, u_w1), dot(off, vec2(-u_w1.y, u_w1.x))), d1, 0.3 * u_thin.x);
+    float toward = lowBody(q1 + vec2(dot(off, u_w1), dot(off, vec2(-u_w1.y, u_w1.x))), d1, 0.18 * u_thin.x);
     shade = clamp((toward - lowRaw) * 2.6, 0.0, 1.0) * low / max(a, 0.001);
-    sh = 0.13 * toward * (1.0 - a) * u_fade.x;
+    sh = 0.07 * toward * (1.0 - a) * u_fade.x;
   }
-  vec3 body = mix(vec3(1.0), vec3(0.76, 0.82, 0.89), 0.7 * clamp(shade, 0.0, 1.0));
+  vec3 body = mix(vec3(1.0), vec3(0.8, 0.85, 0.91), 0.65 * clamp(shade, 0.0, 1.0));
   // High cloud alone is a cooler, greyer white: plain white wisps vanish over pale land.
   body = mix(body, vec3(0.86, 0.9, 0.95), hi * (1.0 - low) * (1.0 - mid) / max(low + mid + hi, 0.001));
   o = vec4(body * a + vec3(0.2, 0.26, 0.34) * sh, a + sh);
 }`;
 
-/** Phones: one sheet from the three covers merged and the marine layer, no shading. */
+/** Phones: one sheet from the three covers merged and the marine layer, no shading, four texture lookups a pixel. */
 const CLOUD_FRAG_LITE = CLOUD_COMMON + `
 void main() {
   if (u_fade.x <= 0.0) discard;
   vec2 m = lifted(u_spread.x);
   vec3 c = cover(m);
-  float d = max(1.0 - (1.0 - c.x) * (1.0 - 0.8 * c.y) * (1.0 - 0.5 * c.z), marine(m));
-  float a = capped(0.8 * sheet(frame(m, u_w1, u_s.x), d, 0.68, 1.0, 0.3 * u_thin.x) * u_fade.x);
+  // The marine layer, plainly: over the sea up to the shore, no banks.
+  vec2 uv = (m - u_seaExt.xy) / (u_seaExt.zw - u_seaExt.xy);
+  vec2 e = min(uv, 1.0 - uv);
+  float sea = 0.85 * u_marine.x * smoothstep(u_marine.y, u_marine.y + 0.22, textureLod(u_sea, uv, 2.5).r) * smoothstep(0.0, 0.04, min(e.x, e.y));
+  float d = max(1.0 - (1.0 - c.x) * (1.0 - 0.8 * c.y) * (1.0 - 0.5 * c.z), sea);
+  float a = 0.0;
+  if (d > 0.02) {
+    vec2 q = frame(m, u_w1, u_s.x);
+    vec2 p = vec2(q.x * 0.68, q.y);
+    float n = 0.6 * texture(u_noise, p * 0.83).r + 0.4 * texture(u_noise, rot(p, 0.8, -0.6) * 2.1).g;
+    a = 0.8 * smoothstep(0.44, 0.66, d + (n - 0.5) * 1.6 - 0.18 * u_thin.x) * smoothstep(0.02, 0.1, d) * u_fade.x;
+  }
+  a = capped(a);
   o = vec4(a);
 }`;
 
@@ -567,7 +578,8 @@ class CloudLayer implements CustomLayerInterface {
     if (!this.still && dt > 0) {
       const perPx = k / (512 * 2 ** z); // noise units per screen pixel
       [L.low.drift, L.mid.drift, L.high.drift].forEach((pxPerS, i) => (this.slid[i] = (this.slid[i] + pxPerS * perPx * dt) % 64));
-      this.morph = (this.morph + dt * 0.0035) % 64;
+      // The sheets change shape as slowly as they drift: about 2 screen pixels a second of difference, at any zoom.
+      this.morph = (this.morph + 2 * perPx * dt) % 64;
     }
     // Unit vectors down each wind on the map (mercator y grows south).
     const dir = (w: [number, number]): [number, number] => {
@@ -743,9 +755,10 @@ export function addAmbience(
     if (timer) clearInterval(timer);
     timer = null;
   }
-  // Lakes, the Delta and the major rivers (lib/water.ts): below the ocean layers, so below every land
-  // fill, line, name and mark. Not on phones.
-  const shimmer: Shimmer | null = small.matches ? null : addShimmer(m, { before: () => (m.getLayer("water-ocean") ? "water-ocean" : undefined), onChange: () => start() });
+  // Lakes, the Delta and the major rivers (lib/water.ts): right below the clouds, so above the water's
+  // own color and tints and below county lines, every name and every mark. Not on phones.
+  const shimmerBefore = () => (m.getLayer(CLOUD_LAYER) ? CLOUD_LAYER : m.getLayer(CLOUDS_BELOW) ? CLOUDS_BELOW : undefined);
+  const shimmer: Shimmer | null = small.matches ? null : addShimmer(m, { before: shimmerBefore, onChange: () => start() });
   const onVis = () => (document.hidden ? stop() : start());
   document.addEventListener("visibilitychange", onVis);
   // Zooming back out past the fade zooms restarts the ticker.
@@ -764,11 +777,18 @@ export function addAmbience(
 
   // Layers added later (public lands, the sovereign-lands tint, a private build's own) go in below the
   // county lines too, which would put them over the clouds: keep the clouds directly under the lines.
+  // The moving inland water stays right below the clouds the same way (the sovereign-lands tint, added
+  // when its layer is switched on, would otherwise cover it).
   const keepOrder = () => {
-    if (dead || !layer || !m.getLayer(CLOUD_LAYER) || !m.getLayer(CLOUDS_BELOW)) return;
+    if (dead || !m.getLayer(CLOUDS_BELOW)) return;
     // getLayersOrder, not getStyle: a custom layer is not part of the serialized style.
-    const ids = m.getLayersOrder();
-    if (ids[ids.indexOf(CLOUD_LAYER) + 1] !== CLOUDS_BELOW) m.moveLayer(CLOUD_LAYER, CLOUDS_BELOW);
+    const want = [LAKE_LAYER, DELTA_LAYER, RIVER_FAR_LAYER, RIVER_LAYER, CLOUD_LAYER].filter((id) => m.getLayer(id));
+    let next = CLOUDS_BELOW;
+    for (let i = want.length - 1; i >= 0; i--) {
+      const ids = m.getLayersOrder();
+      if (ids[ids.indexOf(want[i]) + 1] !== next) m.moveLayer(want[i], next);
+      next = want[i];
+    }
   };
   m.on("styledata", keepOrder);
 

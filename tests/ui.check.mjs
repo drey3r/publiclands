@@ -279,28 +279,32 @@ await check("clouds: on by default (one request, Open-Meteo credit); above land 
   for (const id of below) assert(at(id) < c, `${id} is drawn over the clouds`);
   const above = ["county-line", "ca-outline", "label-range", "label-water", "place-town", "place-city", "cluster", "cluster-count", "lease-flag", "lease-pt", "lease-icon", "hl-ring", "access-sel-fill", "access-sel-line", "access-label"];
   for (const id of above) assert(at(id) > c, `clouds are drawn over ${id}`);
-  // Descending: all three layers whole at Home; the high layer is passed first, then the mid, then the low;
-  // all gone 3.5 zoom levels below Home (before lease detail), while the water keeps moving.
+  assert(/illustrative marine layer/.test(await attribution(page)), "the credit does not say the marine layer is illustrative");
+  // Descending: all three layers whole at Home; the high layer is passed first, then the mid, then the low,
+  // which lingers, thinning, to about zoom 9.5 (before lease detail), while the water keeps moving.
   const levels = () => page.evaluate(() => window.__ambience.cloudLevels());
   const home = await levels();
   assert(home.low === 1 && home.mid === 1 && home.high === 1 && !home.lite, `layers at Home: ${JSON.stringify(home)}`);
-  await jump(page, [-122.3, 37.8], home.base + 1.4);
+  await jump(page, [-122.3, 37.8], home.base + 1.2);
   let l = await levels();
-  assert(l.high === 0 && l.mid > 0 && l.mid < 1 && l.low === 1, `1.4 levels down: ${JSON.stringify(l)}`);
-  await jump(page, [-122.3, 37.8], home.base + 2.6);
+  assert(l.high > 0 && l.high < 1 && l.mid === 1 && l.low === 1, `1.2 levels down: ${JSON.stringify(l)}`);
+  await jump(page, [-122.3, 37.8], home.base + 2.3);
   l = await levels();
-  assert(l.high === 0 && l.mid === 0 && l.low > 0 && l.low < 1, `2.6 levels down: ${JSON.stringify(l)}`);
-  assert(await page.evaluate(() => window.__ambience.cloudsShown()), "low cloud not drawn 2.6 levels down");
-  await jump(page, [-122.3, 37.8], home.base + 3.6);
-  assert(!(await page.evaluate(() => window.__ambience.cloudsShown())), "clouds still drawn 3.6 zoom levels below Home");
+  assert(l.high === 0 && l.mid > 0 && l.mid < 1 && l.low === 1, `2.3 levels down: ${JSON.stringify(l)}`);
+  await jump(page, [-122.3, 37.8], 9);
+  l = await levels();
+  assert(l.high === 0 && l.mid === 0 && l.low > 0.3 && l.low < 1, `at zoom 9: ${JSON.stringify(l)}`);
+  assert(await page.evaluate(() => window.__ambience.cloudsShown()), "low cloud not drawn at zoom 9");
+  await jump(page, [-122.3, 37.8], 9.7);
+  assert(!(await page.evaluate(() => window.__ambience.cloudsShown())), "clouds still drawn at zoom 9.7");
   assert(await page.evaluate(() => window.__ambience.running()), "wave animation not running there");
   await sw.click();
   await page.waitForTimeout(500);
   assert((await page.evaluate(() => window.__map.getLayoutProperty("clouds", "visibility"))) === "none", "cloud layer still visible after the switch");
   assert(!/Clouds: Weather data by Open-Meteo/.test(await attribution(page)), "Open-Meteo credit shown while clouds are off");
-  // Waves fade by zoom 11 and the ticker stops there.
-  await jump(page, [-119.75, 34.15], 11.5);
-  assert(!(await page.evaluate(() => window.__ambience.running())), "animation still running at zoom 11.5");
+  // Waves fade by zoom 11.5 and the ticker stops there.
+  await jump(page, [-119.75, 34.15], 11.7);
+  assert(!(await page.evaluate(() => window.__ambience.running())), "animation still running at zoom 11.7");
   await jump(page, [-119.75, 34.15], 8);
   await page.waitForTimeout(300);
   assert(await page.evaluate(() => window.__ambience.running()), "animation did not restart after zooming out");
@@ -332,7 +336,7 @@ await check("ocean: wave marks drift with the live currents and swell (one reque
   assert(calls.length === 1, `expected one ocean request, got ${calls.length}`);
   assert((await page.evaluate(() => window.__map.getLayer("ocean-waves").type)) === "custom", "wave marks are not the shader layer");
   assert(/Sea currents and swell: Open-Meteo Marine.*Copernicus Marine/.test(await attribution(page)), "marine credit missing");
-  assert(!/illustrative/.test(await attribution(page)), "live flow labeled illustrative");
+  assert(!/Sea drift: illustrative/.test(await attribution(page)), "live flow labeled illustrative");
   assert((await page.evaluate(() => fetch("/data/ocean-mask.png").then((r) => r.ok))), "sea mask not published");
   // A failed load: the sketch, and the credits say it is not data.
   await page.unroute("**/api/ocean");
@@ -344,47 +348,60 @@ await check("ocean: wave marks drift with the live currents and swell (one reque
   assert(await page.evaluate(() => window.__ambience.running()), "water not moving on the illustrative drift");
 });
 
-await check("lakes and rivers: nothing loaded at Home; shimmer under every land fill, line, name and mark; faded where clusters sit on the water; the ticker stops where no water moves", async (page) => {
+await check("lakes and rivers: loaded once after the map rests; moving from Home; right below the clouds, above tints, below every line, name and mark; lake cells faded where clusters sit; rivers are long runs heading downstream; the ticker stops where no water moves", async (page) => {
   await cloudCalls(page, CLOUD_GRID);
   const files = [];
   page.on("request", (r) => { if (/water-shimmer\.geojson/.test(r.url())) files.push(r.url()); });
-  await open(page);
-  assert(files.length === 0 && !(await page.evaluate(() => !!window.__map.getSource("water-shimmer"))), "shimmer loaded at Home");
-  // Lake Tahoe: clusters ring the shore; the open lake shimmers, the cells under the clusters do not.
-  await jump(page, [-120.05, 39.09], 10.2);
-  await page.waitForFunction(() => window.__ambience.shimmer().loaded && window.__ambience.shimmer().shown > 0, null, { timeout: 15000 });
+  await open(page, "/?layers=state,leases,federal,local,waters");
+  await page.waitForFunction(() => window.__ambience.shimmer().loaded && window.__ambience.shimmer().shown > 0, null, { timeout: 20000 });
   await idle(page);
   assert(files.length === 1, `expected one shimmer request, got ${files.length}`);
+  // At Home the lakes and the Delta already move (and far river runs a little closer in).
+  const homeLakes = await page.evaluate(() => window.__map.queryRenderedFeatures({ layers: ["lake-shimmer"] }).length);
+  assert(homeLakes > 50, `${homeLakes} lake cells drawn at Home`);
+  // Rivers: runs long enough to hold the sliding pattern (2 km cells made every cell blink in step).
+  const runs = await page.evaluate(async () => {
+    const d = await (await fetch("/data/water-shimmer.geojson")).json();
+    const km = (c) => c.reduce((a, q, i) => (i ? a + Math.hypot((q[0] - c[i - 1][0]) * 88, (q[1] - c[i - 1][1]) * 110.6) : 0), 0);
+    const of = (k) => d.features.filter((f) => f.properties.k === k).map((f) => km(f.geometry.coordinates)).sort((a, b) => a - b);
+    const near = of("river"), far = of("riverfar");
+    return { near: near.length, nearMedian: near[near.length >> 1], far: far.length, farMedian: far[far.length >> 1], lakes: of("lake").length };
+  });
+  assert(runs.near > 100 && runs.nearMedian > 15 && runs.far > 30 && runs.farMedian > 25, `river runs: ${JSON.stringify(runs)}`);
+  // Lake Tahoe: clusters ring the shore; the open lake shimmers, the cells under the clusters do not.
+  await jump(page, [-120.05, 39.09], 10.2);
+  await idle(page);
   const ids = await order(page);
   const at = (id) => { const i = ids.indexOf(id); assert(i >= 0, `layer ${id} missing`); return i; };
-  for (const id of ["lake-shimmer", "river-drift"]) {
-    assert(at(id) > at("water"), `${id} is under the lakes`);
-    for (const above of ["water-ocean", "access-fill", "clouds", "county-line", "label-water", "cluster", "cluster-count", "lease-pt", "lease-icon"]) assert(at(id) < at(above), `${id} is drawn over ${above}`);
+  assert(ids.some((id) => id === "sov-wb"), "sovereign lake beds not loaded for the order check");
+  for (const id of ["lake-shimmer", "river-drift", "river-drift-far"]) {
+    for (const below of ["water", "water-ocean", "access-fill", "sov-wb", "hillshade"]) assert(at(id) > at(below), `${id} is under ${below}`);
+    for (const above of ["clouds", "county-line", "label-water", "cluster", "cluster-count", "lease-pt", "lease-icon"]) assert(at(id) < at(above), `${id} is drawn over ${above}`);
   }
   const c = await page.evaluate(() => window.__ambience.shimmer());
   assert(c.hidden > 0 && c.hidden < c.shown, `Tahoe cells: ${JSON.stringify(c)}`);
-  // Every cluster on screen: no shimmer cell under its disc is left showing.
+  // Every cluster on screen: no lake cell under its disc is left showing.
   const bare = await page.evaluate(() => {
     const m = window.__map;
     let n = 0;
     for (const f of m.queryRenderedFeatures({ layers: ["cluster"] })) {
       const p = m.project(f.geometry.coordinates);
-      for (const g of m.queryRenderedFeatures([[p.x - 4, p.y - 4], [p.x + 4, p.y + 4]], { layers: ["lake-shimmer", "river-drift"] })) if ((m.getFeatureState({ source: "water-shimmer", id: g.id }).hide ?? 0) < 1) n++;
+      for (const g of m.queryRenderedFeatures([[p.x - 4, p.y - 4], [p.x + 4, p.y + 4]], { layers: ["lake-shimmer"] })) if ((m.getFeatureState({ source: "water-shimmer", id: g.id }).hide ?? 0) < 1) n++;
     }
     return n;
   });
-  assert(bare === 0, `${bare} shimmer cells still showing under a cluster`);
-  // One ticker: about 12 redraws a second, and it outlives the ocean's (zoom 11) while lake water is in view (to zoom 12).
-  await jump(page, [-120.05, 39.09], 11.5);
-  assert(await page.evaluate(() => window.__ambience.running()), "lake not moving at zoom 11.5");
+  assert(bare === 0, `${bare} lake cells still showing under a cluster`);
+  // One ticker: about 12 redraws a second, and it outlives the ocean's (zoom 11.5) while lake water is in view (through zoom 12).
+  await jump(page, [-120.05, 39.09], 12);
+  assert(await page.evaluate(() => window.__ambience.running()), "lake not moving at zoom 12");
   await page.evaluate(() => { window.__renders = 0; window.__map.on("render", () => window.__renders++); });
   await page.waitForTimeout(3000);
   const n = await page.evaluate(() => window.__renders);
   assert(n > 20 && n < 48, `${n} renders in 3 s over Lake Tahoe (expected about 36)`);
   // No moving water in view: nothing animates. Past the shimmer's last zoom: nothing either.
-  await jump(page, [-119.78, 36.74], 11.5);
+  await jump(page, [-119.78, 36.72], 11.8);
   await page.waitForTimeout(600);
-  assert(!(await page.evaluate(() => window.__ambience.running())), "animation running over Fresno at zoom 11.5 (no lake or river in view)");
+  assert(!(await page.evaluate(() => window.__ambience.running())), "animation running over Fresno at zoom 11.8 (no lake or river in view)");
   await jump(page, [-120.05, 39.09], 12.6);
   await page.waitForTimeout(600);
   assert(!(await page.evaluate(() => window.__ambience.running())), "animation running at zoom 12.6");
@@ -403,9 +420,6 @@ await check("sea floor: one smooth depth picture drawn in soft bands by a shader
   assert(r.after === "water-ocean" || r.after.startsWith("sov-"), `ocean-depth sits above ${r.after}`);
   assert(!r.dem, "a layer still shades depth from the terrain tiles");
   assert(r.ok && r.kb < 600, `depth picture: ok ${r.ok}, ${r.kb} KB`);
-});
-  assert(r.source === "depthDem", `ocean-depth reads ${r.source}`);
-  assert(r.maxzoom <= 8, `depth tiles go to zoom ${r.maxzoom}`);
 });
 
 await check("clouds: the switch shows the served grid's model time and its age; a stale grid is marked; gone when off", async (page) => {
@@ -429,10 +443,16 @@ await check("clouds: the switch shows the served grid's model time and its age; 
 await check("idle is idle: no map renders at rest once nothing animates", async (page) => {
   await cloudCalls(page, CLOUD_GRID);
   await open(page);
-  await jump(page, [-121.5, 38.55], 12);
+  const renders = () => page.evaluate(() => new Promise((r) => { let k = 0; const f = () => k++; window.__map.on("render", f); setTimeout(() => { window.__map.off("render", f); r(k); }, 3000); }));
+  // Zoom 12 with no sea, lake or river in view (Fresno); then the Sacramento River past the moving water's last zoom.
+  await jump(page, [-119.78, 36.72], 12);
   await page.waitForTimeout(1500);
-  const n = await page.evaluate(() => new Promise((r) => { let k = 0; const f = () => k++; window.__map.on("render", f); setTimeout(() => { window.__map.off("render", f); r(k); }, 3000); }));
-  assert(n === 0, `${n} renders in 3 s at rest (zoom 12, nothing animating)`);
+  let n = await renders();
+  assert(n === 0, `${n} renders in 3 s at rest (zoom 12, no water in view)`);
+  await jump(page, [-121.5, 38.55], 12.6);
+  await page.waitForTimeout(1500);
+  n = await renders();
+  assert(n === 0, `${n} renders in 3 s at rest (zoom 12.6 on the Sacramento River)`);
   // At Home the ticker runs at about 12 frames a second, never the display's 60.
   await page.evaluate(() => window.__map.jumpTo({ center: [-119.4, 37.2], zoom: 5.6 }));
   await idle(page);

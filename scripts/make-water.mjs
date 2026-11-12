@@ -4,7 +4,7 @@
 //
 //   data/ref/ocean-mask.png       where the sea is (white) around California: the moving wave marks are
 //                                 drawn by a shader and need to know where land is
-//   data/ref/water-shimmer.geojson the big lakes (Tahoe, Clear Lake, Mono, Shasta, the Salton Sea) and the
+//   data/ref/water-shimmer.geojson the big lakes (Tahoe, Clear Lake, Mono, Shasta, the Salton Sea), nine large reservoirs and the
 //                                 Delta's channels as polygons, and the major rivers as lines running
 //                                 downstream, all cut into cells of about 2 km, each with an id: the map
 //                                 fades the shimmer cell by cell wherever lease marks sit on the water
@@ -36,8 +36,22 @@ const LAKES = [
   { name: "Mono Lake", box: [-119.17, 37.9, -118.88, 38.09] },
   { name: "Shasta Lake", box: [-122.5, 40.65, -122.05, 40.95] },
   { name: "Salton Sea", box: [-116.15, 33.05, -115.5, 33.55] },
+  // The larger reservoirs.
+  { name: "Lake Oroville", box: [-121.6, 39.5, -121.25, 39.82] },
+  { name: "Lake Berryessa", box: [-122.33, 38.48, -122.1, 38.72] },
+  { name: "Folsom Lake", box: [-121.2, 38.69, -121.02, 38.83] },
+  { name: "Lake Almanor", box: [-121.25, 40.15, -121.03, 40.33] },
+  { name: "Trinity Lake", box: [-122.85, 40.78, -122.6, 41.05] },
+  { name: "New Melones Lake", box: [-120.6, 37.92, -120.42, 38.08] },
+  { name: "Don Pedro Reservoir", box: [-120.45, 37.67, -120.27, 37.86] },
+  { name: "San Luis Reservoir", box: [-121.2, 37.0, -121.03, 37.12] },
+  { name: "Eagle Lake", box: [-120.82, 40.55, -120.63, 40.75] },
   // The Delta: every channel and flooded tract the basemap draws as water (not the bays, which are sea).
   { name: "Sacramento–San Joaquin Delta", box: [-122.15, 37.75, -121.25, 38.45], any: true },
+  // The Delta's wide tidal channels: OpenStreetMap's coastline runs up them past Antioch and Rio Vista, so the
+  // basemap calls them sea, and they are too narrow for the wave marks' sea mask. East of Suisun Bay only (the
+  // bay itself carries the wave marks).
+  { name: "Delta tidal channels", box: [-121.95, 37.75, -121.25, 38.45], any: true, sea: true },
 ];
 /** Major rivers, by the basemap's name, with a point at the mouth (to check they run downstream). */
 const RIVERS = {
@@ -51,6 +65,7 @@ const RIVERS = {
   "Eel River": [-124.31, 40.64],
   "Russian River": [-123.13, 38.45],
   "Pit River": [-122.4, 40.76],
+  "Salinas River": [-121.8, 36.75],
 };
 
 const outline = JSON.parse(fs.readFileSync(path.join(root, "data/ref/ca-outline.geojson"), "utf8"));
@@ -242,7 +257,7 @@ for (const lake of LAKES) {
     const polys = [];
     for (let i = 0; i < layer.length; i++) {
       const f = layer.feature(i);
-      if (f.type !== 3 || f.properties.class === "ocean" || (!lake.any && f.properties.class !== "lake")) continue;
+      if (f.type !== 3 || (f.properties.class === "ocean") !== !!lake.sea || (!lake.any && f.properties.class !== "lake")) continue;
       if (f.properties.intermittent === 1) continue;
       const g = f.toGeoJSON(tx, ty, DETAIL_Z).geometry;
       polys.push(...(g.type === "Polygon" ? [g.coordinates] : g.coordinates));
@@ -250,7 +265,8 @@ for (const lake of LAKES) {
     for (const [cx, cy] of cellsOf(tx, ty)) {
       const box = cellBox(cx, cy);
       const mid = [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2];
-      if (mid[0] < w || mid[0] > e || mid[1] < s || mid[1] > n || !inCA(mid)) continue;
+      // The state outline follows the shoreline, so tidal water is outside it: the tidal channels' box is all California.
+      if (mid[0] < w || mid[0] > e || mid[1] < s || mid[1] > n || (!lake.sea && !inCA(mid))) continue;
       const parts = [];
       for (const poly of polys) {
         const outer = clipRing(poly[0].slice(0, -1), box);
@@ -262,7 +278,7 @@ for (const lake of LAKES) {
         area += km2(outer) - holes.reduce((a, h) => a + km2(h), 0);
       }
       if (!parts.length) continue;
-      features.push({ type: "Feature", id: id++, properties: { k: "lake", c: mid.map(r5) }, geometry: parts.length === 1 ? { type: "Polygon", coordinates: parts[0] } : { type: "MultiPolygon", coordinates: parts } });
+      features.push({ type: "Feature", id: id++, properties: { k: lake.any ? "delta" : "lake", c: mid.map(r5) }, geometry: parts.length === 1 ? { type: "Polygon", coordinates: parts[0] } : { type: "MultiPolygon", coordinates: parts } });
       count++;
     }
   });
@@ -295,38 +311,121 @@ for (const lake of LAKES) {
         }
     }
   });
+  // Each river as long runs heading downstream. The drift is a pattern that slides along a line, and it
+  // starts again at the start of every line: cut into 2 km cells (the first version) every cell showed
+  // the same few pixels of it and the river blinked instead of flowing. So the tile-clipped pieces are
+  // joined end to start into chains, turned to run toward the mouth, and cut into runs long enough
+  // to hold the pattern: 24 km for close zooms ("river"), 96 km for far ones ("riverfar"). Each run
+  // carries points along itself (about every 2 km), which the map uses to fade it where marks sit on it.
+  const tileBox = (tx, ty) => { const n = 2 ** DETAIL_Z; return [lonOf(tx / n), latOf((ty + 1) / n), lonOf((tx + 1) / n), latOf(ty / n)]; };
+  const kmBetween = (a, b) => Math.hypot((b[0] - a[0]) * 111.32 * Math.cos((a[1] * Math.PI) / 180), (b[1] - a[1]) * 110.57);
+  const lengthKm = (l) => l.reduce((a, q, i) => (i ? a + kmBetween(l[i - 1], q) : 0), 0);
+  /** Cuts a line into runs of about `km` (none shorter than a third of that, unless the line is). */
+  function runs(line, km) {
+    const total = lengthKm(line);
+    const n = Math.max(1, Math.round(total / km));
+    const each = total / n;
+    const out = [];
+    let cur = [line[0]], acc = 0;
+    for (let i = 1; i < line.length; i++) {
+      let a = line[i - 1];
+      const b = line[i];
+      let seg = kmBetween(a, b);
+      while (acc + seg > each && out.length < n - 1) {
+        const t = (each - acc) / seg;
+        const cut = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+        cur.push(cut);
+        out.push(cur);
+        cur = [cut];
+        a = cut;
+        seg = kmBetween(a, b);
+        acc = 0;
+      }
+      cur.push(b);
+      acc += seg;
+    }
+    out.push(cur);
+    return out;
+  }
+  /** Points along a line about every `km`, ends included. */
+  function samples(line, km = 2) {
+    const out = [line[0]];
+    let acc = 0;
+    for (let i = 1; i < line.length; i++) {
+      acc += kmBetween(line[i - 1], line[i]);
+      if (acc >= km) { out.push(line[i]); acc = 0; }
+    }
+    if (out.at(-1) !== line.at(-1)) out.push(line.at(-1));
+    return out;
+  }
   for (const [name, set] of want) {
     const mouth = RIVERS[name];
-    let count = 0, km = 0, toward = 0, away = 0;
+    const parts = [];
     await each([...set].map((k) => k.split(",").map(Number)), async ([tx, ty]) => {
       const layer = (await tile(DETAIL_Z, tx, ty))?.layers.waterway;
       if (!layer) return;
-      const lines = [];
       for (let i = 0; i < layer.length; i++) {
         const f = layer.feature(i);
         if (nameOf(f.properties) !== name || f.properties.class !== "river" || f.properties.intermittent === 1) continue;
         const g = f.toGeoJSON(tx, ty, DETAIL_Z).geometry;
-        lines.push(...(g.type === "LineString" ? [g.coordinates] : g.coordinates));
-      }
-      for (const [cx, cy] of cellsOf(tx, ty)) {
-        const box = cellBox(cx, cy);
-        const mid = [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2];
-        if (!inCA(mid) && !(name === "Colorado River" && mid[1] < 35.01 && kmToCA(mid) < 3)) continue;
-        const parts = lines.flatMap((l) => clipLine(l, box));
-        if (!parts.length) continue;
-        for (const p of parts) {
-          const d = (q) => Math.hypot((q[0] - mouth[0]) * Math.cos((q[1] * Math.PI) / 180), q[1] - mouth[1]);
-          const len = p.reduce((a, q, i) => (i ? a + Math.hypot((q[0] - p[i - 1][0]) * 88, (q[1] - p[i - 1][1]) * 110.57) : 0), 0);
-          km += len;
-          if (d(p.at(-1)) < d(p[0])) toward += len; else away += len;
-        }
-        const coords = parts.map(tidy).filter((p) => p.length > 1);
-        if (!coords.length) continue;
-        features.push({ type: "Feature", id: id++, properties: { k: "river", c: mid.map(r5) }, geometry: coords.length === 1 ? { type: "LineString", coordinates: coords[0] } : { type: "MultiLineString", coordinates: coords } });
-        count++;
+        // Tiles overlap by a buffer: keep only what is inside this tile, so pieces meet at the edges.
+        for (const l of g.type === "LineString" ? [g.coordinates] : g.coordinates) parts.push(...clipLine(l, tileBox(tx, ty)).filter((q) => q.length > 1));
       }
     });
-    console.log(`${name}: ${count} cells, ${km.toFixed(0)} km, ${((100 * toward) / (toward + away || 1)).toFixed(0)}% of its length heads toward the mouth`);
+    // Join: a piece continues in the unused piece that starts nearest its end (within 40 m).
+    const B = 2000; // buckets of 0.0005 degrees
+    const starts = new Map();
+    const key = (x, y) => `${x},${y}`;
+    parts.forEach((q, i) => { const k = key(Math.round(q[0][0] * B), Math.round(q[0][1] * B)); (starts.get(k) ?? starts.set(k, []).get(k)).push(i); });
+    const used = new Uint8Array(parts.length);
+    const nextOf = (end) => {
+      let best = -1, bd = 0.04;
+      const bx = Math.round(end[0] * B), by = Math.round(end[1] * B);
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (const i of starts.get(key(bx + dx, by + dy)) ?? []) {
+        if (used[i]) continue;
+        const d = kmBetween(end, parts[i][0]);
+        if (d < bd) { bd = d; best = i; }
+      }
+      return best;
+    };
+    // Chains begin at pieces no other piece runs into.
+    const ends = new Map();
+    parts.forEach((q) => { const e = q.at(-1); const k = key(Math.round(e[0] * B), Math.round(e[1] * B)); ends.set(k, (ends.get(k) ?? 0) + 1); });
+    const hasFeeder = (q) => { const bx = Math.round(q[0][0] * B), by = Math.round(q[0][1] * B); for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) if (ends.get(key(bx + dx, by + dy))) return true; return false; };
+    const order = [...parts.keys()].sort((a, b) => Number(hasFeeder(parts[a])) - Number(hasFeeder(parts[b])));
+    const chains = [];
+    for (const i0 of order) {
+      if (used[i0]) continue;
+      const chain = [...parts[i0]];
+      used[i0] = 1;
+      for (let n = nextOf(chain.at(-1)); n >= 0; n = nextOf(chain.at(-1))) { used[n] = 1; chain.push(...parts[n].slice(1)); }
+      chains.push(chain);
+    }
+    const d = (q) => Math.hypot((q[0] - mouth[0]) * Math.cos((q[1] * Math.PI) / 180), q[1] - mouth[1]);
+    let count = 0, far = 0, km = 0, turned = 0;
+    for (const raw of chains) {
+      const len = lengthKm(raw);
+      if (len < 0.3) continue;
+      // Downstream is toward the mouth. OpenStreetMap draws rivers downstream already; a chain that runs away is turned.
+      // Only a chain that clearly runs away from the mouth (by a fifth of its length or more) is turned: a meander can end a little further from it.
+      const away = (d(raw.at(-1)) - d(raw[0])) * 100 > 0.2 * len;
+      const chain = away ? (turned += len, [...raw].reverse()) : raw;
+      for (const [k, runKm] of [["river", 24], ["riverfar", 96]]) {
+        for (const run of runs(chain, runKm)) {
+          const pts = samples(run).filter((q) => inCA(q) || (name === "Colorado River" && q[1] < 35.01 && kmToCA(q) < 3));
+          if (pts.length < 2) continue;
+          // Keep the stretch inside California (the Colorado: along it; the Klamath: from the Oregon line).
+          const inside = run.filter((q) => inCA(q) || (name === "Colorado River" && q[1] < 35.01 && kmToCA(q) < 3));
+          const line = inside.length >= 2 ? inside : run;
+          // Far runs are only seen from far: a coarser line.
+          const coords = k === "river" ? tidy(line) : tidy(thin(line, 0.0006));
+          if (coords.length < 2) continue;
+          features.push({ type: "Feature", id: id++, properties: { k, c: pts.flatMap((q) => q.map(r5)) }, geometry: { type: "LineString", coordinates: coords } });
+          if (k === "river") { count++; km += lengthKm(coords); } else far++;
+        }
+      }
+    }
+    console.log(`${name}: ${chains.length} chains from ${parts.length} pieces, ${count} runs (${far} far), ${km.toFixed(0)} km, ${((100 * turned) / (km || 1)).toFixed(0)}% turned to head for the mouth`);
   }
 }
 

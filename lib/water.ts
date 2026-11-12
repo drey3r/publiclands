@@ -1,28 +1,42 @@
 import type { Map as MLMap, StyleImageInterface } from "maplibre-gl";
 
 /**
- * Inland water with a little movement: a faint glint on the big lakes (Tahoe, Clear Lake, Mono,
- * Shasta, the Salton Sea) and the Delta's channels, and light dashes sliding downstream on the major
- * rivers.
+ * Inland water that visibly moves, gently: glints on the big lakes (Tahoe, Clear Lake, Mono, Shasta,
+ * the Salton Sea), nine large reservoirs and the Delta's channels, and light dashes sliding downstream
+ * on the major rivers. Illustrative, not data.
  *
- * The shapes are our own copy of the basemap's water, cut into cells of about 2 km, each with an id
- * (data/ref/water-shimmer.geojson, scripts/make-water.mjs). That is what lets the shimmer step aside:
- * wherever a cluster, lease mark or icon sits on the water, the cells under and around it are faded
- * out (feature state, set when the map comes to rest; no per-frame work).
+ * The shapes are our own copy of the basemap's water (data/ref/water-shimmer.geojson,
+ * scripts/make-water.mjs), in pieces with ids: lakes and the Delta in cells of about 2 km, rivers in
+ * long runs heading downstream (24 km for close zooms, 96 km for far ones: the dashes are a pattern
+ * that slides along a line and starts again with every line, so a run must be longer than the pattern).
+ * The pieces are what lets the movement step aside: wherever a cluster, lease mark or icon sits on the
+ * water, the pieces under and around it are faded out (feature state, set when the map comes to rest;
+ * no per-frame work).
  *
- * Cost: nothing at Home. The file is fetched the first time the reader zooms past SHIMMER_MIN_Z, the
- * two small patterns are redrawn by the ambience ticker only while shimmering water is in view, and
- * the layers sit below every land fill, line, name and mark. Not loaded on phones.
+ * The layers sit right below the clouds: above the water's own color and the sovereign-lands tint
+ * (which covered the first version on Tahoe and Clear Lake), below county lines, every name and every
+ * mark. The lakes and the Delta show from Home, the rivers from a little closer; all of it to zoom
+ * 12. The file is fetched once, after the map first comes to rest; the small patterns are redrawn by
+ * the ambience ticker only while moving water is in view. Not loaded on phones.
  */
 
 export const SHIMMER_SOURCE = "water-shimmer";
 export const LAKE_LAYER = "lake-shimmer";
+/** The Delta: narrow channels, so a finer, denser pattern than the open lakes (theirs put almost nothing on a channel 8 px wide). */
+export const DELTA_LAYER = "delta-shimmer";
+const DELTA_IMAGE = "delta-shimmer";
 export const RIVER_LAYER = "river-drift";
-/** The shimmer fades in from here (Home is lower on any screen that fits the state)… */
-export const SHIMMER_MIN_Z = 6.4;
-/** …and is gone by here, where lease icons and their detail own the water. */
-export const SHIMMER_MAX_Z = 12;
+export const RIVER_FAR_LAYER = "river-drift-far";
+/** Below this zoom the rivers are drawn from their long runs, above it from the shorter ones. */
+const RIVER_NEAR_Z = 8;
+/** The rivers' drift fades in from here (the lakes and the Delta show from Home). */
+export const RIVER_MIN_Z = 5.6;
+/** Whole to zoom 12, gone by here, where lease icons and their detail own the water. */
+export const SHIMMER_MAX_Z = 12.4;
 const LAKE_IMAGE = "lake-shimmer";
+/** A denser, smaller pattern for the zooms where a big lake is a few dozen pixels across. */
+const LAKE_IMAGE_FAR = "lake-shimmer-far";
+const LAKE_FAR_BELOW_Z = 7.6;
 const RIVER_IMAGE = "river-drift";
 /** Cells are tiles of this zoom (scripts/make-water.mjs CELL_Z). */
 const CELL_Z = 14;
@@ -38,50 +52,64 @@ function rng(seed: number) {
   };
 }
 
-/** Lakes: a seamless 96 px tile of a few short glints, each brightening and dimming on its own slow breath. */
+/**
+ * Lakes: a seamless tile of short glints, each a white arc over a darker one (so it reads on pale
+ * water), brightening and dimming on its own slow breath while the whole field drifts across.
+ */
 class LakePattern implements StyleImageInterface {
-  width = 192;
-  height = 192;
-  data = new Uint8ClampedArray(192 * 192 * 4);
+  width: number;
+  height: number;
+  data: Uint8ClampedArray;
   private ctx: CanvasRenderingContext2D;
   private glints: { x: number; y: number; len: number; period: number; phase: number }[] = [];
   private dirty = true;
 
-  constructor() {
+  /** `size`: the tile in CSS pixels; `count` glints of `len` to `len + more` pixels; `drift` pixels a second. */
+  constructor(private size: number, count: number, len: number, more: number, private drift: number, seed: number) {
+    this.width = this.height = size * 2;
+    this.data = new Uint8ClampedArray(this.width * this.height * 4);
     const c = document.createElement("canvas");
-    c.width = c.height = 192;
+    c.width = c.height = size * 2;
     this.ctx = c.getContext("2d", { willReadFrequently: true })!;
-    const r = rng(1851);
-    for (let tries = 0; this.glints.length < 9 && tries < 2000; tries++) {
-      const x = r() * 96, y = r() * 96;
+    const r = rng(seed);
+    const gap = size / Math.sqrt(count);
+    for (let tries = 0; this.glints.length < count && tries < 4000; tries++) {
+      const x = r() * size, y = r() * size;
       const ok = this.glints.every((g) => {
-        const dx = Math.min(Math.abs(g.x - x), 96 - Math.abs(g.x - x)), dy = Math.min(Math.abs(g.y - y), 96 - Math.abs(g.y - y));
-        return (dx / 26) ** 2 + (dy / 15) ** 2 > 1;
+        const dx = Math.min(Math.abs(g.x - x), size - Math.abs(g.x - x)), dy = Math.min(Math.abs(g.y - y), size - Math.abs(g.y - y));
+        return (dx / (gap * 1.05)) ** 2 + (dy / (gap * 0.6)) ** 2 > 1;
       });
-      if (ok) this.glints.push({ x, y, len: 3 + r() * 5, period: 3.5 + r() * 4, phase: r() * Math.PI * 2 });
+      if (ok) this.glints.push({ x, y, len: len + r() * more, period: 2.6 + r() * 2.8, phase: r() * Math.PI * 2 });
     }
   }
 
   draw(t: number) {
-    const { ctx } = this;
+    const { ctx, size } = this;
     ctx.setTransform(2, 0, 0, 2, 0, 0);
-    ctx.clearRect(0, 0, 96, 96);
+    ctx.clearRect(0, 0, size, size);
     ctx.lineCap = "round";
-    ctx.lineWidth = 1;
-    const drift = (t * 0.7) % 96;
+    const drift = (t * this.drift) % size;
     for (const g of this.glints) {
-      const s = Math.sin((t * Math.PI * 2) / g.period + g.phase);
-      if (s <= 0) continue; // dark half its time: a glint, not a pattern
-      ctx.strokeStyle = `rgba(250,252,253,${(0.55 * s * s).toFixed(3)})`;
-      const x = (g.x + drift) % 96, half = (g.len * (0.6 + 0.4 * s)) / 2;
-      for (const dx of [-96, 0, 96]) {
-        if (x + dx < -8 || x + dx > 104) continue;
-        ctx.beginPath();
-        // A shallow arc, like a small wave mark, not a ruled dash.
-        ctx.moveTo(x + dx - half, g.y + 0.5);
-        ctx.quadraticCurveTo(x + dx, g.y - 0.9, x + dx + half, g.y + 0.5);
-        ctx.stroke();
-      }
+      // Bright most of its time, with a slow dip to nothing: movement you can see, never a blink.
+      const s = Math.max(0, 0.62 + 0.5 * Math.sin((t * Math.PI * 2) / g.period + g.phase));
+      if (s <= 0.02) continue;
+      const a = Math.min(1, s);
+      const x = (g.x + drift) % size, half = (g.len * (0.7 + 0.3 * a)) / 2;
+      // A little rise and fall with the breath.
+      const y = g.y + 0.8 * Math.sin((t * Math.PI * 2) / (g.period * 1.7) + g.phase);
+      for (const dx of [-size, 0, size])
+        for (const dy of [-size, 0, size]) {
+          if (x + dx < -12 || x + dx > size + 12 || y + dy < -4 || y + dy > size + 4) continue;
+          for (const [off, style, w] of [[1.1, `rgba(74,112,138,${(0.5 * a).toFixed(3)})`, 1.1], [0, `rgba(255,255,255,${(0.95 * a).toFixed(3)})`, 1.35]] as const) {
+            ctx.strokeStyle = style;
+            ctx.lineWidth = w;
+            ctx.beginPath();
+            // A shallow arc, like a small wave mark, not a ruled dash.
+            ctx.moveTo(x + dx - half, y + dy + off + 0.5);
+            ctx.quadraticCurveTo(x + dx, y + dy + off - 1.1, x + dx + half, y + dy + off + 0.5);
+            ctx.stroke();
+          }
+        }
     }
     this.dirty = true;
   }
@@ -89,31 +117,35 @@ class LakePattern implements StyleImageInterface {
   render() {
     if (!this.dirty) return false;
     this.dirty = false;
-    this.data.set(this.ctx.getImageData(0, 0, 192, 192).data);
+    this.data.set(this.ctx.getImageData(0, 0, this.width, this.height).data);
     return true;
   }
 }
 
-/** Rivers: soft light dashes that slide along the line, which runs downstream. */
+/** Rivers: bright dashes with a darker edge that slide along the line, which runs downstream. */
 class RiverPattern implements StyleImageInterface {
   width = 192;
-  height = 8;
-  data = new Uint8ClampedArray(192 * 8 * 4);
+  height = 12;
+  data = new Uint8ClampedArray(192 * 12 * 4);
   private dirty = true;
 
   draw(t: number) {
     const { width: W, height: H, data } = this;
     for (let x = 0; x < W; x++) {
-      // Two dashes a tile (so it repeats), about 6 px a second downstream, the second one fainter.
-      const p = ((x / W) * 2 - t / 16) % 1;
+      // Two dashes a tile (so it repeats), about 14 px a second downstream, the second one fainter.
+      const p = ((x / W) * 2 - t / 6.9) % 1;
       const u = p < 0 ? p + 1 : p;
-      const dash = Math.max(0, Math.sin(Math.PI * Math.min(1, u / 0.3))) ** 2;
-      const which = Math.floor((x / W) * 2 - t / 16) & 1 ? 0.6 : 1;
+      const dash = Math.max(0, Math.sin(Math.PI * Math.min(1, u / 0.5)));
+      const which = Math.floor((x / W) * 2 - t / 6.9) & 1 ? 0.7 : 1;
       for (let y = 0; y < H; y++) {
         const d = Math.abs((y + 0.5) / H - 0.5) * 2;
         const o = (y * W + x) * 4;
-        data[o] = data[o + 1] = data[o + 2] = 255;
-        data[o + 3] = Math.round(165 * dash * which * (1 - d * d));
+        // White core, a blue-grey rim: the dash reads on pale water and on pale land alike.
+        const core = d < 0.56;
+        data[o] = core ? 255 : 74;
+        data[o + 1] = core ? 255 : 112;
+        data[o + 2] = core ? 255 : 138;
+        data[o + 3] = Math.round(255 * dash * which * (core ? 1 : 0.62 * (1 - (d - 0.56) / 0.44)));
       }
     }
     this.dirty = true;
@@ -137,14 +169,17 @@ export type Shimmer = {
 };
 
 /**
- * Adds the lake and river shimmer below `before` (the lowest layer that must stay above it) once the
- * reader first zooms in past SHIMMER_MIN_Z. `onChange` is called when what is visible changes (the
+ * Adds the lake and river shimmer below `before` (the lowest layer that must stay above it), once the
+ * map has first come to rest. `onChange` is called when what is visible changes (the
  * ticker may need to start or stop).
  */
 export function addShimmer(m: MLMap, opts: { url?: string; before: () => string | undefined; onChange: () => void }): Shimmer {
-  const lake = new LakePattern();
+  const lake = new LakePattern(96, 24, 5.5, 6, 3.2, 1851);
+  const lakeFar = new LakePattern(40, 10, 2.6, 2.4, 1.6, 977);
+  const delta = new LakePattern(36, 13, 3.4, 3, 4.5, 4409);
   const river = new RiverPattern();
-  let cells: { id: number; x: number; y: number }[] = []; // mercator centres
+  /** Each piece: its kind and points on it in mercator (a cell's centre; along a river run, about every 2 km). */
+  let cells: { id: number; k: "lake" | "delta" | "river" | "riverfar"; pts: number[] }[] = [];
   let state: "none" | "loading" | "ready" | "failed" = "none";
   let dead = false;
   let shown = 0;
@@ -152,12 +187,11 @@ export function addShimmer(m: MLMap, opts: { url?: string; before: () => string 
   const hide = new Map<number, number>();
   let timer: ReturnType<typeof setTimeout> | null = null;
 
-  const inZoom = () => m.getZoom() >= SHIMMER_MIN_Z && m.getZoom() < SHIMMER_MAX_Z;
+  const inZoom = () => m.getZoom() < SHIMMER_MAX_Z;
   // Zoom must be the outermost expression: the per-cell fade goes inside its stops.
-  const opacity = (k: number) => {
-    const cell = ["*", k, ["-", 1, ["coalesce", ["feature-state", "hide"], 0]]];
-    return ["interpolate", ["linear"], ["zoom"], SHIMMER_MIN_Z, 0, SHIMMER_MIN_Z + 0.7, cell, 10.8, cell, SHIMMER_MAX_Z, 0];
-  };
+  const cell = ["-", 1, ["coalesce", ["feature-state", "hide"], 0]];
+  const opacity = (from: number, to: number) =>
+    ["interpolate", ["linear"], ["zoom"], ...(from > 0 ? [from, 0, from + 0.5, cell] : [0, cell]), ...(to < 12 ? [to - 0.25, cell, to + 0.25, 0] : [12, cell, SHIMMER_MAX_Z, 0])];
 
   async function load() {
     if (state !== "none" || dead) return;
@@ -168,12 +202,18 @@ export function addShimmer(m: MLMap, opts: { url?: string; before: () => string 
       const data = (await res.json()) as GeoJSON.FeatureCollection;
       if (dead) return;
       cells = data.features.map((f) => {
-        const [lon, lat] = (f.properties as { c: [number, number] }).c;
-        return { id: f.id as number, x: (lon + 180) / 360, y: 0.5 - Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) / (2 * Math.PI) };
+        const { k, c } = f.properties as { k: "lake" | "delta" | "river" | "riverfar"; c: number[] };
+        const pts: number[] = [];
+        for (let i = 0; i + 1 < c.length; i += 2) pts.push((c[i] + 180) / 360, 0.5 - Math.log(Math.tan(Math.PI / 4 + (c[i + 1] * Math.PI) / 360)) / (2 * Math.PI));
+        return { id: f.id as number, k, pts };
       });
       lake.draw(40);
+      lakeFar.draw(40);
+      delta.draw(40);
       river.draw(40);
       if (!m.hasImage(LAKE_IMAGE)) m.addImage(LAKE_IMAGE, lake, { pixelRatio: 2 });
+      if (!m.hasImage(LAKE_IMAGE_FAR)) m.addImage(LAKE_IMAGE_FAR, lakeFar, { pixelRatio: 2 });
+      if (!m.hasImage(DELTA_IMAGE)) m.addImage(DELTA_IMAGE, delta, { pixelRatio: 2 });
       if (!m.hasImage(RIVER_IMAGE)) m.addImage(RIVER_IMAGE, river, { pixelRatio: 2 });
       m.addSource(SHIMMER_SOURCE, { type: "geojson", data, tolerance: 0.2, buffer: 8 });
       const before = opts.before();
@@ -183,29 +223,33 @@ export function addShimmer(m: MLMap, opts: { url?: string; before: () => string 
           type: "fill",
           source: SHIMMER_SOURCE,
           filter: ["==", ["get", "k"], "lake"],
-          minzoom: SHIMMER_MIN_Z,
           maxzoom: SHIMMER_MAX_Z,
-          paint: { "fill-pattern": LAKE_IMAGE, "fill-opacity": opacity(1) as unknown as number },
+          paint: { "fill-pattern": ["step", ["zoom"], LAKE_IMAGE_FAR, LAKE_FAR_BELOW_Z, LAKE_IMAGE] as unknown as string, "fill-opacity": opacity(0, 12) as unknown as number },
         },
         before,
       );
       m.addLayer(
-        {
-          id: RIVER_LAYER,
-          type: "line",
-          source: SHIMMER_SOURCE,
-          filter: ["==", ["get", "k"], "river"],
-          minzoom: SHIMMER_MIN_Z,
-          maxzoom: SHIMMER_MAX_Z,
-          layout: { "line-join": "round", "line-cap": "butt" },
-          paint: {
-            "line-pattern": RIVER_IMAGE,
-            "line-width": ["interpolate", ["linear"], ["zoom"], 6, 2.2, 9, 3, 12, 4.5],
-            "line-opacity": opacity(0.9) as unknown as number,
-          },
-        },
+        { id: DELTA_LAYER, type: "fill", source: SHIMMER_SOURCE, filter: ["==", ["get", "k"], "delta"], maxzoom: SHIMMER_MAX_Z, paint: { "fill-pattern": DELTA_IMAGE, "fill-opacity": opacity(0, 12) as unknown as number } },
         before,
       );
+      for (const [id, k, from, to] of [[RIVER_FAR_LAYER, "riverfar", RIVER_MIN_Z, RIVER_NEAR_Z], [RIVER_LAYER, "river", RIVER_NEAR_Z - 0.25, 12]] as const)
+        m.addLayer(
+          {
+            id,
+            type: "line",
+            source: SHIMMER_SOURCE,
+            filter: ["==", ["get", "k"], k],
+            minzoom: from,
+            maxzoom: to < 12 ? to + 0.25 : SHIMMER_MAX_Z,
+            layout: { "line-join": "round", "line-cap": "butt" },
+            paint: {
+              "line-pattern": RIVER_IMAGE,
+              "line-width": ["interpolate", ["linear"], ["zoom"], 6, 3.2, 9, 5, 12, 6.5],
+              "line-opacity": opacity(from, to) as unknown as number,
+            },
+          },
+          before,
+        );
       state = "ready";
       schedule();
     } catch (e) {
@@ -251,29 +295,49 @@ export function addShimmer(m: MLMap, opts: { url?: string; before: () => string 
     const W = m.getContainer().clientWidth, H = m.getContainer().clientHeight;
     const half = ws / 2 ** CELL_Z / 2; // half a cell, in pixels
     const top = m.getPitch() < 1 && Math.abs(m.getBearing()) < 0.5;
-    const pts = marks();
+    const marksNow = marks();
     const next = new Map<number, number>();
     shown = hiddenCount = 0;
     for (const cell of cells) {
-      // Top-down the screen position is plain arithmetic; tilted or turned, ask the map.
-      let x: number, y: number;
-      if (top) {
-        x = (cell.x - cx) * ws + W / 2;
-        y = (cell.y - cy) * ws + H / 2;
-      } else {
-        const p = m.project([cell.x * 360 - 180, (Math.atan(Math.sinh(Math.PI * (1 - 2 * cell.y))) * 180) / Math.PI]);
-        x = p.x;
-        y = p.y;
-      }
-      if (x < -half - 60 || y < -half - 60 || x > W + half + 60 || y > H + half + 60) continue;
+      if (cell.k === "river" ? z < RIVER_NEAR_Z - 0.25 : cell.k === "riverfar" ? z < RIVER_MIN_Z || z > RIVER_NEAR_Z + 0.25 : false) continue;
+      // A lake cell reaches half a cell from its centre; a river run is its points.
+      const still = cell.k === "lake" || cell.k === "delta"; // a cell of standing water, not a river run
+      const reach = still ? half : 0;
+      let on = false;
       let h = 0;
-      for (const p of pts) {
-        // Clear of the mark's edge by 6 px (plus the cell's own reach): hidden. 30 px further: whole again.
-        const d = Math.hypot(p.x - x, p.y - y) - p.r - half - 6;
-        if (d >= 30) continue;
-        h = Math.max(h, d <= 0 ? 1 : 1 - d / 30);
-        if (h >= 1) break;
+      let seen = 0, covered = 0;
+      for (let i = 0; i < cell.pts.length && (h < 1 || !still); i += 2) {
+        // Top-down the screen position is plain arithmetic; tilted or turned, ask the map.
+        let x: number, y: number;
+        if (top) {
+          x = (cell.pts[i] - cx) * ws + W / 2;
+          y = (cell.pts[i + 1] - cy) * ws + H / 2;
+        } else {
+          const p = m.project([cell.pts[i] * 360 - 180, (Math.atan(Math.sinh(Math.PI * (1 - 2 * cell.pts[i + 1]))) * 180) / Math.PI]);
+          x = p.x;
+          y = p.y;
+        }
+        if (x < -reach - 40 || y < -reach - 40 || x > W + reach + 40 || y > H + reach + 40) continue;
+        on = true;
+        seen++;
+        if (!still) {
+          // A river run passes under the marks on it (they are drawn above it) and shows between them;
+          // it is faded out only where nearly all of it on screen lies under marks.
+          if (marksNow.some((p) => Math.hypot(p.x - x, p.y - y) < p.r + 4)) covered++;
+          continue;
+        }
+        for (const p of marksNow) {
+          // Under the mark or touching its edge (2 px, plus half the cell's own reach): hidden. 10 px further:
+          // whole again. Tight on purpose: the Delta's channels are lined with marks, and a wider calm
+          // left no water moving there at all.
+          const d = Math.hypot(p.x - x, p.y - y) - p.r - reach * 0.5 - 2;
+          if (d >= 10) continue;
+          h = Math.max(h, d <= 0 ? 1 : 1 - d / 10);
+          if (h >= 1) break;
+        }
       }
+      if (!on) continue;
+      if (!still) h = covered / seen > 0.85 ? 1 : 0;
       shown++;
       if (h >= 1) hiddenCount++;
       if (h > 0) next.set(cell.id, Math.round(h * 10) / 10);
@@ -287,7 +351,6 @@ export function addShimmer(m: MLMap, opts: { url?: string; before: () => string 
   }
   function schedule() {
     if (dead) return;
-    if (state === "none" && m.getZoom() >= SHIMMER_MIN_Z) load();
     if (state !== "ready") return;
     if (timer) clearTimeout(timer);
     timer = setTimeout(update, 160);
@@ -298,13 +361,17 @@ export function addShimmer(m: MLMap, opts: { url?: string; before: () => string 
   };
   m.on("moveend", schedule);
   m.on("sourcedata", onSource);
-  schedule();
+  // Fetched once the map has drawn and come to rest, so it never competes with the first view.
+  if (m.loaded() && !m.isMoving()) load();
+  else m.once("idle", load);
 
   return {
     draw(t) {
       if (state !== "ready") return;
-      lake.draw(t);
-      river.draw(t);
+      if (m.getZoom() < LAKE_FAR_BELOW_Z + 0.5) lakeFar.draw(t);
+      if (m.getZoom() > LAKE_FAR_BELOW_Z - 0.5) lake.draw(t);
+      delta.draw(t);
+      if (m.getZoom() >= RIVER_MIN_Z) river.draw(t);
     },
     visible: () => state === "ready" && inZoom() && shown - hiddenCount > 0,
     cells: () => ({ shown, hidden: hiddenCount, loaded: state === "ready" }),

@@ -146,8 +146,9 @@ Grant boundaries for Los Angeles, Long Beach, San Francisco and Oakland are not 
   2026-11-11 by asking for each model by name and comparing: currents from Météo-France / Mercator Ocean SMOC (0.08°,
   tides included, updated daily), swell from Météo-France MFWAM (0.08°, updated every 12 hours); both "generated using
   E.U. Copernicus Marine Service Information".
-- **What the map does with it:** the ocean's wave marks drift a few pixels along the current at their own place
-  (further where it is faster), and the bands of brighter marks roll in from the swell's direction at its period. It
+- **What the map does with it:** the ocean's wave marks slide along the current where they are, 5 to 14 screen
+  pixels a second at every zoom to 11.5 (faster where the current is; a speed chosen to be seen, not to scale), and
+  the bands of brighter marks roll in from the swell's direction at its period. It
   is the look of the water, not a chart: one value per degree, smoothed between. Open-Meteo's own caution: "Accuracy
   at coastal areas is limited. This is not suitable for coastal navigation".
 - **How it is fetched:** the server route `app/api/ocean/route.ts`, one request for the 91 points, cached for three
@@ -167,19 +168,24 @@ Grant boundaries for Los Angeles, Long Beach, San Francisco and Oakland are not 
   contributors) at zoom 7, drawn into a 2048 px picture by `scripts/make-water.mjs`.
 
 
-## Lakes and rivers that move a little (no live data)
+## Lakes and rivers that move (no live data)
 
-- A faint glint on Lake Tahoe, Clear Lake, Mono Lake, Shasta Lake, the Salton Sea and the channels of the
-  Sacramento–San Joaquin Delta, and light dashes sliding downstream on the Sacramento, San Joaquin, Klamath, Colorado,
-  American, Feather, Trinity, Eel, Russian and Pit rivers. **Illustrative, not data:** nothing here measures flow or
-  wind; the dashes follow the direction the river is drawn in (OpenStreetMap draws rivers downstream; checked per
-  river against its mouth when the file is built).
+- Glints on Lake Tahoe, Clear Lake, Mono Lake, Shasta Lake, the Salton Sea, nine large reservoirs (Oroville, Berryessa,
+  Folsom, Almanor, Trinity, New Melones, Don Pedro, San Luis, Eagle Lake) and the channels of the Sacramento–San
+  Joaquin Delta, and light dashes sliding downstream on the Sacramento, San Joaquin, Klamath, Colorado, American,
+  Feather, Trinity, Eel, Russian, Pit and Salinas rivers. **Illustrative, not data:** nothing here measures flow or
+  wind; the dashes follow the direction the river is drawn in (OpenStreetMap draws rivers downstream; a stretch that
+  clearly runs away from the river's mouth is turned when the file is built).
 - Shapes: `data/ref/water-shimmer.geojson`, cut by `scripts/make-water.mjs` from the basemap's own tiles (OpenFreeMap /
   OpenMapTiles, © OpenStreetMap contributors, ODbL; zoom 11) so they sit on the water the basemap draws, limited to
-  California, in cells of about 2 km. The cells are what let the shimmer fade wherever a cluster, lease mark or icon
-  sits on the water.
-- Loaded the first time the reader zooms in past Home (zoom 6.4), gone by zoom 12, not loaded on phones, and one
-  still frame for readers who prefer reduced motion.
+  California. Lakes and the Delta are in cells of about 2 km, which fade wherever a cluster, lease mark or icon sits
+  on the water. The Delta's wide tidal channels east of Suisun Bay are sea on the basemap (OpenStreetMap's coastline
+  runs up them) and too narrow for the wave marks; they are included with the Delta and get its finer glints. Rivers are in long runs (24 km close in, 96 km from far): the dashes are a pattern that slides along
+  a line and starts again with each line, so short pieces only blinked. A run passes under the marks on it.
+- Drawn right below the clouds (above the water's color and the sovereign-lands tint, below county lines, names and
+  marks). Lakes and the Delta from Home, rivers from a little closer, all through zoom 12. Loaded once, after the map
+  first comes to rest; not loaded on phones; one still frame for readers who prefer reduced motion. San Francisco Bay
+  and the other bays are sea on the basemap: they carry the ocean's wave marks.
 
 ## County boundaries
 

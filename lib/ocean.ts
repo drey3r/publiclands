@@ -18,8 +18,8 @@ import type { CustomLayerInterface, CustomRenderMethodInput, Map as MLMap } from
 const MASK = { west: -137, east: -107, south: 26, north: 48 };
 export const OCEAN_LAYER = "ocean-waves";
 /** Wave marks fade out by this zoom; past it nothing on the ocean moves (lease marks and icons own the water there). */
-export const WAVES_MAX_Z = 11;
-const waveOpacity = (z: number) => (z <= 8.5 ? 0.85 : z <= 10 ? 0.85 - (0.45 * (z - 8.5)) / 1.5 : Math.max(0, 0.4 * (WAVES_MAX_Z - z)));
+export const WAVES_MAX_Z = 11.5;
+const waveOpacity = (z: number) => (z <= 9.5 ? 0.85 : z <= 10.5 ? 0.85 - 0.25 * (z - 9.5) : Math.max(0, 0.6 * (WAVES_MAX_Z - z)));
 
 /** What /api/ocean returns. u, v: metres a second toward east and north, row by row from the south. */
 export type OceanFlow = {
@@ -71,9 +71,13 @@ void main() {
 /**
  * The marks live on a grid of cells in map pixels at a whole zoom level (one mark a cell, placed and
  * sized by a hash of the cell, some cells empty, rows staggered, so no grid shows). Between whole
- * zooms the two neighbouring levels cross-fade, as a map pattern does. Each mark is born, drifts a
- * few pixels along the current at its own place (further where the current is faster), fades, and
- * is born again where it began; it never leaves its cell, so a pixel only ever looks at one mark.
+ * zooms the two neighbouring levels cross-fade, as a map pattern does.
+ *
+ * Drift: the whole field of marks slides along the current where it is, 5 to 14 screen pixels a
+ * second (faster where the current is), at every zoom. A field that only slid would shear apart
+ * where the current turns, so there are two fields, each sliding for seven seconds from a fresh
+ * arrangement and fading in and out as it goes, half a cycle apart: one is always whole while the
+ * other is replaced. Where the current is almost nothing the marks go with the swell instead.
  */
 const FRAG = `#version 300 es
 precision highp float;
@@ -91,6 +95,7 @@ uniform float u_swellT;  // seconds for one swell to pass a point
 out vec4 o;
 const float PI = 3.141592653589793;
 const vec2 CELL = vec2(64.0, 34.0);
+const float CYCLE = 7.0;
 
 vec4 hash(ivec2 p, int level) {
   uvec3 q = uvec3(uint(p.x), uint(p.y), uint(level)) * uvec3(1597334673u, 3812015801u, 2798796415u);
@@ -107,30 +112,24 @@ vec2 flow(vec2 m) {
   return texture(u_flow, (uv * (u_flowRes - 1.0) + 0.5) / u_flowRes).rg * 2.0 - 1.0;
 }
 
-// White stroke (x) and its darker underline (y) for the level-L grid.
-vec2 marks(float L) {
+// White stroke (x) and its darker underline (y) for the level-L grid, for one of the two sliding fields.
+vec2 field(float L, vec2 slide, int seed) {
   float n = 512.0 * exp2(L);
-  vec2 P = v_m * n;
   float scale = exp2(u_zoom - L); // screen pixels per pattern pixel
+  vec2 P = v_m * n - slide / scale;
   float row = floor(P.y / CELL.y);
-  float shift = hash(ivec2(7, int(row)), int(L)).x * CELL.x;
+  int lv = int(L) + seed * 37;
+  float shift = hash(ivec2(7, int(row)), lv).x * CELL.x;
   float col = floor((P.x + shift) / CELL.x);
-  vec4 h = hash(ivec2(int(col), int(row)), int(L));
-  vec4 h2 = hash(ivec2(int(col) + 9173, int(row) - 577), int(L));
-  if (h2.w < 0.1) return vec2(0.0);
+  vec4 h = hash(ivec2(int(col), int(row)), lv);
+  vec4 h2 = hash(ivec2(int(col) + 9173, int(row) - 577), lv);
+  if (h2.w < 0.3) return vec2(0.0);
   vec2 origin = vec2(col * CELL.x - shift, row * CELL.y);
-  vec2 base = origin + CELL * 0.5 + (h.xy - 0.5) * vec2(30.0, 12.0);
-  // Drift with the current here.
-  vec2 f = flow((origin + CELL * 0.5) / n);
-  float sp = length(f);
-  vec2 dir = sp > 0.001 ? vec2(f.x, -f.y) / sp : vec2(0.0);
-  float life = fract(u_t / (8.0 + 5.0 * h.z) + h.w);
-  float travel = 3.0 + 10.0 * clamp(sp / 0.5, 0.0, 1.0);
-  vec2 c = base + dir * travel * (life - 0.5);
+  vec2 c = origin + CELL * 0.5 + (h.xy - 0.5) * vec2(30.0, 12.0);
   // The swell: a band of brighter, longer marks rolling along its real direction, two crests in 240 px.
-  float swell = 0.5 + 0.5 * sin(2.0 * PI * (u_t / u_swellT - dot(c, u_swellDir) / 120.0));
+  float swell = 0.5 + 0.5 * sin(2.0 * PI * (u_t / u_swellT - dot(c + slide / scale, u_swellDir) / 120.0));
   c.y += 1.1 * sin(u_t * 0.55 + h2.x * 6.283) * (0.4 + 0.6 * swell);
-  float a = (0.45 + 0.55 * h2.y) * (0.3 + 0.7 * swell) * smoothstep(0.0, 0.2, life) * smoothstep(1.0, 0.8, life);
+  float a = (0.5 + 0.5 * h2.y) * (0.35 + 0.65 * swell);
   float hl = (3.5 + 6.0 * h2.z) * (0.8 + 0.25 * swell);
   vec2 q = P - c;
   float u = q.x / hl;
@@ -141,7 +140,23 @@ vec2 marks(float L) {
   float ends = smoothstep(1.0, 0.82, abs(u));
   float white = (1.0 - smoothstep(0.45, 0.45 + soft, abs(q.y - curve))) * ends * a;
   float under = (1.0 - smoothstep(0.4, 0.4 + soft, abs(q.y - 1.0 - curve))) * ends * a;
-  return vec2(0.72 * white, 0.3 * under);
+  return vec2(0.74 * white, 0.3 * under);
+}
+
+vec2 marks(float L) {
+  // Which way and how fast the water goes here (screen pixels a second).
+  vec2 f = flow(v_m);
+  float sp = length(f);
+  vec2 dir = normalize(vec2(f.x, -f.y) + u_swellDir * 0.02);
+  float v = 5.0 + 9.0 * clamp(sp / 0.4, 0.0, 1.0);
+  vec2 sum = vec2(0.0);
+  for (int k = 0; k < 2; k++) {
+    float ph = u_t / CYCLE + 0.5 * float(k);
+    float life = fract(ph);
+    float w = smoothstep(0.0, 0.28, life) * smoothstep(1.0, 0.72, life);
+    sum += w * field(L, dir * v * CYCLE * (life - 0.5), k + 2 * int(mod(floor(ph), 512.0)));
+  }
+  return sum;
 }
 
 void main() {
