@@ -3,6 +3,40 @@
 Changes to the California Public Lands Map, newest first. Data snapshots and
 counts are unchanged unless an entry says otherwise.
 
+## 2026-11-11 · The living map, made to read: sea floor, clouds, moving water
+
+**Data:** counts unchanged (4,206 leases; categories, kinds and Worth watching groups as before). No lease or land
+data was touched. Weather requests unchanged (about 3,900 locations a day of Open-Meteo's 10,000).
+
+- **The dark blotches in Monterey Bay were the sea floor.** The depth shading was drawn straight from terrain tiles
+  scaled up from zoom 8, and their coarse samples (one about every 1.9 km) showed as soft dark blobs close in. The
+  sea floor is now drawn from one smoothed picture of the same bathymetry, in soft bands at 200 m, 500 m and every
+  500 m after, whose edges follow the depth contours: Monterey Canyon and the basins off Southern California read
+  as sea floor. The bands show shape, not a chart's detail. The shelf still keeps the plain water color.
+- **Clouds that look like clouds.** Sheets and banks with ragged edges, drawn out along the wind at each height,
+  in place of round puffs. The low layer has broad swells and long streaks in it, so a full deck is never a flat veil.
+- **A sky that is never empty, and says what is not data.** The low cloud is now the live cover or an illustrative
+  marine layer, whichever is more: a deck over the sea that touches the shore, whole along the coast and broken into
+  banks further out, fullest about 6 in the morning and lightest about 3 in the afternoon (California time). The
+  high layer always has a few thin wisps. Neither is data. The attribution reads "blended with an illustrative
+  marine layer", the Sources tab says so, and the time by the switch now reads "Live clouds as of" (the live part).
+- **A longer way down.** High cloud is passed by about zoom 7 and mid cloud by about zoom 8 (desktop); low cloud and
+  fog stay, thinning, to about zoom 9.5, then the air is clear. All layers drift at 6 to 13 screen pixels a second.
+- **The sea visibly moves.** The wave marks slide along the live current where they are, 5 to 14 screen pixels a
+  second at every zoom (they barely moved before), and stay to zoom 11.5. The speed is chosen to be seen, not to scale.
+- **Lakes and rivers visibly move, and one part of last round never worked.** The river dashes were a pattern
+  sliding along lines cut into 2 km pieces; the pattern starts again with every piece, so the rivers blinked in
+  step instead of flowing, and on Tahoe and Clear Lake the sovereign-lands tint covered the glints entirely. Rivers
+  are now long runs heading downstream, the glints are brighter and denser with a darker edge so they read on pale
+  water, and inland water is drawn right below the clouds (above tints, below county lines, names and marks). Lakes
+  and the Delta move from Home; rivers from a little closer; all through zoom 12. Added: nine large reservoirs, the
+  Salinas River, and the Delta's wide tidal channels (sea on the basemap, too narrow for the wave marks). Lake cells
+  still fade where clusters and lease marks sit; a river run passes under the marks on it.
+- **Limits:** idle is still idle where nothing moves (checked at zoom 12 away from water and at zoom 12.6 on the
+  Sacramento); reduced motion gets still frames; phones keep one still cloud layer (now with the marine layer, four
+  texture lookups a pixel) and no inland water. The moving-water file is now fetched once after the map first rests
+  (about 400 KB compressed), not on first zoom. 27 browser checks pass.
+
 ## 2026-11-11 · Alive from the sky down: layered clouds, a sea that follows the sea, lakes and rivers
 
 **Data:** counts unchanged (4,206 leases; categories, kinds and Worth watching groups as before). No lease or land
