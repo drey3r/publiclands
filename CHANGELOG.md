@@ -3,6 +3,35 @@
 Changes to the California Public Lands Map, newest first. Data snapshots and
 counts are unchanged unless an entry says otherwise.
 
+## 2026-11-11 · Alive from the sky down: layered clouds, a sea that follows the sea, lakes and rivers
+
+**Data:** counts unchanged (4,206 leases; categories, kinds and Worth watching groups as before). No lease or land
+data was touched. New live source: Open-Meteo's Marine API (currents and swell); see DATA_SOURCES.md.
+
+- **Clouds in three layers you come down through.** High, mid and low cloud (or fog) are drawn separately from the
+  live cover, each drifting with the wind at its own height (300, 700 and 850 hPa). Zooming in passes them in turn:
+  the high layer spreads, thins and is gone about a zoom level below Home, the mid layer about two, the low layer
+  three and a half; panning shows a little parallax between them. However overcast the model is, the three together
+  stop at 60% opacity, so an overcast sky is a veil the map reads through. County lines, names, clusters and lease
+  marks stay above all of it at every zoom. Phones now draw one light, still layer (measured: no change in frame
+  rate at 390 px with a 4× CPU slowdown); readers who prefer reduced motion still get clouds only if they switch them on.
+- **The ocean moves the way the ocean is moving.** The wave marks drift with the surface current where they are,
+  and the bands of brighter marks roll in from the swell's real direction at its real period: Open-Meteo Marine
+  (Météo-France currents and swell, E.U. Copernicus Marine Service), 91 sea points, refreshed every three hours
+  through the site's own `/api/ocean`, credited in the map's attribution. It is the look of the water, one value
+  per degree: not a chart, not for navigation. If the data cannot be loaded the marks keep a hand-drawn drift and
+  the attribution says "Sea drift: illustrative, not data". The marks are now drawn on the graphics card instead
+  of a canvas redrawn twelve times a second, so the map costs less at rest than before.
+- **Lakes and rivers, a little.** A faint glint on Tahoe, Clear Lake, Mono, Shasta, the Salton Sea and the Delta's
+  channels; light dashes sliding downstream on the ten major rivers. Illustrative, not data. It runs in the same
+  ticker as the ocean, sits below every fill, line, name and mark, and fades out cell by cell (about 2 km) wherever
+  a cluster or lease mark sits on the water. Nothing is loaded for it at Home or on phones; it appears from zoom 6.4
+  and is gone by zoom 12.
+- **Limits:** Open-Meteo is asked for about 3,200 (clouds) + 730 (ocean) = about 3,900 locations a day of the 10,000
+  allowed, whoever is using the map. Nothing redraws at rest where nothing is animating; reduced motion gets still frames.
+- **Checks:** 27 pass (new: the three cloud layers on the way down, the ocean's live and fallback flow and their
+  credits, lake and river shimmer under marks; changed: phones).
+
 ## 2026-11-11 · Sea-floor seams, cloud time
 
 **Data:** counts unchanged (4,206 leases; categories, kinds and Worth watching groups as before).

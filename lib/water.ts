@@ -185,8 +185,7 @@ export function addShimmer(m: MLMap, opts: { url?: string; before: () => string 
           filter: ["==", ["get", "k"], "lake"],
           minzoom: SHIMMER_MIN_Z,
           maxzoom: SHIMMER_MAX_Z,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          paint: { "fill-pattern": LAKE_IMAGE, "fill-opacity": opacity(1) as any },
+          paint: { "fill-pattern": LAKE_IMAGE, "fill-opacity": opacity(1) as unknown as number },
         },
         before,
       );
@@ -202,8 +201,7 @@ export function addShimmer(m: MLMap, opts: { url?: string; before: () => string 
           paint: {
             "line-pattern": RIVER_IMAGE,
             "line-width": ["interpolate", ["linear"], ["zoom"], 6, 2.2, 9, 3, 12, 4.5],
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            "line-opacity": opacity(0.9) as any,
+            "line-opacity": opacity(0.9) as unknown as number,
           },
         },
         before,
