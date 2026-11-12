@@ -3,6 +3,39 @@
 Changes to the California Public Lands Map, newest first. Data snapshots and
 counts are unchanged unless an entry says otherwise.
 
+## 2026-11-11 · A lighter sky, calmer fresh water, swell at the shore
+
+**Data:** counts unchanged (4,206 leases; categories, kinds and Worth watching groups as before). No lease or land
+data was touched. Weather requests unchanged (about 3,900 locations a day of Open-Meteo's 10,000); nothing new is
+downloaded.
+
+- **A lighter sky.** At Home the offshore deck was heavy and gray. It is now thinner and whiter, always in banks
+  with clear water between them, so the ocean reads through; cloud shadows are cut to a trace. Over California
+  there are a few soft patches of low cloud and thin high wisps, from the live cover where it has cloud and a very
+  light illustrative baseline where it has none. The attribution and the Sources tab say the marine layer, the
+  patches and the wisps are not data. The descent through the layers and the drift are as they were.
+- **Swell lines at the shore, from about zoom 9 on.** Long, soft lines that run with the coast, close up toward the
+  beach, bend around headlands and into coves, and end in a wash at the water's edge. They carry on at every close
+  zoom, flat and in the tilted 3D view (the open sea's wave marks still end at zoom 11.5). Illustrative: they are
+  level lines of the distance from the shore, not a wave model. Two things are live: they are stronger on shores
+  facing the direction the swell comes from, and one line passes about every swell period.
+- **Bays are calm.** San Francisco, San Pablo and Suisun bays, Tomales, Humboldt, Morro, San Diego and Mission bays,
+  San Pedro Bay behind its breakwaters, and enclosed harbours and lagoons have a short, quiet ripple with a slow
+  drift in place of swell lines. The inner part of Monterey Bay keeps the swell lines, gentler.
+- **Fresh water is much calmer.** Lakes, reservoirs, wide rivers and the Delta have small, fine, sparse glints,
+  irregularly placed and sized to the water they are on, fading out toward the shoreline. The larger arcs on the
+  lakes and the sliding dashes on the rivers are gone, so the long rivers no longer move when zoomed out.
+- **Every water effect is cut from the basemap's own water.** They are drawn from the water shapes of the map tiles
+  in view, so they end exactly where the drawn water ends at every zoom, and they sit under every land fill and the
+  sovereign-lands tint. From zoom 9.5, public-land shapes that lie over water (Emerald Bay State Park, the federal
+  parcels on Don Pedro Reservoir) and every lease mark and cluster are cut out with a margin; names are drawn above.
+- **Open sea, zoomed out:** the drifting wave marks are kept and thin out toward the coast, so the shoreline is
+  quieter.
+- **Fixed:** the wave-mark layer was being inserted below the map's background (it showed only because of how the
+  map orders its drawing); it is now right above the sea floor, where it was meant to be.
+- Phones: no close-in water effects, as before none past zoom 11.5; their single cloud layer is lightened to match.
+  Reduced motion: still frames. Nothing animates where no water and no cloud is in view.
+
 ## 2026-11-11 · The living map, made to read: sea floor, clouds, moving water
 
 **Data:** counts unchanged (4,206 leases; categories, kinds and Worth watching groups as before). No lease or land
