@@ -126,9 +126,16 @@ Grant boundaries for Los Angeles, Long Beach, San Francisco and Oakland are not 
   `NEXT_PUBLIC_CLOUDS_URL` to the public map's `/api/clouds` (CDN-cached, readable from any origin) and its pages
   read the clouds from there.
 - **License:** data CC BY 4.0. Required credit with a link wherever the data is shown: the map's attribution reads
-  "Clouds: Weather data by Open-Meteo.com (CC BY 4.0, smoothed and drawn as clouds)" while the clouds are on. The
-  smoothing, noise texture and drift are ours, so the clouds show where cover is reported, not the shape of real
-  clouds.
+  "Clouds: Weather data by Open-Meteo.com (CC BY 4.0, drawn as clouds) blended with an illustrative marine layer"
+  while the clouds are on. The smoothing, noise texture and drift are ours, so the clouds show where cover is
+  reported, not the shape of real clouds.
+- **Not data: the marine layer and the high wisps.** So the sky is never empty, the low cloud is the live cover or an
+  illustrative marine layer, whichever is more at each point: a deck over the sea that reaches the shore (found from
+  the sea mask, `data/ref/ocean-mask.png`), whole along the coast and broken into banks further out, at its fullest
+  about 6 in the morning and lightest about 3 in the afternoon, California time. The high layer likewise always has a
+  few thin wisps. Neither is a forecast or an observation. The map's Sources tab says so, and "Live clouds as of"
+  gives the model time of the live part only. Low cloud and fog stay, thinning, to about zoom 9.5; the mid layer is
+  passed by about zoom 8 and the high layer by about zoom 7 (on a desktop screen).
 
 
 ## Ocean currents and swell: Open-Meteo Marine (moving wave marks)
