@@ -483,7 +483,7 @@ export function MapControls(p: Props) {
       <div>
         <DataDates datasets={p.datasets} compact />
         <p id="sources-ambience" className="mt-2 text-[12px] leading-snug text-ink-faint">
-          Clouds blend live cloud cover (Open-Meteo) with an illustrative marine layer along the coast, fuller in the morning and lighter in the afternoon, and a few light patches and high wisps over land; the marine layer, the patches and the wisps are not data. Sea drift follows live currents and swell (Open-Meteo Marine). The movement on lakes and rivers is illustrative.
+          Clouds blend live cloud cover (Open-Meteo) with an illustrative marine layer along the coast, fuller in the morning and lighter in the afternoon, and a few light patches and high wisps over land; the marine layer, the patches and the wisps are not data. Sea drift follows live currents and swell (Open-Meteo Marine). Close in, the swell lines along the coast, the ripple in the bays and the glints on lakes and rivers are illustrative; only the swell's direction and period are live.
         </p>
         <a href="/about#data" className="mt-2 inline-block text-[12px] font-medium text-ink-soft underline underline-offset-2 hover:text-ink">All sources and caveats</a>
       </div>

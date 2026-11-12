@@ -92,6 +92,8 @@ uniform float u_t;
 uniform float u_opacity;
 uniform vec2 u_swellDir; // unit vector the swell travels along, in map pixels (x east, y south)
 uniform float u_swellT;  // seconds for one swell to pass a point
+uniform float u_coastLod; // the mask's blur level that spans about 45 screen pixels
+uniform float u_thin;     // how much the marks thin out toward the coast (0..1)
 out vec4 o;
 const float PI = 3.141592653589793;
 const vec2 CELL = vec2(64.0, 34.0);
@@ -163,6 +165,10 @@ void main() {
   vec2 uv = (v_m - u_maskExt.xy) / (u_maskExt.zw - u_maskExt.xy);
   float sea = smoothstep(0.62, 0.92, texture(u_mask, uv).r);
   if (sea <= 0.0) discard;
+  // Fewer and fainter toward the coast, so the shoreline is not busy (and, close in, the swell lines have it to themselves).
+  float nearSea = min(textureLod(u_mask, uv, u_coastLod).r, textureLod(u_mask, uv, u_coastLod + 1.5).r);
+  sea *= mix(1.0, smoothstep(0.62, 0.97, nearSea), u_thin);
+  if (sea <= 0.0) discard;
   float L = floor(u_zoom);
   float w = u_zoom - L;
   vec2 a = marks(L) * (1.0 - w) + marks(L + 1.0) * w;
@@ -194,6 +200,10 @@ export class OceanLayer implements CustomLayerInterface {
     this.flow = f;
     this.flowDirty = true;
   }
+  /** The sea mask's texture once it has arrived (the close-in water layer reads it too). */
+  maskTexture() {
+    return this.maskReady ? this.mask : null;
+  }
   /** Whether the marks can be drawn (the sea mask has arrived). */
   ready() {
     return this.maskReady;
@@ -217,7 +227,7 @@ export class OceanLayer implements CustomLayerInterface {
       return;
     }
     this.program = p;
-    for (const u of ["u_matrix", "u_mask", "u_flow", "u_maskExt", "u_flowExt", "u_flowRes", "u_zoom", "u_t", "u_opacity", "u_swellDir", "u_swellT"]) this.uni[u] = gl.getUniformLocation(p, u);
+    for (const u of ["u_matrix", "u_mask", "u_flow", "u_maskExt", "u_flowExt", "u_flowRes", "u_zoom", "u_t", "u_opacity", "u_swellDir", "u_swellT", "u_coastLod", "u_thin"]) this.uni[u] = gl.getUniformLocation(p, u);
     this.vao = gl.createVertexArray();
     this.buf = gl.createBuffer();
     const x0 = mercX(MASK.west), x1 = mercX(MASK.east), yN = mercY(MASK.north), yS = mercY(MASK.south);
@@ -254,21 +264,22 @@ export class OceanLayer implements CustomLayerInterface {
     if (!m || !this.program) return;
     const z = m.getZoom();
     const opacity = waveOpacity(z);
-    if (opacity <= 0) return;
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     if (this.maskImage) {
       gl.bindTexture(gl.TEXTURE_2D, this.mask);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.maskImage);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       this.maskImage = null;
       this.maskReady = true;
     }
-    if (!this.maskReady) return;
+    // (The mask is uploaded even where the marks are not drawn: the close-in water layer reads it.)
+    if (!this.maskReady || opacity <= 0) return;
     const f = this.flow;
     if (this.flowDirty) {
       // ±1 m/s in two bytes a cell; faster water (rare here) is drawn as 1 m/s.
@@ -299,6 +310,9 @@ export class OceanLayer implements CustomLayerInterface {
     gl.uniform1f(this.uni.u_opacity, opacity);
     gl.uniform2f(this.uni.u_swellDir, Math.sin(head), -Math.cos(head));
     gl.uniform1f(this.uni.u_swellT, Math.min(14, Math.max(6, f.swell.period || 9)));
+    // One mask pixel is 2^z / 48 screen pixels wide (2048 px across 30 degrees).
+    gl.uniform1f(this.uni.u_coastLod, Math.max(0, Math.log2(45 * 48) - z));
+    gl.uniform1f(this.uni.u_thin, 1);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.mask);
     gl.uniform1i(this.uni.u_mask, 0);

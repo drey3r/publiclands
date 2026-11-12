@@ -149,7 +149,8 @@ Grant boundaries for Los Angeles, Long Beach, San Francisco and Oakland are not 
   E.U. Copernicus Marine Service Information".
 - **What the map does with it:** the ocean's wave marks slide along the current where they are, 5 to 14 screen
   pixels a second at every zoom to 11.5 (faster where the current is; a speed chosen to be seen, not to scale), and
-  the bands of brighter marks roll in from the swell's direction at its period. It
+  the bands of brighter marks roll in from the swell's direction at its period. The marks thin out toward the
+  coast, so the shoreline is not busy. It
   is the look of the water, not a chart: one value per degree, smoothed between. Open-Meteo's own caution: "Accuracy
   at coastal areas is limited. This is not suitable for coastal navigation".
 - **How it is fetched:** the server route `app/api/ocean/route.ts`, one request for the 91 points, cached for three
@@ -169,24 +170,30 @@ Grant boundaries for Los Angeles, Long Beach, San Francisco and Oakland are not 
   contributors) at zoom 7, drawn into a 2048 px picture by `scripts/make-water.mjs`.
 
 
-## Lakes and rivers that move (no live data)
+## Water close in: swell lines, bay ripple, glints on fresh water (illustrative)
 
-- Glints on Lake Tahoe, Clear Lake, Mono Lake, Shasta Lake, the Salton Sea, nine large reservoirs (Oroville, Berryessa,
-  Folsom, Almanor, Trinity, New Melones, Don Pedro, San Luis, Eagle Lake) and the channels of the Sacramento–San
-  Joaquin Delta, and light dashes sliding downstream on the Sacramento, San Joaquin, Klamath, Colorado, American,
-  Feather, Trinity, Eel, Russian, Pit and Salinas rivers. **Illustrative, not data:** nothing here measures flow or
-  wind; the dashes follow the direction the river is drawn in (OpenStreetMap draws rivers downstream; a stretch that
-  clearly runs away from the river's mouth is turned when the file is built).
-- Shapes: `data/ref/water-shimmer.geojson`, cut by `scripts/make-water.mjs` from the basemap's own tiles (OpenFreeMap /
-  OpenMapTiles, © OpenStreetMap contributors, ODbL; zoom 11) so they sit on the water the basemap draws, limited to
-  California. Lakes and the Delta are in cells of about 2 km, which fade wherever a cluster, lease mark or icon sits
-  on the water. The Delta's wide tidal channels east of Suisun Bay are sea on the basemap (OpenStreetMap's coastline
-  runs up them) and too narrow for the wave marks; they are included with the Delta and get its finer glints. Rivers are in long runs (24 km close in, 96 km from far): the dashes are a pattern that slides along
-  a line and starts again with each line, so short pieces only blinked. A run passes under the marks on it.
-- Drawn right below the clouds (above the water's color and the sovereign-lands tint, below county lines, names and
-  marks). Lakes and the Delta from Home, rivers from a little closer, all through zoom 12. Loaded once, after the map
-  first comes to rest; not loaded on phones; one still frame for readers who prefer reduced motion. San Francisco Bay
-  and the other bays are sea on the basemap: they carry the ocean's wave marks.
+- From about zoom 9 the open coast has long, soft swell lines that run with the shore, close up toward the beach and
+  end in a wash at the water's edge; sheltered bays (San Francisco, San Pablo and Suisun, Tomales, Humboldt, Morro,
+  San Diego, Mission Bay, San Pedro Bay behind its breakwaters, and enclosed harbours and lagoons generally) have a
+  short, calm ripple instead; the inner part of Monterey Bay keeps the swell lines, gentler. Lakes, reservoirs, wide
+  rivers and the Delta have small, sparse glints at every zoom, sized to the water they are on.
+- **Illustrative, not data.** The lines are level lines of the distance from the shore, not a wave model: they do
+  not show wave height, breaking, or where it is safe. Two things are live, from the swell above: the lines are
+  stronger on shores that face the direction the swell comes from, and one line passes about every swell period
+  (held between 7.5 and 11 seconds). Nothing measures wind or flow on fresh water.
+- **Clipped to the basemap's own water.** `lib/waterfx.ts` triangulates the water shapes of the loaded basemap tiles
+  (OpenFreeMap / OpenMapTiles, © OpenStreetMap contributors) and draws them into a picture of the ground in view, so
+  the effects end exactly where the drawn water ends, at every zoom and in the tilted view. From zoom 9.5 the
+  public-land shapes that lie over water (a state park over a bay, federal parcels over a reservoir) and every lease
+  mark and cluster are cut out of it, with a margin. It is drawn right above the water and the sea floor, under every
+  land fill, the sovereign-lands tint, lines, names and marks. Nothing is downloaded for it.
+- **By hand:** which water is a sheltered bay is a short list of outlines in `lib/waterfx.ts` (`ZONES`). The Delta's
+  tidal channels east of Suisun Bay are sea on the basemap (OpenStreetMap's coastline runs up them); they are in that
+  list as fresh water.
+- Not drawn on phones; one still frame for readers who prefer reduced motion. Nothing animates where no water is in
+  view. The open sea's wave marks (above) thin out toward the coast and end at zoom 11.5; the swell lines carry on.
+- **No longer used:** `data/ref/water-shimmer.geojson` (lake cells and river runs for the earlier glints and river
+  dashes) is not loaded by the map any more.
 
 ## County boundaries
 

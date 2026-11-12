@@ -1,6 +1,6 @@
 import type { CustomLayerInterface, CustomRenderMethodInput, Map as MLMap, StyleImageInterface } from "maplibre-gl";
 import { OCEAN_LAYER, OceanLayer, WAVES_MAX_Z, type OceanFlow } from "./ocean";
-import { DELTA_LAYER, LAKE_LAYER, RIVER_FAR_LAYER, RIVER_LAYER, addShimmer, type Shimmer } from "./water";
+import { WATERFX_LAYER, WaterFx } from "./waterfx";
 
 /**
  * Ambience: the ocean's moving wave marks, the surf line along the coast, and the live cloud layer.
@@ -9,11 +9,12 @@ import { DELTA_LAYER, LAKE_LAYER, RIVER_FAR_LAYER, RIVER_LAYER, addShimmer, type
  * repaint, so the map can still rest and fire `idle` between frames. The clouds are three layers
  * (high, mid, low) shaded on the GPU in one draw call a frame, passed one after another as the reader
  * zooms in; phones get one light layer, still. The wave marks are a shader too (lib/ocean.ts): they
- * drift with the live current and brighten with the swell from its real direction. Only the surf
- * line is a small canvas redrawn each tick, and, from a little below Home, two more for the glint on
- * the big lakes and the drift on the major rivers (lib/water.ts), only while those are in view. The ticker
- * stops past the zooms where waves and clouds have faded, while the tab is hidden, on screens
- * 600 px wide or less, and when the reader prefers reduced motion (one still frame instead).
+ * drift with the live current and brighten with the swell from its real direction. Close in, a third
+ * shader (lib/waterfx.ts) draws swell lines on the open coast, a ripple in the bays and glints on
+ * fresh water, cut from the basemap's own water shapes. Only the surf line is a small canvas redrawn
+ * each tick. The ticker stops where no cloud and no moving water is in view, while the tab is
+ * hidden, on screens 600 px wide or less, and when the reader prefers reduced motion (one still
+ * frame instead).
  */
 
 const FPS = 12;
@@ -647,8 +648,8 @@ export type Ambience = {
   setClouds: (on: boolean) => void;
   /** Where the sea's motion comes from: the live grid, the illustrative sketch (load failed), or not asked yet. */
   oceanFlow: () => "live" | "sketch" | "none";
-  /** Lake and river shimmer cells on screen, and how many are faded out under lease marks (for the browser checks). */
-  shimmer: () => { shown: number; hidden: number; loaded: boolean };
+  /** The close-in water layer: what it found in view (open coast, sheltered sea, fresh water), or null where it is not drawn (for the browser checks). */
+  water: () => { sea: boolean; fresh: boolean; calm: boolean; built: boolean; triangles: number; marks: number; float: boolean } | null;
   /** Whether the animation ticker is running (for the browser checks). */
   running: () => boolean;
   /** Whether clouds are being drawn at this zoom (for the browser checks). */
@@ -677,7 +678,8 @@ export function addAmbience(
   if (!m.getLayer(OCEAN_LAYER) && m.getLayer("water-ocean")) {
     // Right above the sea-floor depth (or the plain ocean), so the State sovereign lands tint, which
     // ogLayers.addWaters puts below the depth, never covers them.
-    const ids = m.getStyle().layers.map((l) => l.id);
+    // getLayersOrder, not getStyle: a custom layer (the sea floor) is not part of the serialized style.
+    const ids = m.getLayersOrder();
     m.addLayer(ocean, ids[ids.indexOf(m.getLayer("ocean-depth") ? "ocean-depth" : "water-ocean") + 1]);
     // Credits ride on empty sources, shown by a layer that is visible only while they apply.
     for (const [id, attribution] of [["ocean-flow", OCEAN_CREDIT], ["ocean-sketch", OCEAN_SKETCH_CREDIT]] as const) {
@@ -697,6 +699,7 @@ export function addAmbience(
       if (dead) return;
       if (!f?.nx || !f.swell || f.u?.length !== f.nx * f.ny) throw new Error("ocean: unexpected answer");
       ocean.setFlow(f);
+      fx?.setSwell(f.swell.from, f.swell.period);
       flowKind = "live";
       oceanCredit("ocean-flow");
     } catch (e) {
@@ -739,6 +742,18 @@ export function addAmbience(
     );
   }
 
+  // Close in: swell lines on the open coast, a ripple in the bays, glints on fresh water (lib/waterfx.ts),
+  // right above the surf line: over the water's own color and depth, under every land fill, tint, line,
+  // name and mark. Not on phones.
+  const fx: WaterFx | null = small.matches || opts.waves === false ? null : new WaterFx();
+  if (fx && !m.getLayer(WATERFX_LAYER) && m.getLayer("water-ocean")) {
+    const ids = m.getLayersOrder();
+    const under = [SURF_LAYER, OCEAN_LAYER, "ocean-depth", "water-ocean"].find((id) => m.getLayer(id))!;
+    m.addLayer(fx, ids[ids.indexOf(under) + 1]);
+    fx.onChange = () => start();
+    fx.coarse = () => ocean.maskTexture();
+  }
+
   let cloudsOn = opts.clouds;
   let layer: CloudLayer | null = null;
   let timer: ReturnType<typeof setInterval> | null = null;
@@ -750,8 +765,8 @@ export function addAmbience(
   const wavesVisible = () => opts.waves !== false && m.getZoom() < WAVES_MAX_Z;
 
   function frame() {
-    if (!wavesVisible() && !cloudsVisible() && !shimmer?.visible()) return stop();
-    if (shimmer?.visible()) shimmer.draw(now());
+    if (!wavesVisible() && !cloudsVisible() && !fx?.active()) return stop();
+    if (fx?.active()) fx.t = now();
     if (wavesVisible()) ocean.t = now();
     if (m.getZoom() < SURF_MAX_Z) surf.draw(now());
     // The clouds advance themselves when the map draws them; all they need is the repaint.
@@ -759,17 +774,13 @@ export function addAmbience(
   }
 
   function start() {
-    if (reduce() || timer || document.hidden || (!wavesVisible() && !cloudsVisible() && !shimmer?.visible())) return;
+    if (reduce() || timer || document.hidden || (!wavesVisible() && !cloudsVisible() && !fx?.active())) return;
     timer = setInterval(frame, 1000 / FPS);
   }
   function stop() {
     if (timer) clearInterval(timer);
     timer = null;
   }
-  // Lakes, the Delta and the major rivers (lib/water.ts): right below the clouds, so above the water's
-  // own color and tints and below county lines, every name and every mark. Not on phones.
-  const shimmerBefore = () => (m.getLayer(CLOUD_LAYER) ? CLOUD_LAYER : m.getLayer(CLOUDS_BELOW) ? CLOUDS_BELOW : undefined);
-  const shimmer: Shimmer | null = small.matches ? null : addShimmer(m, { before: shimmerBefore, onChange: () => start() });
   const onVis = () => (document.hidden ? stop() : start());
   document.addEventListener("visibilitychange", onVis);
   // Zooming back out past the fade zooms restarts the ticker.
@@ -788,18 +799,12 @@ export function addAmbience(
 
   // Layers added later (public lands, the sovereign-lands tint, a private build's own) go in below the
   // county lines too, which would put them over the clouds: keep the clouds directly under the lines.
-  // The moving inland water stays right below the clouds the same way (the sovereign-lands tint, added
-  // when its layer is switched on, would otherwise cover it).
   const keepOrder = () => {
     if (dead || !m.getLayer(CLOUDS_BELOW)) return;
     // getLayersOrder, not getStyle: a custom layer is not part of the serialized style.
-    const want = [LAKE_LAYER, DELTA_LAYER, RIVER_FAR_LAYER, RIVER_LAYER, CLOUD_LAYER].filter((id) => m.getLayer(id));
-    let next = CLOUDS_BELOW;
-    for (let i = want.length - 1; i >= 0; i--) {
-      const ids = m.getLayersOrder();
-      if (ids[ids.indexOf(want[i]) + 1] !== next) m.moveLayer(want[i], next);
-      next = want[i];
-    }
+    if (!m.getLayer(CLOUD_LAYER)) return;
+    const ids = m.getLayersOrder();
+    if (ids[ids.indexOf(CLOUD_LAYER) + 1] !== CLOUDS_BELOW) m.moveLayer(CLOUD_LAYER, CLOUDS_BELOW);
   };
   m.on("styledata", keepOrder);
 
@@ -851,7 +856,7 @@ export function addAmbience(
   return {
     running: () => timer !== null,
     oceanFlow: () => flowKind,
-    shimmer: () => shimmer?.cells() ?? { shown: 0, hidden: 0, loaded: false },
+    water: () => fx?.state() ?? null,
     cloudsShown: cloudsVisible,
     cloudLevels() {
       const down = m.getZoom() - cloudBase(m);
@@ -871,7 +876,6 @@ export function addAmbience(
     destroy() {
       dead = true;
       stop();
-      shimmer?.destroy();
       if (refetch) clearInterval(refetch);
       if (oceanRefetch) clearInterval(oceanRefetch);
       document.removeEventListener("visibilitychange", onVis);
