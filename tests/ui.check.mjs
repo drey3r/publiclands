@@ -390,10 +390,20 @@ await check("lakes and rivers: nothing loaded at Home; shimmer under every land 
   assert(!(await page.evaluate(() => window.__ambience.running())), "animation running at zoom 12.6");
 });
 
-await check("sea floor: depth shading reads terrain tiles no deeper than zoom 8 (deeper tiles have seams and holes in the bathymetry)", async (page) => {
+await check("sea floor: one smooth depth picture drawn in soft bands by a shader, right above the plain ocean; not shaded from upscaled terrain tiles (they drew blobs close in)", async (page) => {
   await cloudCalls(page, CLOUD_GRID);
   await open(page);
-  const r = await page.evaluate(() => { const m = window.__map; const l = m.getLayer("ocean-depth"); return { source: l.source, maxzoom: m.getStyle().sources[l.source].maxzoom }; });
+  const r = await page.evaluate(async () => {
+    const m = window.__map;
+    const ids = m.getLayersOrder();
+    const res = await fetch("/data/ocean-depth.png");
+    return { type: m.getLayer("ocean-depth").type, after: ids[ids.indexOf("ocean-depth") - 1], dem: !!m.getSource("depthDem") && m.getStyle().layers.some((l) => l.source === "depthDem"), ok: res.ok, kb: Math.round((await res.blob()).size / 1024) };
+  });
+  assert(r.type === "custom", `ocean-depth is a ${r.type} layer`);
+  assert(r.after === "water-ocean" || r.after.startsWith("sov-"), `ocean-depth sits above ${r.after}`);
+  assert(!r.dem, "a layer still shades depth from the terrain tiles");
+  assert(r.ok && r.kb < 600, `depth picture: ok ${r.ok}, ${r.kb} KB`);
+});
   assert(r.source === "depthDem", `ocean-depth reads ${r.source}`);
   assert(r.maxzoom <= 8, `depth tiles go to zoom ${r.maxzoom}`);
 });

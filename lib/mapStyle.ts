@@ -343,7 +343,7 @@ function oceanDepth(): LayerSpecification {
   } as unknown as LayerSpecification;
 }
 
-export function baseStyle(opts: { mask?: MaskMode } = {}): StyleSpecification {
+export function baseStyle(opts: { mask?: MaskMode; seaFloor?: boolean } = {}): StyleSpecification {
   const mask = opts.mask ?? MASK_MODE;
   return {
     version: 8,
@@ -446,7 +446,8 @@ export function baseStyle(opts: { mask?: MaskMode } = {}): StyleSpecification {
             },
           ] as LayerSpecification[])),
       { id: "water-ocean", type: "fill", source: "omt", "source-layer": "water", filter: ["==", ["get", "class"], "ocean"], paint: { "fill-color": C.water } },
-      oceanDepth(),
+      // The main map draws the sea floor itself (lib/seafloor.ts: smooth, banded); small maps keep this plain wash.
+      ...(opts.seaFloor === false ? [] : [oceanDepth()]),
       ...countyLayers(),
       ...roadLayers(true),
       ...frameLines(),

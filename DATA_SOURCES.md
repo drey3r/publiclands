@@ -78,7 +78,10 @@ Grant boundaries for Los Angeles, Long Beach, San Francisco and Oakland are not 
 
 - [Terrain Tiles on the Registry of Open Data on AWS](https://registry.opendata.aws/terrain-tiles/) (Terrarium encoding),
   used for hillshade, 3D terrain and the faint sea-floor depth offshore (their bathymetry, from ETOPO1 and GMTED; the
-  water deepens only below 150 m, so the shelf and the State sovereign lands tint keep their color).
+  water deepens only below 150 m, so the shelf and the State sovereign lands tint keep their color). The main map
+  draws the sea floor from one small copy of that bathymetry (`data/ref/ocean-depth.png`, `scripts/make-depth.mjs`:
+  the zoom 7 tiles around California, smoothed once), in soft bands at 200 m, 500 m and every 500 m after. ETOPO1 has
+  one sample about every 1.9 km: the bands show the shape of the canyons and basins, not a chart's detail.
 - Required attribution, shown on the map: data sources include USGS 3DEP, SRTM, GMTED2010 and ETOPO1. See the
   [attribution list](https://github.com/tilezen/joerd/blob/master/docs/attribution.md) for the full set.
 

@@ -268,7 +268,7 @@ for (const f of ["ca-county-lines.geojson", "ca-county-labels.geojson", "ca-labe
   fs.copyFileSync(path.join(root, "data/ref", f), path.join(root, "public/data", f));
 // Moving water (scripts/make-water.mjs, from the basemap's tiles): where the sea is, for the wave marks;
 // the big lakes, the Delta and the major rivers in cells, for their shimmer.
-for (const f of ["ocean-mask.png", "water-shimmer.geojson"])
+for (const f of ["ocean-mask.png", "ocean-depth.png", "water-shimmer.geojson"])
   if (fs.existsSync(path.join(root, "data/ref", f))) fs.copyFileSync(path.join(root, "data/ref", f), path.join(root, "public/data", f));
 
 // ---------- Fly-in camera overrides (data/cameras.json; optional extra file via CAMERAS_EXTRA) ----------

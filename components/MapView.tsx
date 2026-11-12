@@ -13,6 +13,7 @@ import type { Place as Space } from "./PlaceCard";
 import { OG_FILL_LAYERS, OG_POINT_LAYERS, addOg, addWaters, setOgSelPoint, syncOg, syncWaters, type OgData, type OgView } from "./ogLayers";
 import { LABEL, actionLabel, compLabel } from "@/lib/oilgas";
 import { addAmbience, type Ambience } from "@/lib/ambience";
+import { addSeaFloor } from "@/lib/seafloor";
 
 // Served by scripts/sync-data.mjs (webpack can't bundle the v6 module worker).
 maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
@@ -209,7 +210,7 @@ export default function MapView(props: Props) {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const m = new maplibregl.Map({
       container: el.current,
-      style: baseStyle({ mask: cb.current.mask }),
+      style: baseStyle({ mask: cb.current.mask, seaFloor: false }),
       bounds: CA_BOUNDS,
       renderWorldCopies: false,
       // Explorer observes the container and resizes (it re-frames Home); see onCreate.
@@ -234,6 +235,8 @@ export default function MapView(props: Props) {
     m.on("load", () => {
       el.current?.querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show");
       m.setSky({ "sky-color": "#dfe5e0", "horizon-color": "#f4efe4", "fog-color": "#f4efe4", "sky-horizon-blend": 0.6, "horizon-fog-blend": 0.7, "fog-ground-blend": 0.25, "atmosphere-blend": 0 });
+      // The sea floor first: the sovereign-lands tint and the wave marks place themselves around it.
+      addSeaFloor(m);
 
       // Kind icons: "m|<kind>|<disc color>" (the disc follows Color by). All are added before the
       // layer exists: an image added later (styleimagemissing) never reaches tiles already parsed.
