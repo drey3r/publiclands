@@ -44,7 +44,8 @@ export const cloudsMaxZoom = (m: MLMap, lite = false) => cloudBase(m) + (lite ? 
 const CLOUD_CAP = 0.6;
 /**
  * The illustrative marine layer (not data): a deck of low cloud over the sea that reaches the coast,
- * at its fullest about 6 in the morning and thinnest about 3 in the afternoon, California time.
+ * at its fullest about 6 in the morning and thinnest about 3 in the afternoon, California time. It is
+ * light and broken into banks at every hour: the ocean always reads through it.
  * Returns its strength (0..1) and how far it reaches: the share of sea around a point (0.5 = the
  * shoreline) from which it begins. It touches the shore at every hour, and comes a little inland in the morning.
  */
@@ -61,7 +62,7 @@ function marineLayer(now = new Date()): [number, number] {
     if (typeof pinned === "number") h = pinned;
   }
   const f = h >= 6 && h <= 15 ? 0.5 + 0.5 * Math.cos((Math.PI * (h - 6)) / 9) : 0.5 - 0.5 * Math.cos((Math.PI * ((h + 24 - 15) % 24)) / 15);
-  return [0.74 + 0.26 * f, 0.47 - 0.07 * f];
+  return [0.6 + 0.22 * f, 0.47 - 0.07 * f];
 }
 /** Keep in step with MASK in lib/ocean.ts: the sea mask's box. */
 const SEA_BOX = { west: -137, east: -107, south: 26, north: 48 };
@@ -85,7 +86,7 @@ const OCEAN_SKETCH_CREDIT = "Sea drift: illustrative, not data";
 export const CLOUD_SOURCE = "clouds";
 export const CLOUD_LAYER = "clouds";
 /** Open-Meteo's CC BY 4.0 credit, shown in the map's attribution only while the clouds are drawn. */
-const CLOUDS_CREDIT = 'Clouds: <a href="https://open-meteo.com/">Weather data by Open-Meteo.com</a> (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, drawn as clouds) blended with an illustrative marine layer';
+const CLOUDS_CREDIT = 'Clouds: <a href="https://open-meteo.com/">Weather data by Open-Meteo.com</a> (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, drawn as clouds) blended with an illustrative marine layer and a few illustrative patches over land';
 
 // ---------------------------------------------------------------------------------------------
 // Small helpers
@@ -265,6 +266,7 @@ uniform vec2 u_marine;  // the marine layer: strength, and the share of sea arou
 uniform float u_morph;  // slow time: the sheets change shape as they go
 uniform float u_k;      // mercator -> noise units
 uniform float u_cap;
+uniform float u_base;   // the illustrative baseline over land: 0 = none
 out vec4 o;
 const float PI = 3.141592653589793;
 
@@ -292,10 +294,15 @@ float marine(vec2 m) {
   float far = textureLod(u_sea, uv, 4.5).r;
   float banks = texture(u_noise, m * u_k * 0.21 + vec2(0.37 + u_morph * 0.4, 0.11)).g;
   vec2 e = min(uv, 1.0 - uv);
-  // Whole along the coast; further out it thins and breaks into banks.
+  // In banks with clear water between them, even along the coast; further out the banks are thinner still.
   float out_ = smoothstep(0.78, 1.0, far);
-  return u_marine.x * smoothstep(u_marine.y, u_marine.y + 0.22, near) * mix(1.0, 0.8 * mix(0.4, 1.0, smoothstep(0.34, 0.56, banks)), out_)
+  return u_marine.x * smoothstep(u_marine.y, u_marine.y + 0.22, near) * mix(0.04, 1.0, smoothstep(0.43, 0.66, banks)) * mix(1.0, 0.72, out_)
        * smoothstep(0.0, 0.04, min(e.x, e.y));
+}
+// How much of the ground around a point is land (0 over the open sea, 1 well inland).
+float landAt(vec2 m) {
+  vec2 uv = (m - u_seaExt.xy) / (u_seaExt.zw - u_seaExt.xy);
+  return 1.0 - smoothstep(0.2, 0.6, textureLod(u_sea, uv, 2.5).r);
 }
 vec2 lifted(float s) { return u_center + (v_m - u_center) / s; }
 vec2 rot(vec2 p, float c, float s) { return vec2(p.x * c - p.y * s, p.x * s + p.y * c); }
@@ -335,10 +342,13 @@ void main() {
   vec2 q1 = vec2(0.0);
   if (u_fade.x > 0.0) {
     vec2 m1 = lifted(u_spread.x);
-    d1 = max(cover(m1).x, marine(m1));
+    // Over land, where the data has none: a few soft patches (illustrative, very light).
+    float patches = u_base * 0.46 * landAt(m1) * smoothstep(0.5, 0.66, texture(u_noise, m1 * u_k * 0.26 + vec2(0.19 + u_morph * 0.3, 0.71)).g);
+    d1 = max(max(cover(m1).x, marine(m1)), patches);
     q1 = frame(m1, u_w1, u_s.x);
     lowRaw = lowBody(q1, d1, 0.18 * u_thin.x);
-    low = (mix(0.82, 1.1, u_thin.x) * lowRaw + haze(d1, u_thin.x)) * u_fade.x;
+    // Thinner over the sea than over land: the ocean reads through the deck.
+    low = (mix(0.5, 0.78, u_thin.x) * mix(0.82, 1.0, landAt(m1)) * lowRaw + haze(d1, u_thin.x)) * u_fade.x;
   }
   // Mid: a thinner, flatter sheet in smaller pieces.
   float mid = 0.0;
@@ -351,7 +361,7 @@ void main() {
   float hi = 0.0;
   if (u_fade.z > 0.0) {
     vec2 m3 = lifted(u_spread.z);
-    float wisps = 0.5 * smoothstep(0.48, 0.68, texture(u_noise, m3 * u_k * 0.17 + vec2(0.61, 0.23 + u_morph * 0.3)).r);
+    float wisps = mix(0.5, 0.62, u_base * landAt(m3)) * smoothstep(0.45, 0.63, texture(u_noise, m3 * u_k * 0.17 + vec2(0.61, 0.23 + u_morph * 0.3)).r);
     float d = max(cover(m3).z, wisps);
     hi = (0.5 * sheet(frame(m3, u_w3, u_s.z) + vec2(5.3, 2.9), d, 0.22, 1.25, 0.42 * u_thin.z) + 0.5 * haze(d, u_thin.z)) * u_fade.z;
   }
@@ -365,9 +375,9 @@ void main() {
     vec2 off = vec2(-0.0055, -0.0055);
     float toward = lowBody(q1 + vec2(dot(off, u_w1), dot(off, vec2(-u_w1.y, u_w1.x))), d1, 0.18 * u_thin.x);
     shade = clamp((toward - lowRaw) * 2.6, 0.0, 1.0) * low / max(a, 0.001);
-    sh = 0.07 * toward * (1.0 - a) * u_fade.x;
+    sh = 0.015 * toward * (1.0 - a) * u_fade.x;
   }
-  vec3 body = mix(vec3(1.0), vec3(0.8, 0.85, 0.91), 0.65 * clamp(shade, 0.0, 1.0));
+  vec3 body = mix(vec3(1.0), vec3(0.9, 0.93, 0.96), 0.4 * clamp(shade, 0.0, 1.0));
   // High cloud alone is a cooler, greyer white: plain white wisps vanish over pale land.
   body = mix(body, vec3(0.86, 0.9, 0.95), hi * (1.0 - low) * (1.0 - mid) / max(low + mid + hi, 0.001));
   o = vec4(body * a + vec3(0.2, 0.26, 0.34) * sh, a + sh);
@@ -382,14 +392,14 @@ void main() {
   // The marine layer, plainly: over the sea up to the shore, no banks.
   vec2 uv = (m - u_seaExt.xy) / (u_seaExt.zw - u_seaExt.xy);
   vec2 e = min(uv, 1.0 - uv);
-  float sea = 0.85 * u_marine.x * smoothstep(u_marine.y, u_marine.y + 0.22, textureLod(u_sea, uv, 2.5).r) * smoothstep(0.0, 0.04, min(e.x, e.y));
+  float sea = 0.7 * u_marine.x * smoothstep(u_marine.y, u_marine.y + 0.22, textureLod(u_sea, uv, 2.5).r) * smoothstep(0.0, 0.04, min(e.x, e.y));
   float d = max(1.0 - (1.0 - c.x) * (1.0 - 0.8 * c.y) * (1.0 - 0.5 * c.z), sea);
   float a = 0.0;
   if (d > 0.02) {
     vec2 q = frame(m, u_w1, u_s.x);
     vec2 p = vec2(q.x * 0.68, q.y);
     float n = 0.6 * texture(u_noise, p * 0.83).r + 0.4 * texture(u_noise, rot(p, 0.8, -0.6) * 2.1).g;
-    a = 0.8 * smoothstep(0.44, 0.66, d + (n - 0.5) * 1.6 - 0.18 * u_thin.x) * smoothstep(0.02, 0.1, d) * u_fade.x;
+    a = 0.6 * smoothstep(0.44, 0.66, d + (n - 0.5) * 1.6 - 0.18 * u_thin.x) * smoothstep(0.02, 0.1, d) * u_fade.x;
   }
   a = capped(a);
   o = vec4(a);
@@ -453,7 +463,7 @@ class CloudLayer implements CustomLayerInterface {
       return;
     }
     this.program = p;
-    for (const u of ["u_matrix", "u_cover", "u_noise", "u_sea", "u_ext", "u_seaExt", "u_res", "u_center", "u_spread", "u_fade", "u_thin", "u_s", "u_w1", "u_w2", "u_w3", "u_marine", "u_morph", "u_k", "u_cap"]) this.uni[u] = gl.getUniformLocation(p, u);
+    for (const u of ["u_matrix", "u_cover", "u_noise", "u_sea", "u_ext", "u_seaExt", "u_res", "u_center", "u_spread", "u_fade", "u_thin", "u_s", "u_w1", "u_w2", "u_w3", "u_marine", "u_morph", "u_k", "u_cap", "u_base"]) this.uni[u] = gl.getUniformLocation(p, u);
     this.vao = gl.createVertexArray();
     this.buf = gl.createBuffer();
     this.cover = gl.createTexture();
@@ -608,6 +618,7 @@ class CloudLayer implements CustomLayerInterface {
     gl.uniform4f(this.uni.u_seaExt, mx(SEA_BOX.west), my(SEA_BOX.north), mx(SEA_BOX.east), my(SEA_BOX.south));
     gl.uniform1f(this.uni.u_k, k);
     gl.uniform1f(this.uni.u_cap, CLOUD_CAP);
+    gl.uniform1f(this.uni.u_base, 1);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.cover);
     gl.uniform1i(this.uni.u_cover, 0);

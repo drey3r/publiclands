@@ -212,7 +212,7 @@ export function MapControls(p: Props) {
     : null;
   const cloudsAge = cloudsAgeMin < 90 ? `${Math.round(cloudsAgeMin)} min old` : `about ${Math.round(cloudsAgeMin / 60)} h old`;
   const cloudsAsOf = p.clouds && cloudsTime ? (
-    <p id="clouds-asof" className={`-mt-2 text-right text-[11px] ${cloudsAgeMin > 240 ? "font-medium text-clay" : "text-ink-faint"}`} title="The weather model's time for the live cloud cover on the map now (Open-Meteo: NOAA HRRR and GFS). The map reads a new grid every three hours. The marine layer along the coast is illustrative and follows the time of day.">
+    <p id="clouds-asof" className={`-mt-2 text-right text-[11px] ${cloudsAgeMin > 240 ? "font-medium text-clay" : "text-ink-faint"}`} title="The weather model's time for the live cloud cover on the map now (Open-Meteo: NOAA HRRR and GFS). The map reads a new grid every three hours. The marine layer along the coast and a few light patches over land are illustrative.">
       Live clouds as of {cloudsTime} · {cloudsAge}
     </p>
   ) : null;
@@ -223,7 +223,7 @@ export function MapControls(p: Props) {
       onClick={() => p.setClouds(!p.clouds)}
       aria-checked={p.clouds}
       className="flex min-h-9 items-center gap-2 whitespace-nowrap rounded-lg px-2 text-[13px] font-semibold text-ink-soft hover:bg-sand hover:text-ink"
-      title={`Current cloud cover (Open-Meteo: NOAA HRRR and GFS models), refreshed every three hours, blended with an illustrative marine layer along the coast; high, mid and low cloud, passed in turn as you zoom in${cloudsTime ? `. Model time ${cloudsTime}` : ""}`}
+      title={`Current cloud cover (Open-Meteo: NOAA HRRR and GFS models), refreshed every three hours, blended with an illustrative marine layer along the coast and a few light patches over land; high, mid and low cloud, passed in turn as you zoom in${cloudsTime ? `. Model time ${cloudsTime}` : ""}`}
     >
       Clouds
       <SwitchMark on={p.clouds} />
@@ -483,7 +483,7 @@ export function MapControls(p: Props) {
       <div>
         <DataDates datasets={p.datasets} compact />
         <p id="sources-ambience" className="mt-2 text-[12px] leading-snug text-ink-faint">
-          Clouds blend live cloud cover (Open-Meteo) with an illustrative marine layer along the coast, fuller in the morning and lighter in the afternoon; the marine layer and a few high wisps are not data. Sea drift follows live currents and swell (Open-Meteo Marine). The movement on lakes and rivers is illustrative.
+          Clouds blend live cloud cover (Open-Meteo) with an illustrative marine layer along the coast, fuller in the morning and lighter in the afternoon, and a few light patches and high wisps over land; the marine layer, the patches and the wisps are not data. Sea drift follows live currents and swell (Open-Meteo Marine). The movement on lakes and rivers is illustrative.
         </p>
         <a href="/about#data" className="mt-2 inline-block text-[12px] font-medium text-ink-soft underline underline-offset-2 hover:text-ink">All sources and caveats</a>
       </div>
